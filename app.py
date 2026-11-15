@@ -140,15 +140,15 @@ def _badge(text: str, tone: str, p: Dict[str, str]) -> str:
 
 def _table_html(headers: Iterable[str], rows_html: str, empty_msg: str, p: Dict[str, str]) -> str:
     if not rows_html:
-        return f'<p style="color:{p["muted"]};font-style:italic;margin:8px 0;font-size:12px;">{html.escape(empty_msg)}</p>'
+        return f'<p style="color:{p["muted"]} !important;font-style:italic;margin:8px 0;font-size:12px;">{html.escape(empty_msg)}</p>'
     ths = "".join(
         f'<th style="text-align:left;padding:7px 6px;border-bottom:1px solid {p["border"]};'
-        f'color:{p["muted"]};font-size:11px;text-transform:uppercase;">{html.escape(h)}</th>'
+        f'color:{p["muted"]} !important;font-size:11px;text-transform:uppercase;">{html.escape(h)}</th>'
         for h in headers
     )
     return (
         '<div style="overflow-x:auto;">'
-        '<table style="width:100%;border-collapse:collapse;font-size:12px;">'
+        f'<table style="width:100%;border-collapse:collapse;font-size:12px;color:{p["text"]} !important;">'
         f"<thead><tr>{ths}</tr></thead><tbody>{rows_html}</tbody></table></div>"
     )
 
@@ -198,20 +198,20 @@ def _render_radar_card(name: str, st: Dict[str, Any], p: Dict[str, str]) -> str:
     banner_fg = p["green"] if is_imm else p["text"]
 
     return (
-        f'<div style="background:{p["surface"]};border:1px solid {p["border"]};border-radius:14px;padding:15px;">'
+        f'<div style="background:{p["surface"]};border:1px solid {p["border"]};border-radius:14px;padding:15px;color:{p["text"]} !important;">'
         f'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">'
-        f'<strong style="font-size:14px;">{html.escape(name)} Spot &amp; Auto-Order Radar</strong>{status}</div>'
+        f'<strong style="font-size:14px;color:{p["text"]} !important;">{html.escape(name)} Spot &amp; Auto-Order Radar</strong>{status}</div>'
         f'<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-bottom:10px;">{kv_blocks}</div>'
-        f'<div style="display:flex;justify-content:space-between;font-size:11px;color:{p["muted"]};">'
-        f'<span>Auto-Trigger Readiness</span><strong>{pct}%</strong></div>'
+        f'<div style="display:flex;justify-content:space-between;font-size:11px;color:{p["muted"]} !important;">'
+        f'<span style="color:{p["muted"]} !important;">Auto-Trigger Readiness</span><strong style="color:{p["text"]} !important;">{pct}%</strong></div>'
         f'<div style="background:{p["alt"]};border:1px solid {p["border"]};border-radius:999px;height:8px;overflow:hidden;margin:6px 0 8px;">'
         f'<div style="width:{pct}%;height:100%;background:{p["accent"]};"></div></div>'
         f'<div style="margin-bottom:8px;">{gate_chips}</div>'
-        f'<div style="font-size:11px;color:{p["muted"]};margin-bottom:6px;">Candidate: '
-        f'<strong>{html.escape(str(r.get("candidate_ce", "--")))}</strong> | '
-        f'<strong>{html.escape(str(r.get("candidate_pe", "--")))}</strong></div>'
+        f'<div style="font-size:11px;color:{p["muted"]} !important;margin-bottom:6px;">Candidate: '
+        f'<strong style="color:{p["text"]} !important;">{html.escape(str(r.get("candidate_ce", "--")))}</strong> | '
+        f'<strong style="color:{p["text"]} !important;">{html.escape(str(r.get("candidate_pe", "--")))}</strong></div>'
         f'<div style="font-size:12px;padding:8px 10px;border-radius:8px;background:{banner_bg};'
-        f'border:1px solid {banner_border};color:{banner_fg};font-weight:{"600" if is_imm else "400"};">'
+        f'border:1px solid {banner_border};color:{banner_fg} !important;font-weight:{"600" if is_imm else "400"};">'
         f'{html.escape(str(r.get("radar_summary", "")))}</div></div>'
     )
 
@@ -248,28 +248,28 @@ def _render_broker_and_schedule_col(snap: Dict[str, Any], p: Dict[str, str]) -> 
     )
     ms_rows = "".join(
         f'<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 9px;'
-        f'border-radius:8px;background:{p["alt"]};border:1px solid {p["border"]};margin-top:5px;font-size:11px;">'
-        f'<span><strong>{html.escape(str(m.get("time", "")))}</strong> — {html.escape(str(m.get("label", "")))}</span>'
-        f'<span style="font-weight:700;color:{p["green"] if m.get("status") == "DONE" else p["amber"] if m.get("status") == "ACTIVE" else p["muted"]};">'
+        f'border-radius:8px;background:{p["alt"]};border:1px solid {p["border"]};margin-top:5px;font-size:11px;color:{p["text"]} !important;">'
+        f'<span style="color:{p["text"]} !important;"><strong style="color:{p["text"]} !important;">{html.escape(str(m.get("time", "")))}</strong> — {html.escape(str(m.get("label", "")))}</span>'
+        f'<span style="font-weight:700;color:{p["green"] if m.get("status") == "DONE" else p["amber"] if m.get("status") == "ACTIVE" else p["muted"]} !important;">'
         f'{html.escape(str(m.get("status", "")))}</span></div>'
         for m in sched.get("milestones", [])
     )
     links = (
         '<div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;">'
         '<a href="https://prism.shoonya.com/" target="_blank" rel="noopener" '
-        f'style="padding:5px 10px;border-radius:7px;background:{p["green"]};color:#fff;text-decoration:none;font-size:11px;font-weight:600;">+ Add Real Funds</a>'
+        'style="padding:5px 10px;border-radius:7px;background:#059669;color:#ffffff !important;text-decoration:none;font-size:11px;font-weight:600;">+ Add Real Funds</a>'
         '<a href="https://trade.shoonya.com/" target="_blank" rel="noopener" '
-        f'style="padding:5px 10px;border-radius:7px;background:{p["alt"]};border:1px solid {p["border"]};color:{p["text"]};text-decoration:none;font-size:11px;font-weight:600;">Shoonya Web</a>'
+        f'style="padding:5px 10px;border-radius:7px;background:{p["alt"]};border:1px solid {p["border"]};color:{p["text"]} !important;text-decoration:none;font-size:11px;font-weight:600;">Shoonya Web</a>'
         "</div>"
     )
     return (
-        f'<div style="background:{p["surface"]};border:1px solid {p["border"]};border-radius:14px;padding:15px;">'
+        f'<div style="background:{p["surface"]};border:1px solid {p["border"]};border-radius:14px;padding:15px;color:{p["text"]} !important;">'
         f'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">'
-        f'<strong style="font-size:14px;">Broker Funds &amp; Auto-Schedule</strong>{conn_badge}</div>'
+        f'<strong style="font-size:14px;color:{p["text"]} !important;">Broker Funds &amp; Auto-Schedule</strong>{conn_badge}</div>'
         f'<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;">{kv_cards}</div>'
         f"{links}"
-        f'<div style="font-weight:700;font-size:12px;margin-top:12px;">Automated Daily Timeline</div>'
-        f'<div style="font-size:11px;color:{p["muted"]};margin-top:2px;">{html.escape(str(sched.get("auto_mode_note", "")))}</div>'
+        f'<div style="font-weight:700;font-size:12px;margin-top:12px;color:{p["text"]} !important;">Automated Daily Timeline</div>'
+        f'<div style="font-size:11px;color:{p["muted"]} !important;margin-top:2px;">{html.escape(str(sched.get("auto_mode_note", "")))}</div>'
         f"{ms_rows}</div>"
     )
 
@@ -330,39 +330,39 @@ def render_dashboard_html(theme_name: Optional[str] = None) -> str:
     )
 
     pos_rows = "".join(
-        f"<tr>"
-        f'<td style="padding:7px;border-bottom:1px solid {p["border"]};"><strong>{html.escape(str(x.get("tradingsymbol", "")))}</strong></td>'
-        f'<td style="padding:7px;border-bottom:1px solid {p["border"]};">{html.escape(str(x.get("state", "")))}</td>'
-        f'<td style="padding:7px;border-bottom:1px solid {p["border"]};">{x.get("remaining_qty", 0)}/{x.get("initial_qty", 0)}</td>'
-        f'<td style="padding:7px;border-bottom:1px solid {p["border"]};">₹{_fmt_num(x.get("entry_avg_price"))}</td>'
-        f'<td style="padding:7px;border-bottom:1px solid {p["border"]};">₹{_fmt_num(x.get("sl_trigger_price"))}</td>'
-        f'<td style="padding:7px;border-bottom:1px solid {p["border"]};">₹{_fmt_num((x.get("unrealized_pnl", 0) or 0) + (x.get("realized_pnl", 0) or 0))}</td>'
+        f'<tr style="color:{p["text"]} !important;">'
+        f'<td style="padding:7px;border-bottom:1px solid {p["border"]};color:{p["text"]} !important;"><strong style="color:{p["text"]} !important;">{html.escape(str(x.get("tradingsymbol", "")))}</strong></td>'
+        f'<td style="padding:7px;border-bottom:1px solid {p["border"]};color:{p["text"]} !important;">{html.escape(str(x.get("state", "")))}</td>'
+        f'<td style="padding:7px;border-bottom:1px solid {p["border"]};color:{p["text"]} !important;">{x.get("remaining_qty", 0)}/{x.get("initial_qty", 0)}</td>'
+        f'<td style="padding:7px;border-bottom:1px solid {p["border"]};color:{p["text"]} !important;">₹{_fmt_num(x.get("entry_avg_price"))}</td>'
+        f'<td style="padding:7px;border-bottom:1px solid {p["border"]};color:{p["text"]} !important;">₹{_fmt_num(x.get("sl_trigger_price"))}</td>'
+        f'<td style="padding:7px;border-bottom:1px solid {p["border"]};color:{p["text"]} !important;">₹{_fmt_num((x.get("unrealized_pnl", 0) or 0) + (x.get("realized_pnl", 0) or 0))}</td>'
         f"</tr>"
         for x in snap.get("positions", [])
     )
     pos_table = _table_html(["Contract", "State", "Qty", "Entry", "SL", "P&L"], pos_rows, "No active strategy positions.", p)
 
     trade_rows = "".join(
-        f"<tr>"
-        f'<td style="padding:7px;border-bottom:1px solid {p["border"]};">{html.escape(str(t.get("tradingsymbol", "")))}</td>'
-        f'<td style="padding:7px;border-bottom:1px solid {p["border"]};">{html.escape(str(t.get("signal_type", "")))}</td>'
-        f'<td style="padding:7px;border-bottom:1px solid {p["border"]};">{t.get("quantity", 0)}</td>'
-        f'<td style="padding:7px;border-bottom:1px solid {p["border"]};">{html.escape(str(t.get("exit_reason", "")))}</td>'
-        f'<td style="padding:7px;border-bottom:1px solid {p["border"]};">₹{_fmt_num(t.get("net_pnl"))}</td>'
+        f'<tr style="color:{p["text"]} !important;">'
+        f'<td style="padding:7px;border-bottom:1px solid {p["border"]};color:{p["text"]} !important;">{html.escape(str(t.get("tradingsymbol", "")))}</td>'
+        f'<td style="padding:7px;border-bottom:1px solid {p["border"]};color:{p["text"]} !important;">{html.escape(str(t.get("signal_type", "")))}</td>'
+        f'<td style="padding:7px;border-bottom:1px solid {p["border"]};color:{p["text"]} !important;">{t.get("quantity", 0)}</td>'
+        f'<td style="padding:7px;border-bottom:1px solid {p["border"]};color:{p["text"]} !important;">{html.escape(str(t.get("exit_reason", "")))}</td>'
+        f'<td style="padding:7px;border-bottom:1px solid {p["border"]};color:{p["text"]} !important;">₹{_fmt_num(t.get("net_pnl"))}</td>'
         f"</tr>"
         for t in snap.get("completed_trades", [])
     )
     trades_table = _table_html(["Contract", "Side", "Qty", "Reason", "Net P&L"], trade_rows, "No completed strategy trades yet.", p)
 
     ord_rows = "".join(
-        f"<tr>"
-        f'<td style="padding:7px;border-bottom:1px solid {p["border"]};"><strong>{html.escape(str(o.get("norenordno", "")))}</strong></td>'
-        f'<td style="padding:7px;border-bottom:1px solid {p["border"]};">{html.escape(str(o.get("exch", "")))}:{html.escape(str(o.get("tsym", "")))}</td>'
-        f'<td style="padding:7px;border-bottom:1px solid {p["border"]};">{html.escape(str(o.get("trantype", "")))} ({html.escape(str(o.get("prd", "")))})</td>'
-        f'<td style="padding:7px;border-bottom:1px solid {p["border"]};">{html.escape(str(o.get("fillshares", "0")))}/{html.escape(str(o.get("qty", "0")))}</td>'
-        f'<td style="padding:7px;border-bottom:1px solid {p["border"]};">₹{html.escape(str(o.get("prc", "0")))}</td>'
-        f'<td style="padding:7px;border-bottom:1px solid {p["border"]};color:{p["green"] if str(o.get("status", "")).upper() == "COMPLETE" else p["red"] if str(o.get("status", "")).upper() in ("REJECTED", "CANCELED") else p["amber"]};font-weight:700;">{html.escape(str(o.get("status", "")))}</td>'
-        f'<td style="padding:7px;border-bottom:1px solid {p["border"]};">{html.escape(str(o.get("reason", "")))}</td>'
+        f'<tr style="color:{p["text"]} !important;">'
+        f'<td style="padding:7px;border-bottom:1px solid {p["border"]};color:{p["text"]} !important;"><strong style="color:{p["text"]} !important;">{html.escape(str(o.get("norenordno", "")))}</strong></td>'
+        f'<td style="padding:7px;border-bottom:1px solid {p["border"]};color:{p["text"]} !important;">{html.escape(str(o.get("exch", "")))}:{html.escape(str(o.get("tsym", "")))}</td>'
+        f'<td style="padding:7px;border-bottom:1px solid {p["border"]};color:{p["text"]} !important;">{html.escape(str(o.get("trantype", "")))} ({html.escape(str(o.get("prd", "")))})</td>'
+        f'<td style="padding:7px;border-bottom:1px solid {p["border"]};color:{p["text"]} !important;">{html.escape(str(o.get("fillshares", "0")))}/{html.escape(str(o.get("qty", "0")))}</td>'
+        f'<td style="padding:7px;border-bottom:1px solid {p["border"]};color:{p["text"]} !important;">₹{html.escape(str(o.get("prc", "0")))}</td>'
+        f'<td style="padding:7px;border-bottom:1px solid {p["border"]};color:{p["green"] if str(o.get("status", "")).upper() == "COMPLETE" else p["red"] if str(o.get("status", "")).upper() in ("REJECTED", "CANCELED") else p["amber"]} !important;font-weight:700;">{html.escape(str(o.get("status", "")))}</td>'
+        f'<td style="padding:7px;border-bottom:1px solid {p["border"]};color:{p["text"]} !important;">{html.escape(str(o.get("reason", "")))}</td>'
         f"</tr>"
         for o in brk.get("orders", [])
     )
@@ -374,12 +374,12 @@ def render_dashboard_html(theme_name: Optional[str] = None) -> str:
     )
 
     brk_pos_rows = "".join(
-        f"<tr>"
-        f'<td style="padding:7px;border-bottom:1px solid {p["border"]};"><strong>{html.escape(str(x.get("exch", "")))}:{html.escape(str(x.get("tsym", "")))}</strong></td>'
-        f'<td style="padding:7px;border-bottom:1px solid {p["border"]};">{html.escape(str(x.get("prd", "")))}</td>'
-        f'<td style="padding:7px;border-bottom:1px solid {p["border"]};">{html.escape(str(x.get("netqty", "0")))}</td>'
-        f'<td style="padding:7px;border-bottom:1px solid {p["border"]};">₹{html.escape(str(x.get("netavgprc", "0")))}</td>'
-        f'<td style="padding:7px;border-bottom:1px solid {p["border"]};">₹{html.escape(str(x.get("urmtom", "0")))}</td>'
+        f'<tr style="color:{p["text"]} !important;">'
+        f'<td style="padding:7px;border-bottom:1px solid {p["border"]};color:{p["text"]} !important;"><strong style="color:{p["text"]} !important;">{html.escape(str(x.get("exch", "")))}:{html.escape(str(x.get("tsym", "")))}</strong></td>'
+        f'<td style="padding:7px;border-bottom:1px solid {p["border"]};color:{p["text"]} !important;">{html.escape(str(x.get("prd", "")))}</td>'
+        f'<td style="padding:7px;border-bottom:1px solid {p["border"]};color:{p["text"]} !important;">{html.escape(str(x.get("netqty", "0")))}</td>'
+        f'<td style="padding:7px;border-bottom:1px solid {p["border"]};color:{p["text"]} !important;">₹{html.escape(str(x.get("netavgprc", "0")))}</td>'
+        f'<td style="padding:7px;border-bottom:1px solid {p["border"]};color:{p["text"]} !important;">₹{html.escape(str(x.get("urmtom", "0")))}</td>'
         f"</tr>"
         for x in brk.get("positions", [])
     )
@@ -388,38 +388,48 @@ def render_dashboard_html(theme_name: Optional[str] = None) -> str:
     col2_books = (
         f'<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(380px,1fr));gap:14px;margin-bottom:14px;">'
         f'<div style="display:flex;flex-direction:column;gap:14px;">'
-        f'<div style="background:{p["surface"]};border:1px solid {p["border"]};border-radius:14px;padding:15px;">'
-        f'<div style="font-weight:700;margin-bottom:8px;">Active Strategy Bracket Positions</div>{pos_table}</div>'
-        f'<div style="background:{p["surface"]};border:1px solid {p["border"]};border-radius:14px;padding:15px;">'
-        f'<div style="font-weight:700;margin-bottom:8px;">Completed Strategy Trades Today</div>{trades_table}</div></div>'
+        f'<div style="background:{p["surface"]};border:1px solid {p["border"]};border-radius:14px;padding:15px;color:{p["text"]} !important;">'
+        f'<div style="font-weight:700;margin-bottom:8px;color:{p["text"]} !important;">Active Strategy Bracket Positions</div>{pos_table}</div>'
+        f'<div style="background:{p["surface"]};border:1px solid {p["border"]};border-radius:14px;padding:15px;color:{p["text"]} !important;">'
+        f'<div style="font-weight:700;margin-bottom:8px;color:{p["text"]} !important;">Completed Strategy Trades Today</div>{trades_table}</div></div>'
         f'<div style="display:flex;flex-direction:column;gap:14px;">'
-        f'<div style="background:{p["surface"]};border:1px solid {p["border"]};border-radius:14px;padding:15px;">'
-        f'<div style="font-weight:700;margin-bottom:8px;">Live Shoonya Broker Order Book (OrderBook)</div>{brk_orders_table}</div>'
-        f'<div style="background:{p["surface"]};border:1px solid {p["border"]};border-radius:14px;padding:15px;">'
-        f'<div style="font-weight:700;margin-bottom:8px;">Live Shoonya Broker Positions (PositionBook)</div>{brk_pos_table}</div></div>'
+        f'<div style="background:{p["surface"]};border:1px solid {p["border"]};border-radius:14px;padding:15px;color:{p["text"]} !important;">'
+        f'<div style="font-weight:700;margin-bottom:8px;color:{p["text"]} !important;">Live Shoonya Broker Order Book (OrderBook)</div>{brk_orders_table}</div>'
+        f'<div style="background:{p["surface"]};border:1px solid {p["border"]};border-radius:14px;padding:15px;color:{p["text"]} !important;">'
+        f'<div style="font-weight:700;margin-bottom:8px;color:{p["text"]} !important;">Live Shoonya Broker Positions (PositionBook)</div>{brk_pos_table}</div></div>'
         f"</div>"
     )
 
     log_lines = "".join(
-        f'<div style="margin-bottom:3px;color:{"#ef4444" if l.get("level") in ("ERROR", "CRITICAL") else "#f59e0b" if "WARN" in str(l.get("level", "")) else "#d1d5db"};">'
+        f'<div style="margin-bottom:3px;color:{"#ef4444" if l.get("level") in ("ERROR", "CRITICAL") else "#f59e0b" if "WARN" in str(l.get("level", "")) else "#d1d5db"} !important;">'
         f"[{html.escape(str(l.get('timestamp', '')))}] {html.escape(str(l.get('level', '')))} | "
         f"{html.escape(str(l.get('logger', '')))} | {html.escape(str(l.get('message', '')))}</div>"
         for l in snap.get("logs", [])[-50:]
-    ) or '<div style="color:#9ca3af;">Waiting for engine logs...</div>'
+    ) or '<div style="color:#9ca3af !important;">Waiting for engine logs...</div>'
+
+    reset_css = (
+        "<style>"
+        ".orb-root{color:var(--orb-text) !important;}"
+        ".orb-root strong,.orb-root b{color:var(--orb-text) !important;}"
+        ".orb-root th{color:var(--orb-muted) !important;}"
+        ".orb-root td,.orb-root p{color:inherit;}"
+        "</style>"
+    )
 
     return (
-        f'<div style="background:{p["bg"]};color:{p["text"]};padding:16px;border-radius:14px;'
+        f'<div class="orb-root not-prose" style="--orb-text:{p["text"]};--orb-muted:{p["muted"]};background:{p["bg"]};color:{p["text"]} !important;padding:16px;border-radius:14px;'
         'font-family:Inter,-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;">'
-        f'<div style="background:{p["surface"]};border:1px solid {p["border"]};border-radius:14px;padding:14px 16px;margin-bottom:14px;">'
-        f'<div style="font-size:18px;font-weight:700;margin-bottom:4px;">Shoonya Automated ORB Terminal '
-        f'<span style="font-size:12px;color:{p["muted"]};font-weight:500;">(Theme: {html.escape(chosen)})</span></div>'
-        f'<div style="font-size:12px;color:{p["muted"]};margin-bottom:8px;">15-Min ORB (09:15-09:30) + Intraday VWAP + Wilder RSI(14) | Algo ID: {html.escape(str(snap.get("sebi_algo_id", "--")))}</div>'
+        f"{reset_css}"
+        f'<div style="background:{p["surface"]};border:1px solid {p["border"]};border-radius:14px;padding:14px 16px;margin-bottom:14px;color:{p["text"]} !important;">'
+        f'<div style="font-size:18px;font-weight:700;margin-bottom:4px;color:{p["text"]} !important;">Shoonya Automated ORB Terminal '
+        f'<span style="font-size:12px;color:{p["muted"]} !important;font-weight:500;">(Theme: {html.escape(chosen)})</span></div>'
+        f'<div style="font-size:12px;color:{p["muted"]} !important;margin-bottom:8px;">15-Min ORB (09:15-09:30) + Intraday VWAP + Wilder RSI(14) | Algo ID: {html.escape(str(snap.get("sebi_algo_id", "--")))}</div>'
         f"<div>{badges_html}</div></div>"
         f'<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-bottom:14px;">{kpi_html}</div>'
         f"{col3_html}{col2_books}"
-        f'<div style="background:{p["surface"]};border:1px solid {p["border"]};border-radius:14px;padding:15px;">'
-        f'<div style="font-weight:700;margin-bottom:8px;">Live Engine &amp; Auto-Execution Logs</div>'
-        f'<div style="background:{p["log_bg"]};border:1px solid {p["border"]};border-radius:8px;padding:10px;'
+        f'<div style="background:{p["surface"]};border:1px solid {p["border"]};border-radius:14px;padding:15px;color:{p["text"]} !important;">'
+        f'<div style="font-weight:700;margin-bottom:8px;color:{p["text"]} !important;">Live Engine &amp; Auto-Execution Logs</div>'
+        f'<div style="background:{p["log_bg"]};border:1px solid {p["border"]};border-radius:8px;padding:10px;color:#d1d5db !important;'
         f'max-height:240px;overflow-y:auto;font-family:ui-monospace,Consolas,monospace;font-size:12px;">'
         f"{log_lines}</div></div></div>"
     )
