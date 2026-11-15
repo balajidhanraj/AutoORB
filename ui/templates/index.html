@@ -117,6 +117,52 @@
     .log-WARN, .log-WARNING { color: var(--amber); }
     .log-ERROR, .log-CRITICAL { color: var(--red); }
     .log-INFO { color: #d1d5db; }
+
+    .form-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+      gap: 10px;
+      margin-top: 10px;
+      align-items: end;
+    }
+    .field label {
+      display: block;
+      font-size: 0.72rem;
+      color: var(--muted);
+      margin-bottom: 4px;
+      text-transform: uppercase;
+    }
+    .field input, .field select {
+      width: 100%;
+      padding: 8px 10px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--surface-alt);
+      color: var(--text);
+      font-size: 0.85rem;
+    }
+    .row-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      margin-top: 12px;
+    }
+    .status-note {
+      margin-top: 10px;
+      font-size: 0.83rem;
+      padding: 8px 12px;
+      border-radius: 8px;
+      background: var(--surface-alt);
+      border: 1px solid var(--border);
+      display: none;
+    }
+    .status-note.show { display: block; }
+    .status-note.ok { border-color: var(--green); color: var(--green); }
+    .status-note.err { border-color: var(--red); color: var(--red); }
+    .btn-green { background: #065f46; border-color: var(--green); color: #fff; }
+    details summary { cursor: pointer; font-weight: 600; font-size: 0.96rem; list-style: none; }
+    .table-wrap { overflow-x: auto; }
   </style>
 </head>
 <body>
@@ -127,6 +173,7 @@
         <p>15-Min ORB (09:15-09:30) + Intraday VWAP + Wilder RSI(14) | SEBI Algo ID: <span id="algo-id">{{ snapshot.sebi_algo_id }}</span></p>
       </div>
       <div class="badges">
+        <span id="user-badge" class="badge">Client: {{ snapshot.user_id or '--' }}</span>
         <span id="mode-badge" class="badge {{ 'live' if snapshot.mode == 'LIVE' else 'paper' }}">MODE: {{ snapshot.mode }}</span>
         <span id="oauth-badge" class="badge">OAuth: {{ snapshot.oauth_status }}</span>
         <span id="ws-badge" class="badge">WS: {{ 'ONLINE' if snapshot.ws_connected else 'OFFLINE' }}</span>
@@ -160,6 +207,79 @@
       </div>
     </section>
 
+    <section class="card" style="margin-bottom: 18px;">
+      <div class="section-title">
+        <span>Live Shoonya Broker Account &amp; Funds</span>
+        <span id="broker-conn-badge" class="badge">BROKER: CHECKING...</span>
+      </div>
+      <div class="kv-grid" id="broker-limits-grid" style="grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));">
+        <div class="kv"><small>Client / Profile</small><strong id="brk-client">--</strong></div>
+        <div class="kv"><small>Available Cash</small><strong id="brk-cash">--</strong></div>
+        <div class="kv"><small>Payin / Payout</small><strong id="brk-payin">--</strong></div>
+        <div class="kv"><small>Collateral</small><strong id="brk-coll">--</strong></div>
+        <div class="kv"><small>Margin Used</small><strong id="brk-margin">--</strong></div>
+        <div class="kv"><small>Net Available</small><strong id="brk-net">--</strong></div>
+        <div class="kv"><small>Strategy Capital</small><strong id="brk-capital">₹{{ "%.2f"|format(snapshot.capital) }}</strong></div>
+      </div>
+      <div class="row-actions">
+        <button class="btn-primary" onclick="refreshBrokerData()">Sync Broker Funds &amp; Orders</button>
+        <a class="btn btn-green" href="https://prism.shoonya.com/" target="_blank" rel="noopener">+ Add Real Funds (Shoonya Prism)</a>
+        <a class="btn" href="https://trade.shoonya.com/" target="_blank" rel="noopener">Open Shoonya Web Terminal</a>
+        <div style="display:flex;gap:8px;align-items:center;margin-left:auto;flex-wrap:wrap;">
+          <input id="funds-amount" type="number" step="1000" value="50000" style="width:125px;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--surface-alt);color:var(--text);" />
+          <select id="funds-action" style="padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--surface-alt);color:var(--text);">
+            <option value="add">Add Capital</option>
+            <option value="set">Set Capital</option>
+          </select>
+          <button onclick="submitFunds()">Update Strategy Capital</button>
+        </div>
+      </div>
+      <div id="funds-msg" class="status-note"></div>
+    </section>
+
+    <section class="card" style="margin-bottom: 18px;">
+      <details>
+        <summary>Connect / Switch Any Shoonya Account (Multi-User Onboarding) ▾</summary>
+        <p style="font-size:0.82rem;color:var(--muted);margin-top:6px;">
+          Enter any Finvasia Shoonya account's API credentials below to switch and authenticate immediately for this session.
+        </p>
+        <div class="form-grid">
+          <div class="field"><label>Shoonya User ID *</label><input id="conn-uid" type="text" placeholder="e.g. FA53975" /></div>
+          <div class="field"><label>Account ID (Optional)</label><input id="conn-actid" type="text" placeholder="Defaults to User ID" /></div>
+          <div class="field"><label>Password *</label><input id="conn-pwd" type="password" placeholder="Shoonya login password" /></div>
+          <div class="field"><label>TOTP Secret (Base32) *</label><input id="conn-totp" type="password" placeholder="Base32 2FA key" /></div>
+          <div class="field"><label>API Key / Client ID</label><input id="conn-apikey" type="text" placeholder="Default: <USER_ID>_U" /></div>
+          <div class="field"><label>Secret Key (64-char) *</label><input id="conn-skey" type="password" placeholder="Shoonya API secret key" /></div>
+          <div class="field"><label>SEBI Algo ID</label><input id="conn-algoid" type="text" placeholder="Optional Algo ID" /></div>
+        </div>
+        <div class="row-actions">
+          <button class="btn-primary" onclick="connectBrokerAccount()">Connect &amp; Login Shoonya Account</button>
+        </div>
+        <div id="connect-msg" class="status-note"></div>
+      </details>
+    </section>
+
+    <section class="card" style="margin-bottom: 18px;">
+      <div class="section-title"><span>Live Shoonya Broker Order Book &amp; Quick Order Test</span></div>
+      <div class="form-grid" style="margin-bottom: 14px;">
+        <div class="field"><label>Exchange</label><select id="ord-exch"><option value="NSE">NSE</option><option value="NFO">NFO</option></select></div>
+        <div class="field"><label>Trading Symbol</label><input id="ord-tsym" type="text" value="TCS-EQ" /></div>
+        <div class="field"><label>Side</label><select id="ord-side"><option value="B">BUY (B)</option><option value="S">SELL (S)</option></select></div>
+        <div class="field"><label>Product</label><select id="ord-prd"><option value="C">CNC (C)</option><option value="I">MIS (I)</option><option value="M">NRML (M)</option></select></div>
+        <div class="field"><label>Order Type</label><select id="ord-prctyp"><option value="LMT">LMT</option><option value="MKT">MKT</option></select></div>
+        <div class="field"><label>Qty</label><input id="ord-qty" type="number" min="1" value="1" /></div>
+        <div class="field"><label>Price</label><input id="ord-prc" type="number" step="0.05" value="2407.50" /></div>
+        <div class="field"><button class="btn-primary" style="width:100%;" onclick="placeBrokerOrder()">Send Live Broker Order</button></div>
+      </div>
+      <div id="order-msg" class="status-note" style="margin-bottom: 12px;"></div>
+      <div class="table-wrap" id="broker-orders-container"><p class="empty">No broker orders loaded yet (connect or run OAuth login).</p></div>
+    </section>
+
+    <section class="card" style="margin-bottom: 18px;">
+      <div class="section-title"><span>Live Shoonya Broker Positions (Broker PositionBook)</span></div>
+      <div class="table-wrap" id="broker-positions-container"><p class="empty">No live broker positions.</p></div>
+    </section>
+
     <section class="grid-2" id="indices-grid"></section>
 
     <section class="card" style="margin-bottom: 18px;">
@@ -184,8 +304,22 @@
       return Number(val).toFixed(digits);
     }
 
+    function esc(str) {
+      return String(str ?? "").replace(/[&<>"']/g, s => ({
+        "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;"
+      }[s]));
+    }
+
+    function showNote(id, ok, msg) {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.textContent = msg;
+      el.className = "status-note show " + (ok ? "ok" : "err");
+    }
+
     function renderSnapshot(data) {
       document.getElementById("algo-id").textContent = data.sebi_algo_id || "--";
+      document.getElementById("user-badge").textContent = "Client: " + (data.user_id || "--");
       const modeBadge = document.getElementById("mode-badge");
       modeBadge.textContent = "MODE: " + data.mode;
       modeBadge.className = "badge " + (data.mode === "LIVE" ? "live" : "paper");
@@ -194,6 +328,73 @@
       document.getElementById("ws-badge").textContent = "WS: " + (data.ws_connected ? "ONLINE" : "OFFLINE");
       document.getElementById("ip-badge").textContent = "IP: " + (data.public_ip || "--");
       document.getElementById("clock-badge").textContent = "IST: " + data.ist_time;
+
+      const brk = data.broker || {};
+      const brkBadge = document.getElementById("broker-conn-badge");
+      brkBadge.textContent = brk.connected ? `BROKER: CONNECTED (${brk.user_id || data.user_id || "--"})` : "BROKER: NOT CONNECTED";
+      brkBadge.className = "badge " + (brk.connected ? "live" : "halted");
+
+      const clientLabel = [brk.user_id || data.user_id || "--", brk.profile_name, brk.account_name].filter(Boolean).join(" / ");
+      document.getElementById("brk-client").textContent = clientLabel || "--";
+      document.getElementById("brk-cash").textContent = "₹" + fmt(brk.cash || 0);
+      document.getElementById("brk-payin").textContent = `₹${fmt(brk.payin || 0)} / ₹${fmt(brk.payout || 0)}`;
+      document.getElementById("brk-coll").textContent = "₹" + fmt(brk.collateral || 0);
+      document.getElementById("brk-margin").textContent = "₹" + fmt(brk.margin_used || 0);
+      document.getElementById("brk-net").textContent = "₹" + fmt(brk.net_available || 0);
+      document.getElementById("brk-capital").textContent = "₹" + fmt(data.capital || 0);
+
+      const brkOrdBox = document.getElementById("broker-orders-container");
+      const brkOrders = brk.orders || [];
+      if (!brk.connected && brkOrders.length === 0) {
+        brkOrdBox.innerHTML = `<p class="empty">${esc(brk.error || "Not connected to Shoonya yet. Click Run OAuth Login or Connect Account.")}</p>`;
+      } else if (brkOrders.length === 0) {
+        brkOrdBox.innerHTML = '<p class="empty">No broker orders placed today on Shoonya.</p>';
+      } else {
+        const rows = brkOrders.map(o => {
+          const st = (o.status || "").toUpperCase();
+          const stCls = st === "COMPLETE" ? "pos" : ((st === "REJECTED" || st === "CANCELED") ? "neg" : "");
+          return `
+            <tr>
+              <td><strong>${esc(o.norenordno)}</strong></td>
+              <td>${esc(o.norentm)}</td>
+              <td>${esc(o.exch)}:${esc(o.tsym)}</td>
+              <td>${esc(o.trantype)} (${esc(o.prctyp)})</td>
+              <td>${esc(o.prd)}</td>
+              <td>${esc(o.fillshares)} / ${esc(o.qty)}</td>
+              <td>₹${esc(o.prc)}</td>
+              <td class="${stCls}"><strong>${esc(o.status)}</strong></td>
+              <td>${esc(o.ordersource)}</td>
+              <td>${esc(o.reason)}</td>
+            </tr>`;
+        }).join("");
+        brkOrdBox.innerHTML = `
+          <table>
+            <thead><tr><th>Order No</th><th>Time</th><th>Symbol</th><th>Side</th><th>Prod</th><th>Qty</th><th>Price</th><th>Status</th><th>Source</th><th>Reason / Remarks</th></tr></thead>
+            <tbody>${rows}</tbody>
+          </table>`;
+      }
+
+      const brkPosBox = document.getElementById("broker-positions-container");
+      const brkPositions = brk.positions || [];
+      if (brkPositions.length === 0) {
+        brkPosBox.innerHTML = '<p class="empty">No live broker positions open in Shoonya.</p>';
+      } else {
+        const rows = brkPositions.map(p => `
+          <tr>
+            <td><strong>${esc(p.exch)}:${esc(p.tsym)}</strong></td>
+            <td>${esc(p.prd)}</td>
+            <td>${esc(p.netqty)}</td>
+            <td>₹${esc(p.netavgprc)}</td>
+            <td>₹${esc(p.lp)}</td>
+            <td>₹${esc(p.rpnl)}</td>
+            <td>₹${esc(p.urmtom)}</td>
+          </tr>`).join("");
+        brkPosBox.innerHTML = `
+          <table>
+            <thead><tr><th>Symbol</th><th>Prod</th><th>Net Qty</th><th>Avg Price</th><th>LTP</th><th>Realized P&L</th><th>Unrealized MTM</th></tr></thead>
+            <tbody>${rows}</tbody>
+          </table>`;
+      }
 
       const mtmEl = document.getElementById("mtm-val");
       mtmEl.textContent = "₹" + fmt(data.mtm_pnl, 2);
@@ -313,6 +514,69 @@
       } else {
         await refreshStatus();
       }
+    }
+
+    async function refreshBrokerData() {
+      const res = await fetch("/api/broker/refresh", { method: "POST" });
+      const data = await res.json();
+      if (data.snapshot) renderSnapshot(data.snapshot);
+      showNote("funds-msg", data.ok, data.ok ? "Synced live Shoonya funds, orders, and positions." : "Broker session offline — click Run OAuth Login or Connect Account.");
+    }
+
+    async function submitFunds() {
+      const amount = parseFloat(document.getElementById("funds-amount").value || "0");
+      const action = document.getElementById("funds-action").value;
+      const res = await fetch("/api/broker/funds", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ amount, action })
+      });
+      const data = await res.json();
+      if (data.snapshot) renderSnapshot(data.snapshot);
+      showNote("funds-msg", data.ok, data.message || "Capital updated.");
+    }
+
+    async function connectBrokerAccount() {
+      const payload = {
+        user_id: document.getElementById("conn-uid").value,
+        account_id: document.getElementById("conn-actid").value,
+        password: document.getElementById("conn-pwd").value,
+        totp_secret: document.getElementById("conn-totp").value,
+        api_key: document.getElementById("conn-apikey").value,
+        secret_key: document.getElementById("conn-skey").value,
+        sebi_algo_id: document.getElementById("conn-algoid").value,
+      };
+      showNote("connect-msg", true, "Authenticating with Shoonya...");
+      const res = await fetch("/api/broker/connect", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      if (data.snapshot) renderSnapshot(data.snapshot);
+      showNote("connect-msg", data.ok, data.message || data.oauth_status);
+    }
+
+    async function placeBrokerOrder() {
+      const payload = {
+        exchange: document.getElementById("ord-exch").value,
+        tradingsymbol: document.getElementById("ord-tsym").value,
+        buy_or_sell: document.getElementById("ord-side").value,
+        product_type: document.getElementById("ord-prd").value,
+        price_type: document.getElementById("ord-prctyp").value,
+        quantity: parseInt(document.getElementById("ord-qty").value || "1", 10),
+        price: parseFloat(document.getElementById("ord-prc").value || "0"),
+      };
+      if (!confirm(`Send LIVE Shoonya broker order: ${payload.buy_or_sell} ${payload.quantity} ${payload.exchange}:${payload.tradingsymbol} (${payload.product_type} ${payload.price_type} @ ${payload.price})?`)) return;
+      showNote("order-msg", true, "Submitting order to Shoonya...");
+      const res = await fetch("/api/broker/order", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      if (data.snapshot) renderSnapshot(data.snapshot);
+      showNote("order-msg", data.ok, data.message || "Order request completed.");
     }
 
     refreshStatus();

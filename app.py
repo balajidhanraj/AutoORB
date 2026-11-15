@@ -59,7 +59,7 @@ def _badge(text: str, tone: str = "neutral") -> str:
     return (
         f'<span style="display:inline-block;padding:4px 10px;border-radius:999px;'
         f'font-size:12px;font-weight:600;color:{fg};background:{bg};'
-        f'border:1px solid {fg};margin-right:6px;">{html.escape(text)}</span>'
+        f'border:1px solid {fg};margin-right:6px;margin-bottom:4px;">{html.escape(text)}</span>'
     )
 
 
@@ -77,6 +77,111 @@ def _table_html(headers: Iterable[str], rows_html: str, empty_msg: str) -> str:
         f"<thead><tr>{ths}</tr></thead>"
         f"<tbody>{rows_html}</tbody>"
         "</table></div>"
+    )
+
+
+def _render_broker_section(snap: Dict[str, Any]) -> str:
+    brk = snap.get("broker") or {}
+    connected = bool(brk.get("connected"))
+    conn_badge = _badge(
+        f"BROKER: CONNECTED ({brk.get('user_id') or snap.get('user_id') or '--'})"
+        if connected
+        else "BROKER: NOT CONNECTED",
+        "live" if connected else "danger",
+    )
+    client_parts = [
+        str(brk.get("user_id") or snap.get("user_id") or "--"),
+        str(brk.get("profile_name") or ""),
+        str(brk.get("account_name") or ""),
+    ]
+    client_label = " / ".join(p for p in client_parts if p)
+
+    fields = [
+        ("Client / Profile", client_label or "--"),
+        ("Available Cash", f"₹{_fmt_num(brk.get('cash', 0.0))}"),
+        ("Payin / Payout", f"₹{_fmt_num(brk.get('payin', 0.0))} / ₹{_fmt_num(brk.get('payout', 0.0))}"),
+        ("Collateral", f"₹{_fmt_num(brk.get('collateral', 0.0))}"),
+        ("Margin Used", f"₹{_fmt_num(brk.get('margin_used', 0.0))}"),
+        ("Net Available", f"₹{_fmt_num(brk.get('net_available', 0.0))}"),
+        ("Strategy Capital", f"₹{_fmt_num(snap.get('capital', 0.0))}"),
+    ]
+    kv_cards = "".join(
+        f'<div style="background:#1f2937;padding:10px;border-radius:8px;">'
+        f'<div style="color:#9ca3af;font-size:11px;">{html.escape(label)}</div>'
+        f'<div style="color:#f3f4f6;font-size:14px;font-weight:700;">{html.escape(val)}</div>'
+        f"</div>"
+        for label, val in fields
+    )
+
+    err_html = (
+        f'<p style="color:#fca5a5;font-size:12px;margin-top:8px;">{html.escape(str(brk.get("error")))}</p>'
+        if brk.get("error") and not connected
+        else ""
+    )
+
+    ord_rows = ""
+    for o in brk.get("orders", []):
+        st = str(o.get("status", "")).upper()
+        st_color = "#10b981" if st == "COMPLETE" else "#ef4444" if st in {"REJECTED", "CANCELED"} else "#f59e0b"
+        ord_rows += (
+            f"<tr>"
+            f'<td style="padding:8px;border-bottom:1px solid #374151;"><strong>{html.escape(str(o.get("norenordno", "")))}</strong></td>'
+            f'<td style="padding:8px;border-bottom:1px solid #374151;">{html.escape(str(o.get("norentm", "")))}</td>'
+            f'<td style="padding:8px;border-bottom:1px solid #374151;">{html.escape(str(o.get("exch", "")))}:{html.escape(str(o.get("tsym", "")))}</td>'
+            f'<td style="padding:8px;border-bottom:1px solid #374151;">{html.escape(str(o.get("trantype", "")))} ({html.escape(str(o.get("prctyp", "")))})</td>'
+            f'<td style="padding:8px;border-bottom:1px solid #374151;">{html.escape(str(o.get("prd", "")))}</td>'
+            f'<td style="padding:8px;border-bottom:1px solid #374151;">{html.escape(str(o.get("fillshares", "0")))} / {html.escape(str(o.get("qty", "0")))}</td>'
+            f'<td style="padding:8px;border-bottom:1px solid #374151;">₹{html.escape(str(o.get("prc", "0")))}</td>'
+            f'<td style="padding:8px;border-bottom:1px solid #374151;color:{st_color};font-weight:700;">{html.escape(st)}</td>'
+            f'<td style="padding:8px;border-bottom:1px solid #374151;">{html.escape(str(o.get("ordersource", "")))}</td>'
+            f'<td style="padding:8px;border-bottom:1px solid #374151;">{html.escape(str(o.get("reason", "")))}</td>'
+            f"</tr>"
+        )
+    orders_table = _table_html(
+        ["Order No", "Time", "Symbol", "Side", "Prod", "Qty", "Price", "Status", "Source", "Reason / Remarks"],
+        ord_rows,
+        "No live Shoonya orders yet (or connect your account above).",
+    )
+
+    pos_rows = "".join(
+        f"<tr>"
+        f'<td style="padding:8px;border-bottom:1px solid #374151;"><strong>{html.escape(str(p.get("exch", "")))}:{html.escape(str(p.get("tsym", "")))}</strong></td>'
+        f'<td style="padding:8px;border-bottom:1px solid #374151;">{html.escape(str(p.get("prd", "")))}</td>'
+        f'<td style="padding:8px;border-bottom:1px solid #374151;">{html.escape(str(p.get("netqty", "0")))}</td>'
+        f'<td style="padding:8px;border-bottom:1px solid #374151;">₹{html.escape(str(p.get("netavgprc", "0")))}</td>'
+        f'<td style="padding:8px;border-bottom:1px solid #374151;">₹{html.escape(str(p.get("lp", "0")))}</td>'
+        f'<td style="padding:8px;border-bottom:1px solid #374151;">₹{html.escape(str(p.get("rpnl", "0")))}</td>'
+        f'<td style="padding:8px;border-bottom:1px solid #374151;">₹{html.escape(str(p.get("urmtom", "0")))}</td>'
+        f"</tr>"
+        for p in brk.get("positions", [])
+    )
+    pos_table = _table_html(
+        ["Symbol", "Prod", "Net Qty", "Avg Price", "LTP", "Realized P&L", "Unrealized MTM"],
+        pos_rows,
+        "No live broker positions open in Shoonya.",
+    )
+
+    links_bar = (
+        '<div style="margin-top:10px;display:flex;gap:10px;flex-wrap:wrap;">'
+        '<a href="https://prism.shoonya.com/" target="_blank" rel="noopener" '
+        'style="display:inline-block;padding:6px 12px;border-radius:8px;background:#065f46;'
+        'color:#fff;text-decoration:none;font-size:12px;font-weight:600;">+ Add Real Funds (Shoonya Prism)</a>'
+        '<a href="https://trade.shoonya.com/" target="_blank" rel="noopener" '
+        'style="display:inline-block;padding:6px 12px;border-radius:8px;background:#1f2937;'
+        'border:1px solid #374151;color:#f3f4f6;text-decoration:none;font-size:12px;font-weight:600;">Open Shoonya Web Terminal</a>'
+        "</div>"
+    )
+
+    return (
+        f'<div style="background:#111827;border:1px solid #374151;border-radius:12px;padding:16px;margin-bottom:16px;">'
+        f'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">'
+        f'<strong style="font-size:15px;">Live Shoonya Broker Account &amp; Funds</strong>{conn_badge}</div>'
+        f'<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:10px;">{kv_cards}</div>'
+        f"{links_bar}{err_html}</div>"
+        f'<div style="background:#111827;border:1px solid #374151;border-radius:12px;padding:16px;margin-bottom:16px;">'
+        f'<div style="font-weight:600;margin-bottom:8px;">Live Shoonya Broker Order Book (OrderBook)</div>{orders_table}</div>'
+        f'<div style="background:#111827;border:1px solid #374151;border-radius:12px;padding:16px;margin-bottom:16px;">'
+        f'<div style="font-weight:600;margin-bottom:8px;">Live Shoonya Broker Positions (PositionBook)</div>{pos_table}</div>'
     )
 
 
@@ -128,9 +233,13 @@ def render_dashboard_html() -> str:
 
     badges_html = "".join(
         [
+            _badge(f"Client: {snap.get('user_id') or '--'}", "info"),
             _badge(f"MODE: {mode}", "live" if mode == "LIVE" else "paper"),
             _badge(f"OAuth: {snap.get('oauth_status', '--')}", "info"),
-            _badge(f"WS: {'ONLINE' if snap.get('ws_connected') else 'OFFLINE'}", "live" if snap.get("ws_connected") else "neutral"),
+            _badge(
+                f"WS: {'ONLINE' if snap.get('ws_connected') else 'OFFLINE'}",
+                "live" if snap.get("ws_connected") else "neutral",
+            ),
             _badge(f"IP: {snap.get('public_ip', 'unknown')}", "info"),
             _badge(f"IST: {snap.get('ist_time', '--')}", "neutral"),
             _badge(f"Algo: {snap.get('sebi_algo_id', '--')}", "neutral"),
@@ -141,7 +250,11 @@ def render_dashboard_html() -> str:
         ("Live Total MTM", f"₹{mtm:.2f}", "#10b981" if mtm >= 0 else "#ef4444"),
         ("Trades Today", f"{snap.get('trades_taken', 0)} / {snap.get('max_trades', 2)}", "#f3f4f6"),
         ("India VIX (Min 12.0)", _fmt_num(vix), "#f3f4f6"),
-        ("System State", str(snap.get("halt_reason") or "HALTED") if halted else "ACTIVE", "#ef4444" if halted else "#10b981"),
+        (
+            "System State",
+            str(snap.get("halt_reason") or "HALTED") if halted else "ACTIVE",
+            "#ef4444" if halted else "#10b981",
+        ),
     ]
     kpi_html = "".join(
         f'<div style="background:#111827;border:1px solid #374151;border-radius:12px;padding:14px;">'
@@ -167,7 +280,7 @@ def render_dashboard_html() -> str:
     pos_table = _table_html(
         ["Contract", "State", "Qty", "Entry", "LTP", "SL Trig", "Target 1", "P&L"],
         pos_rows,
-        "No active positions.",
+        "No active strategy positions.",
     )
 
     trade_rows = "".join(
@@ -203,11 +316,12 @@ def render_dashboard_html() -> str:
         f'<div style="font-size:12px;color:#9ca3af;margin-bottom:10px;">15-Min ORB (09:15-09:30) + Intraday VWAP + Wilder RSI(14)</div>'
         f"<div>{badges_html}</div></div>"
         f'<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px;margin-bottom:16px;">{kpi_html}</div>'
+        f"{_render_broker_section(snap)}"
         f'{_render_indices(snap.get("indices", {}))}'
         f'<div style="background:#111827;border:1px solid #374151;border-radius:12px;padding:16px;margin-bottom:16px;">'
-        f'<div style="font-weight:600;margin-bottom:8px;">Active Positions &amp; Bracket Lifecycle</div>{pos_table}</div>'
+        f'<div style="font-weight:600;margin-bottom:8px;">Active Strategy Positions &amp; Bracket Lifecycle</div>{pos_table}</div>'
         f'<div style="background:#111827;border:1px solid #374151;border-radius:12px;padding:16px;margin-bottom:16px;">'
-        f'<div style="font-weight:600;margin-bottom:8px;">Completed Trades Today</div>{trades_table}</div>'
+        f'<div style="font-weight:600;margin-bottom:8px;">Completed Strategy Trades Today</div>{trades_table}</div>'
         f'<div style="background:#111827;border:1px solid #374151;border-radius:12px;padding:16px;">'
         f'<div style="font-weight:600;margin-bottom:8px;">Live Engine Logs</div>'
         f'<div style="background:#050810;border:1px solid #374151;border-radius:8px;padding:10px;'
@@ -226,6 +340,16 @@ def run_oauth_login() -> Tuple[str, str]:
     return status, render_dashboard_html()
 
 
+def sync_broker_ui() -> Tuple[str, str]:
+    """Force sync of live Shoonya limits, orders, and positions."""
+    brk = orchestrator.refresh_broker_data()
+    if brk.get("connected"):
+        msg = f"Synced live Shoonya account {brk.get('user_id')} (orders={len(brk.get('orders', []))}, cash=₹{brk.get('cash', 0):.2f})."
+    else:
+        msg = f"Broker offline: {brk.get('error') or 'Click Run OAuth Login or Connect Account first.'}"
+    return msg, render_dashboard_html()
+
+
 def toggle_trading_mode() -> Tuple[str, str]:
     """Toggle trading mode between PAPER and LIVE when no positions are open."""
     _changed, message = orchestrator.toggle_mode()
@@ -236,6 +360,56 @@ def trigger_kill_switch() -> Tuple[str, str]:
     """Execute the emergency kill switch to flatten positions and halt trading today."""
     orchestrator.trigger_kill_switch(reason="MANUAL_UI_KILL_SWITCH")
     return "Emergency kill switch executed.", render_dashboard_html()
+
+
+def update_funds_ui(amount: float, action: str) -> Tuple[str, str]:
+    """Add to or set strategy capital and sync live Shoonya broker balances."""
+    _ok, msg = orchestrator.add_or_update_funds(amount=amount or 0.0, action=action or "add")
+    return msg, render_dashboard_html()
+
+
+def place_broker_order_ui(
+    exchange: str,
+    tradingsymbol: str,
+    buy_or_sell: str,
+    product_type: str,
+    price_type: str,
+    quantity: float,
+    price: float,
+) -> Tuple[str, str]:
+    """Place a live broker order directly on Shoonya and refresh the order book."""
+    _ok, msg, _resp = orchestrator.place_manual_broker_order(
+        exchange=exchange,
+        tradingsymbol=tradingsymbol,
+        buy_or_sell=buy_or_sell,
+        quantity=int(quantity or 0),
+        price_type=price_type,
+        price=float(price or 0.0),
+        product_type=product_type,
+    )
+    return msg, render_dashboard_html()
+
+
+def connect_account_ui(
+    user_id: str,
+    account_id: str,
+    password: str,
+    totp_secret: str,
+    api_key: str,
+    secret_key: str,
+    sebi_algo_id: str,
+) -> Tuple[str, str]:
+    """Connect or switch to any user's Shoonya account at runtime."""
+    _ok, msg = orchestrator.connect_shoonya_account(
+        user_id=user_id or "",
+        password=password or "",
+        totp_secret=totp_secret or "",
+        secret_key=secret_key or "",
+        account_id=account_id or "",
+        api_key=api_key or "",
+        sebi_algo_id=sebi_algo_id or "",
+    )
+    return msg, render_dashboard_html()
 
 
 def refresh_dashboard() -> str:
@@ -254,9 +428,43 @@ def build_gradio_demo() -> Any:
         )
         with gr.Row():
             oauth_btn = gr.Button("Run OAuth Login", variant="primary")
+            sync_btn = gr.Button("Sync Broker Funds & Orders")
             mode_btn = gr.Button("Toggle PAPER / LIVE")
             refresh_btn = gr.Button("Refresh Snapshot")
             kill_btn = gr.Button("PANIC KILL SWITCH", variant="stop")
+
+        with gr.Accordion("Add / Update Strategy Capital & Add Real Funds", open=False):
+            gr.Markdown(
+                "[+ Add Real Funds in Shoonya Prism](https://prism.shoonya.com/) | "
+                "[Open Shoonya Web Terminal](https://trade.shoonya.com/)"
+            )
+            with gr.Row():
+                funds_amt = gr.Number(label="Amount (INR)", value=50000)
+                funds_act = gr.Dropdown(["add", "set"], value="add", label="Action")
+                funds_btn = gr.Button("Update Strategy Capital", variant="primary")
+
+        with gr.Accordion("Place Live Broker Order (Test / Manual)", open=False):
+            with gr.Row():
+                ord_exch = gr.Dropdown(["NSE", "NFO"], value="NSE", label="Exchange")
+                ord_tsym = gr.Textbox(value="TCS-EQ", label="Trading Symbol")
+                ord_side = gr.Dropdown(["B", "S"], value="B", label="Side")
+                ord_prd = gr.Dropdown(["C", "I", "M"], value="C", label="Product (C=CNC, I=MIS, M=NRML)")
+                ord_prctyp = gr.Dropdown(["LMT", "MKT"], value="LMT", label="Order Type")
+                ord_qty = gr.Number(value=1, precision=0, label="Qty")
+                ord_prc = gr.Number(value=2407.50, label="Price")
+            ord_btn = gr.Button("Send Live Broker Order", variant="primary")
+
+        with gr.Accordion("Connect / Switch Any Shoonya Account (Multi-User Onboarding)", open=False):
+            with gr.Row():
+                conn_uid = gr.Textbox(label="Shoonya User ID *", placeholder="e.g. FA53975")
+                conn_actid = gr.Textbox(label="Account ID (optional)", placeholder="Defaults to User ID")
+                conn_pwd = gr.Textbox(label="Password *", type="password")
+            with gr.Row():
+                conn_totp = gr.Textbox(label="TOTP Secret (Base32) *", type="password")
+                conn_apikey = gr.Textbox(label="API Key / Client ID", placeholder="Default: <USER_ID>_U")
+                conn_skey = gr.Textbox(label="Secret Key (64-char) *", type="password")
+                conn_algoid = gr.Textbox(label="SEBI Algo ID (optional)")
+            conn_btn = gr.Button("Connect & Login Shoonya Account", variant="primary")
 
         dashboard_html = gr.HTML(value=render_dashboard_html)
 
@@ -264,6 +472,11 @@ def build_gradio_demo() -> Any:
             fn=run_oauth_login,
             outputs=[status_banner, dashboard_html],
             api_name="oauth_login",
+        )
+        sync_btn.click(
+            fn=sync_broker_ui,
+            outputs=[status_banner, dashboard_html],
+            api_name="sync_broker",
         )
         mode_btn.click(
             fn=toggle_trading_mode,
@@ -279,6 +492,24 @@ def build_gradio_demo() -> Any:
             fn=refresh_dashboard,
             outputs=[dashboard_html],
             api_name="refresh_dashboard",
+        )
+        funds_btn.click(
+            fn=update_funds_ui,
+            inputs=[funds_amt, funds_act],
+            outputs=[status_banner, dashboard_html],
+            api_name="update_funds",
+        )
+        ord_btn.click(
+            fn=place_broker_order_ui,
+            inputs=[ord_exch, ord_tsym, ord_side, ord_prd, ord_prctyp, ord_qty, ord_prc],
+            outputs=[status_banner, dashboard_html],
+            api_name="place_broker_order",
+        )
+        conn_btn.click(
+            fn=connect_account_ui,
+            inputs=[conn_uid, conn_actid, conn_pwd, conn_totp, conn_apikey, conn_skey, conn_algoid],
+            outputs=[status_banner, dashboard_html],
+            api_name="connect_account",
         )
         gr.Timer(2.0).tick(fn=refresh_dashboard, outputs=[dashboard_html])
 

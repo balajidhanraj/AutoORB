@@ -33,7 +33,12 @@ from engine.indicators import calculate_intraday_vwap, calculate_wilder_rsi
 from engine.risk_manager import PositionState, RiskManager
 from engine.strategy_orb import ORBSignal, ORBStrategy
 from main import TradingSystemOrchestrator
-from ui.dashboard import create_app
+from ui.dashboard import (
+    BrokerConnectRequest,
+    BrokerFundsRequest,
+    BrokerOrderRequest,
+    create_app,
+)
 
 
 def _ist_dt(year: int, month: int, day: int, hour: int, minute: int, second: int = 0) -> datetime:
@@ -463,3 +468,101 @@ def test_web_ui_dashboard_endpoints(tmp_path: Path) -> None:
     health_resp = handlers["health"]()
     assert health_resp.status_code == 200
     assert json.loads(health_resp.body.decode("utf-8"))["status"] == "ok"
+
+
+def test_live_broker_ui_endpoints(tmp_path: Path) -> None:
+    settings = _make_settings(tmp_path, mode="PAPER", capital=200000.0)
+    orchestrator = TradingSystemOrchestrator(settings=settings)
+
+    # Mock raw broker API for sandbox-safe live terminal verification
+    mock_api = MagicMock()
+    mock_api.access_token = ""
+    mock_api.get_limits.return_value = {
+        "stat": "Ok",
+        "prfname": "SHOONYA",
+        "cash": "12500.50",
+        "payin": "0.00",
+        "payout": "0.00",
+        "brkcollamt": "0.00",
+        "marginused": "2500.00",
+        "request_time": "10:15:00 16-11-2026",
+    }
+    mock_api.get_user_details.return_value = {
+        "stat": "Ok",
+        "uid": "DEMO999",
+        "actid": "DEMO999",
+        "uname": "DEMO USER",
+    }
+    mock_api.get_order_book.return_value = [
+        {
+            "norenordno": "26111400043194",
+            "norentm": "22:25:09 15-11-2026",
+            "exch": "NSE",
+            "tsym": "TCS-EQ",
+            "trantype": "B",
+            "s_prdt_ali": "CNC",
+            "prctyp": "LMT",
+            "qty": "1",
+            "fillshares": "0",
+            "prc": "2407.50",
+            "status": "REJECTED",
+            "ordersource": "WEB",
+            "rejreason": "Margin Shortfall",
+        }
+    ]
+    mock_api.get_positions.return_value = []
+    mock_api.place_order.return_value = {"stat": "Ok", "norenordno": "26111600000001"}
+
+    orchestrator.client.api = mock_api
+    orchestrator.auth.api = mock_api
+    orchestrator.auth.login_via_selenium = MagicMock(side_effect=lambda: setattr(mock_api, "access_token", "LIVE_TOK") or "LIVE_TOK")  # type: ignore[method-assign]
+
+    app = create_app(orchestrator)
+    handlers = app.state.handlers
+
+    # 1. Connect new Shoonya user account
+    conn_resp = handlers["api_broker_connect"](
+        BrokerConnectRequest(
+            user_id="demo999",
+            password="secret",
+            totp_secret=pyotp.random_base32(),
+            secret_key="a" * 64,
+        )
+    )
+    assert conn_resp.status_code == 200
+    conn_data = json.loads(conn_resp.body.decode("utf-8"))
+    assert conn_data["ok"] is True
+    assert orchestrator.settings.shoonya_user_id == "DEMO999"
+    assert orchestrator.settings.shoonya_api_key == "DEMO999_U"
+    assert conn_data["snapshot"]["broker"]["connected"] is True
+    assert conn_data["snapshot"]["broker"]["cash"] == 12500.5
+    assert conn_data["snapshot"]["broker"]["orders"][0]["norenordno"] == "26111400043194"
+
+    # 2. Update strategy capital + sync limits
+    funds_resp = handlers["api_broker_funds"](BrokerFundsRequest(amount=50000.0, action="add"))
+    assert funds_resp.status_code == 200
+    funds_data = json.loads(funds_resp.body.decode("utf-8"))
+    assert funds_data["ok"] is True
+    assert funds_data["capital"] == 250000.0
+
+    # 3. Place manual live broker order + refresh
+    order_resp = handlers["api_broker_order"](
+        BrokerOrderRequest(
+            exchange="NSE",
+            tradingsymbol="TCS-EQ",
+            buy_or_sell="B",
+            quantity=1,
+            price_type="LMT",
+            price=2407.50,
+            product_type="C",
+        )
+    )
+    assert order_resp.status_code == 200
+    order_data = json.loads(order_resp.body.decode("utf-8"))
+    assert order_data["ok"] is True
+    assert order_data["response"]["norenordno"] == "26111600000001"
+    mock_api.place_order.assert_called_once()
+
+    refresh_resp = handlers["api_broker_refresh"]()
+    assert refresh_resp.status_code == 200
+    assert json.loads(refresh_resp.body.decode("utf-8"))["ok"] is True

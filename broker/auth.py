@@ -139,7 +139,13 @@ class ShoonyaAuthenticator:
         if token_path.exists():
             try:
                 payload = json.loads(token_path.read_text(encoding="utf-8"))
-                if payload.get("date") == today_str and payload.get("access_token"):
+                cached_uid = str(payload.get("user_id") or "").strip().upper()
+                expected_uid = self.settings.shoonya_user_id.strip().upper()
+                if (
+                    payload.get("date") == today_str
+                    and payload.get("access_token")
+                    and (not cached_uid or not expected_uid or cached_uid == expected_uid)
+                ):
                     candidate_token = str(payload["access_token"]).strip()
             except Exception as exc:
                 logger.warning("Failed reading token cache %s: %s", token_path, exc)
@@ -404,6 +410,22 @@ class ShoonyaAuthenticator:
 
         self.save_token(access_token)
         return access_token
+
+    def authenticate_once(self) -> Tuple[bool, str]:
+        """Run one immediate OAuth login attempt for interactive UI account connection."""
+        try:
+            self.login_via_selenium()
+            self.last_login_status = "AUTHENTICATED"
+            logger.info("Shoonya OAuth Login Successful (%s)", self.settings.shoonya_user_id)
+            if self.notifier:
+                self.notifier.send_async(
+                    f"Shoonya OAuth Login Successful ({self.settings.shoonya_user_id})"
+                )
+            return True, f"Authenticated Shoonya account {self.settings.shoonya_user_id}."
+        except Exception as exc:
+            self.last_login_status = f"LOGIN_FAILED: {exc}"
+            logger.error("Interactive OAuth login failed (%s): %s", self.settings.shoonya_user_id, exc)
+            return False, str(exc)
 
     def ensure_authenticated(self, force_refresh: bool = False) -> Optional[str]:
         """Ensure a valid OAuth session exists, using cache or 3-attempt Selenium retry."""

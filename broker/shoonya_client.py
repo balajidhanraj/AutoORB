@@ -138,6 +138,10 @@ class CompatibleNorenApi:
     def get_limits(self) -> Dict[str, Any]:
         return self._post("Limits", {"uid": self.username, "actid": self.account_id})
 
+    def get_user_details(self) -> Dict[str, Any]:
+        resp = self._post("UserDetails", {"uid": self.username})
+        return resp if isinstance(resp, dict) else {}
+
     def searchscrip(self, exchange: str, searchtext: str) -> Dict[str, Any]:
         return self._post("SearchScrip", {"uid": self.username, "exch": exchange, "stext": searchtext})
 
@@ -294,6 +298,8 @@ class ShoonyaClient:
         self._paper_orders: Dict[str, Dict[str, Any]] = {}
         self._paper_positions: Dict[str, Dict[str, Any]] = {}
         self._token_by_tsym: Dict[str, str] = {}
+        self._broker_snapshot_cache: Optional[Dict[str, Any]] = None
+        self._broker_snapshot_ts: float = 0.0
 
         # External callback hooks
         self._tick_listeners: List[Callable[[Dict[str, Any]], None]] = []
@@ -577,6 +583,194 @@ class ShoonyaClient:
             return self.api.get_positions()
         with self._lock:
             return [dict(pos) for pos in self._paper_positions.values()]
+
+    @staticmethod
+    def _to_float(val: Any, default: float = 0.0) -> float:
+        try:
+            return float(val)
+        except (TypeError, ValueError):
+            return default
+
+    def update_credentials(self, settings: AppSettings) -> None:
+        """Apply updated Shoonya credentials and clear cached session state."""
+        with self._lock:
+            self.settings = settings
+            self._broker_snapshot_cache = None
+            self._broker_snapshot_ts = 0.0
+            uid = settings.shoonya_user_id.strip().upper()
+            actid = (settings.shoonya_account_id or uid).strip().upper()
+            if hasattr(self.api, "username"):
+                self.api.username = uid
+            if hasattr(self.api, "account_id"):
+                self.api.account_id = actid
+            if hasattr(self.api, "api_key"):
+                self.api.api_key = settings.shoonya_api_key.strip()
+            if hasattr(self.api, "secret_key"):
+                self.api.secret_key = settings.shoonya_secret_key.strip()
+            if hasattr(self.api, "access_token"):
+                self.api.access_token = ""
+            sess = getattr(self.api, "_session", None)
+            if sess is not None and hasattr(sess, "headers"):
+                sess.headers.pop("Authorization", None)
+
+    def get_live_broker_snapshot(self, force: bool = False) -> Dict[str, Any]:
+        """Fetch live Shoonya account limits, order book, and positions (10s cached)."""
+        empty_snapshot: Dict[str, Any] = {
+            "connected": False,
+            "user_id": self.settings.shoonya_user_id,
+            "account_id": self.settings.shoonya_account_id or self.settings.shoonya_user_id,
+            "profile_name": "",
+            "account_name": "",
+            "cash": 0.0,
+            "payin": 0.0,
+            "payout": 0.0,
+            "collateral": 0.0,
+            "margin_used": 0.0,
+            "net_available": 0.0,
+            "request_time": "",
+            "orders": [],
+            "positions": [],
+            "error": "",
+        }
+        if not getattr(self.api, "access_token", ""):
+            return empty_snapshot
+
+        with self._lock:
+            if (
+                not force
+                and self._broker_snapshot_cache is not None
+                and (time.monotonic() - self._broker_snapshot_ts) < 10.0
+            ):
+                return dict(self._broker_snapshot_cache)
+
+        snapshot = dict(empty_snapshot)
+        try:
+            limits = self.api.get_limits()
+            if isinstance(limits, dict) and limits.get("stat") == "Ok":
+                cash = self._to_float(limits.get("cash"))
+                payin = self._to_float(limits.get("payin"))
+                payout = self._to_float(limits.get("payout"))
+                collateral = self._to_float(limits.get("brkcollamt"))
+                margin_used = self._to_float(limits.get("marginused"))
+                net_avail = round(cash + payin + collateral - margin_used, 2)
+                snapshot.update(
+                    {
+                        "connected": True,
+                        "profile_name": str(limits.get("prfname") or "SHOONYA"),
+                        "cash": cash,
+                        "payin": payin,
+                        "payout": payout,
+                        "collateral": collateral,
+                        "margin_used": margin_used,
+                        "net_available": net_avail,
+                        "request_time": str(limits.get("request_time") or ""),
+                    }
+                )
+            elif isinstance(limits, dict):
+                snapshot["error"] = str(limits.get("emsg") or "Unable to fetch Limits")
+        except Exception as exc:
+            snapshot["error"] = str(exc)
+
+        if hasattr(self.api, "get_user_details"):
+            try:
+                user_info = self.api.get_user_details()
+                if isinstance(user_info, dict) and user_info.get("stat") == "Ok":
+                    snapshot["account_name"] = str(
+                        user_info.get("uname") or user_info.get("cliname") or ""
+                    )
+                    if user_info.get("actid"):
+                        snapshot["account_id"] = str(user_info["actid"])
+                    if user_info.get("uid"):
+                        snapshot["user_id"] = str(user_info["uid"])
+            except Exception:
+                pass
+
+        try:
+            raw_orders = self.api.get_order_book() or []
+            norm_orders = []
+            for o in raw_orders:
+                if not isinstance(o, dict):
+                    continue
+                norm_orders.append(
+                    {
+                        "norenordno": str(o.get("norenordno") or ""),
+                        "norentm": str(o.get("norentm") or ""),
+                        "exch": str(o.get("exch") or ""),
+                        "tsym": str(o.get("tsym") or ""),
+                        "trantype": str(o.get("trantype") or ""),
+                        "prd": str(o.get("s_prdt_ali") or o.get("prd") or ""),
+                        "prctyp": str(o.get("prctyp") or ""),
+                        "qty": str(o.get("qty") or "0"),
+                        "fillshares": str(o.get("fillshares") or "0"),
+                        "prc": str(o.get("avgprc") or o.get("prc") or "0"),
+                        "status": str(o.get("status") or ""),
+                        "ordersource": str(o.get("ordersource") or ""),
+                        "reason": str(o.get("rejreason") or o.get("remarks") or ""),
+                    }
+                )
+            snapshot["orders"] = norm_orders
+        except Exception as exc:
+            logger.debug("Live OrderBook fetch failed: %s", exc)
+
+        try:
+            raw_positions = self.api.get_positions() or []
+            norm_positions = []
+            for p in raw_positions:
+                if not isinstance(p, dict):
+                    continue
+                norm_positions.append(
+                    {
+                        "exch": str(p.get("exch") or ""),
+                        "tsym": str(p.get("tsym") or ""),
+                        "prd": str(p.get("s_prdt_ali") or p.get("prd") or ""),
+                        "netqty": str(p.get("netqty") or "0"),
+                        "netavgprc": str(p.get("netavgprc") or "0.00"),
+                        "lp": str(p.get("lp") or "0.00"),
+                        "rpnl": str(p.get("rpnl") or "0.00"),
+                        "urmtom": str(p.get("urmtom") or "0.00"),
+                    }
+                )
+            snapshot["positions"] = norm_positions
+        except Exception as exc:
+            logger.debug("Live PositionBook fetch failed: %s", exc)
+
+        with self._lock:
+            self._broker_snapshot_cache = dict(snapshot)
+            self._broker_snapshot_ts = time.monotonic()
+        return snapshot
+
+    def place_live_broker_order(
+        self,
+        exchange: str,
+        tradingsymbol: str,
+        buy_or_sell: str,
+        quantity: int,
+        price_type: str = "LMT",
+        price: float = 0.0,
+        product_type: str = "C",
+    ) -> Dict[str, Any]:
+        """Place a manual/test order directly on the live Shoonya broker API."""
+        if not getattr(self.api, "access_token", ""):
+            return {"stat": "Not_Ok", "emsg": "Shoonya session is not authenticated. Connect account first."}
+
+        try:
+            resp = self.api.place_order(
+                buy_or_sell=buy_or_sell.strip().upper(),
+                product_type=product_type.strip().upper(),
+                exchange=exchange.strip().upper(),
+                tradingsymbol=tradingsymbol.strip().upper(),
+                quantity=int(quantity),
+                discloseqty=0,
+                price_type=price_type.strip().upper(),
+                price=float(price),
+                trigger_price=0.0,
+                retention="DAY",
+                remarks=self.settings.sebi_algo_id or "UI_MANUAL",
+            )
+        except Exception as exc:
+            resp = {"stat": "Not_Ok", "emsg": str(exc)}
+        self.get_live_broker_snapshot(force=True)
+        return resp if isinstance(resp, dict) else {"stat": "Not_Ok", "emsg": str(resp)}
 
     def _paper_place_order(
         self,

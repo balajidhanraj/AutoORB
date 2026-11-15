@@ -8,8 +8,34 @@ from typing import Any
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, Response
 from fastapi.templating import Jinja2Templates
+from pydantic import BaseModel
 
 TEMPLATES_DIR = Path(__file__).resolve().parent / "templates"
+
+
+class BrokerConnectRequest(BaseModel):
+    user_id: str
+    password: str
+    totp_secret: str
+    secret_key: str
+    account_id: str = ""
+    api_key: str = ""
+    sebi_algo_id: str = ""
+
+
+class BrokerFundsRequest(BaseModel):
+    amount: float
+    action: str = "add"
+
+
+class BrokerOrderRequest(BaseModel):
+    exchange: str = "NSE"
+    tradingsymbol: str = "TCS-EQ"
+    buy_or_sell: str = "B"
+    quantity: int = 1
+    price_type: str = "LMT"
+    price: float = 0.0
+    product_type: str = "C"
 
 
 def create_app(orchestrator: Any) -> FastAPI:
@@ -75,6 +101,69 @@ def create_app(orchestrator: Any) -> FastAPI:
             headers={"Content-Disposition": f'attachment; filename="{csv_path.name}"'},
         )
 
+    @app.post("/api/broker/connect")
+    def api_broker_connect(payload: BrokerConnectRequest) -> JSONResponse:
+        ok, msg = orchestrator.connect_shoonya_account(
+            user_id=payload.user_id,
+            password=payload.password,
+            totp_secret=payload.totp_secret,
+            secret_key=payload.secret_key,
+            account_id=payload.account_id,
+            api_key=payload.api_key,
+            sebi_algo_id=payload.sebi_algo_id,
+        )
+        return JSONResponse(
+            content={
+                "ok": ok,
+                "message": msg,
+                "oauth_status": orchestrator.auth.last_login_status,
+                "snapshot": orchestrator.get_status_snapshot(),
+            }
+        )
+
+    @app.post("/api/broker/refresh")
+    def api_broker_refresh() -> JSONResponse:
+        broker = orchestrator.refresh_broker_data()
+        return JSONResponse(
+            content={
+                "ok": bool(broker.get("connected")),
+                "broker": broker,
+                "snapshot": orchestrator.get_status_snapshot(),
+            }
+        )
+
+    @app.post("/api/broker/funds")
+    def api_broker_funds(payload: BrokerFundsRequest) -> JSONResponse:
+        ok, msg = orchestrator.add_or_update_funds(amount=payload.amount, action=payload.action)
+        return JSONResponse(
+            content={
+                "ok": ok,
+                "message": msg,
+                "capital": orchestrator.settings.capital,
+                "snapshot": orchestrator.get_status_snapshot(),
+            }
+        )
+
+    @app.post("/api/broker/order")
+    def api_broker_order(payload: BrokerOrderRequest) -> JSONResponse:
+        ok, msg, resp = orchestrator.place_manual_broker_order(
+            exchange=payload.exchange,
+            tradingsymbol=payload.tradingsymbol,
+            buy_or_sell=payload.buy_or_sell,
+            quantity=payload.quantity,
+            price_type=payload.price_type,
+            price=payload.price,
+            product_type=payload.product_type,
+        )
+        return JSONResponse(
+            content={
+                "ok": ok,
+                "message": msg,
+                "response": resp,
+                "snapshot": orchestrator.get_status_snapshot(),
+            }
+        )
+
     @app.get("/health")
     def health() -> JSONResponse:
         return JSONResponse(content={"status": "ok", "mode": orchestrator.settings.mode})
@@ -86,6 +175,10 @@ def create_app(orchestrator: Any) -> FastAPI:
         "api_oauth_login": api_oauth_login,
         "api_toggle_mode": api_toggle_mode,
         "api_trades_csv": api_trades_csv,
+        "api_broker_connect": api_broker_connect,
+        "api_broker_refresh": api_broker_refresh,
+        "api_broker_funds": api_broker_funds,
+        "api_broker_order": api_broker_order,
         "health": health,
     }
     return app

@@ -70,6 +70,11 @@ class TradingSystemOrchestrator:
             name="public-ip-detect",
             daemon=True,
         ).start()
+        if self.settings.shoonya_user_id:
+            try:
+                self.auth.load_cached_token()
+            except Exception as exc:
+                logger.debug("Startup cached token check skipped: %s", exc)
 
     def _detect_public_ip(self) -> None:
         """Best-effort lookup of the host outbound IPv4 address for Shoonya IP whitelisting."""
@@ -159,7 +164,109 @@ class TradingSystemOrchestrator:
             builder.backfill_from_api(self.client, lookback_days=3, now_ist=now_ist)
 
     def run_daily_login(self, force_refresh: bool = False) -> Optional[str]:
-        return self.auth.ensure_authenticated(force_refresh=force_refresh)
+        token = self.auth.ensure_authenticated(force_refresh=force_refresh)
+        if token:
+            self.client.get_live_broker_snapshot(force=True)
+        return token
+
+    def connect_shoonya_account(
+        self,
+        user_id: str,
+        password: str,
+        totp_secret: str,
+        secret_key: str,
+        account_id: str = "",
+        api_key: str = "",
+        sebi_algo_id: str = "",
+    ) -> Tuple[bool, str]:
+        """Configure or switch Shoonya credentials at runtime and authenticate immediately."""
+        uid = user_id.strip().upper()
+        pwd = password.strip()
+        totp = totp_secret.strip().replace(" ", "")
+        skey = secret_key.strip()
+        if not all([uid, pwd, totp, skey]):
+            return False, "User ID, Password, TOTP Secret, and Secret Key are required."
+
+        with self._lock:
+            if self.risk_manager.positions:
+                return False, "Cannot switch Shoonya account while strategy positions are active."
+            actid = (account_id.strip() or uid).upper()
+            cid = api_key.strip() or f"{uid}_U"
+            self.settings.shoonya_user_id = uid
+            self.settings.shoonya_account_id = actid
+            self.settings.shoonya_password = pwd
+            self.settings.shoonya_totp_secret = totp
+            self.settings.shoonya_api_key = cid
+            self.settings.shoonya_secret_key = skey
+            self.settings.shoonya_access_token = ""
+            if sebi_algo_id.strip():
+                self.settings.sebi_algo_id = sebi_algo_id.strip()
+            self.client.update_credentials(self.settings)
+
+        ok, msg = self.auth.authenticate_once()
+        if ok:
+            self.client.get_live_broker_snapshot(force=True)
+        return ok, msg
+
+    def add_or_update_funds(self, amount: float, action: str = "add") -> Tuple[bool, str]:
+        """Add to or set strategy capital allocation and sync live broker margin."""
+        try:
+            amt = float(amount)
+        except (TypeError, ValueError):
+            return False, "Invalid fund amount."
+
+        norm_action = action.strip().lower()
+        if norm_action == "set":
+            if amt < 0:
+                return False, "Capital amount must be non-negative."
+            self.settings.capital = round(amt, 2)
+        else:
+            if amt <= 0:
+                return False, "Added fund amount must be greater than zero."
+            self.settings.capital = round(self.settings.capital + amt, 2)
+
+        self.client.get_live_broker_snapshot(force=True)
+        msg = f"Strategy capital updated to ₹{self.settings.capital:,.2f}; broker balances synced."
+        logger.info(msg)
+        return True, msg
+
+    def refresh_broker_data(self) -> Dict[str, Any]:
+        """Force refresh of live Shoonya limits, orders, and positions."""
+        return self.client.get_live_broker_snapshot(force=True)
+
+    def place_manual_broker_order(
+        self,
+        exchange: str,
+        tradingsymbol: str,
+        buy_or_sell: str,
+        quantity: int,
+        price_type: str = "LMT",
+        price: float = 0.0,
+        product_type: str = "C",
+    ) -> Tuple[bool, str, Dict[str, Any]]:
+        """Place a live broker order directly through Shoonya API and return status."""
+        if not tradingsymbol.strip():
+            return False, "Trading symbol is required.", {}
+        if int(quantity) <= 0:
+            return False, "Order quantity must be positive.", {}
+
+        resp = self.client.place_live_broker_order(
+            exchange=exchange,
+            tradingsymbol=tradingsymbol,
+            buy_or_sell=buy_or_sell,
+            quantity=quantity,
+            price_type=price_type,
+            price=price,
+            product_type=product_type,
+        )
+        ok = isinstance(resp, dict) and resp.get("stat") == "Ok"
+        msg = (
+            f"Broker order accepted: {resp.get('norenordno')}"
+            if ok
+            else str(resp.get("emsg") or resp)
+        )
+        logger.info("Manual broker order (%s %s qty=%s): ok=%s msg=%s", buy_or_sell, tradingsymbol, quantity, ok, msg)
+        return ok, msg, resp
 
     def run_instrument_cache(self) -> int:
         return self.mapper.refresh_instrument_cache()
@@ -334,6 +441,8 @@ class TradingSystemOrchestrator:
 
         return {
             "mode": self.settings.mode,
+            "capital": self.settings.capital,
+            "user_id": self.settings.shoonya_user_id,
             "oauth_status": self.auth.last_login_status,
             "token_date": self.auth.last_token_date,
             "sebi_algo_id": self.settings.sebi_algo_id,
@@ -352,6 +461,7 @@ class TradingSystemOrchestrator:
             "indices": indices_data,
             "positions": positions_data,
             "completed_trades": [t.__dict__ for t in self.risk_manager.completed_trades],
+            "broker": self.client.get_live_broker_snapshot(force=False),
             "logs": get_recent_logs(100),
         }
 
