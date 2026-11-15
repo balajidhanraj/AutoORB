@@ -1,0 +1,681 @@
+"""Thread-safe wrapper around Shoonya NorenRestApiOAuth REST, WebSocket, and PAPER simulator."""
+
+from __future__ import annotations
+
+import hashlib
+import json
+import threading
+import time
+import uuid
+from datetime import datetime
+from typing import Any, Callable, Dict, List, Optional
+
+import requests
+import websocket
+
+from config.settings import IST, AppSettings
+from utils.logger import get_logger
+
+logger = get_logger("broker.client")
+
+try:
+    from NorenRestApiPy.NorenApi import NorenApi as _UpstreamNorenApi  # type: ignore
+except ImportError:
+    _UpstreamNorenApi = None
+
+
+class CompatibleNorenApi:
+    """Lightweight REST + WebSocket compatible Shoonya OAuth API client fallback."""
+
+    def __init__(
+        self,
+        host: str = "https://api.shoonya.com/NorenWClientAPI/",
+        websocket_url: str = "wss://api.shoonya.com/NorenWSAPI/",
+        api_key: str = "",
+        secret_key: str = "",
+        redirect_uri: str = "http://127.0.0.1:8080/callback",
+        user_id: str = "",
+    ) -> None:
+        self.host = host.rstrip("/") + "/"
+        self.websocket_url = websocket_url
+        self.api_key = api_key
+        self.secret_key = secret_key
+        self.redirect_uri = redirect_uri
+        self.access_token: str = ""
+        self.username: str = user_id.strip().upper()
+        self.account_id: str = user_id.strip().upper()
+        self._session = requests.Session()
+        self._ws_app: Optional[websocket.WebSocketApp] = None
+        self._ws_thread: Optional[threading.Thread] = None
+        self._ws_connected = False
+
+    def _resolve_client_id(self) -> str:
+        """Resolve Shoonya OAuth client_id (typically <USER_ID>_U, not the 64-char secret)."""
+        if self.api_key and self.api_key != self.secret_key and len(self.api_key) != 64:
+            return self.api_key
+        if self.username:
+            return f"{self.username}_U"
+        return self.api_key
+
+    def getOAuthURL(self) -> str:  # noqa: N802
+        client_id = self._resolve_client_id()
+        return f"https://api.shoonya.com/OAuthlogin/authorize/oauth?client_id={client_id}"
+
+    def fetch_oauth_code_direct(
+        self,
+        user_id: str,
+        password: str,
+        totp_code: str,
+        client_id: Optional[str] = None,
+    ) -> str:
+        """Obtain the OAuth authorization code via Shoonya's QuickAuth NOREN_API handshake."""
+        uid = user_id.strip().upper()
+        self.username = uid
+        self.account_id = self.account_id or uid
+        if client_id and client_id != self.secret_key and len(client_id) != 64:
+            cid = client_id
+        else:
+            cid = self._resolve_client_id() or f"{uid}_U"
+
+        pwd_hash = hashlib.sha256(password.encode("utf-8")).hexdigest()
+        app_hash = hashlib.sha256(f"{uid}|S3cur3!d".encode("utf-8")).hexdigest()
+        payload = {
+            "apkversion": "W2_20260827",
+            "uid": uid,
+            "pwd": pwd_hash,
+            "factor2": totp_code,
+            "appkey": app_hash,
+            "imei": str(uuid.uuid4()),
+            "addldivinf": "Mozilla/5.0",
+            "app_key": cid,
+            "source": "API",
+            "vc": "NOREN_API",
+        }
+        resp = self._session.post(
+            f"{self.host}QuickAuth",
+            data=f"jData={json.dumps(payload)}",
+            timeout=15,
+        )
+        data = resp.json()
+        if data.get("stat") == "Ok" and data.get("code"):
+            return str(data["code"]).strip()
+        raise RuntimeError(f"QuickAuth OAuth code request failed: {data}")
+
+    def getAccessToken(self, code: str) -> Dict[str, Any]:  # noqa: N802
+        cid = self._resolve_client_id()
+        uid = self.username
+        checksum = hashlib.sha256((cid + self.secret_key + code).encode("utf-8")).hexdigest()
+        payload = {
+            "code": code,
+            "checksum": checksum,
+            "uid": uid,
+        }
+        resp = self._session.post(
+            f"{self.host}GenAcsTok",
+            data=f"jData={json.dumps(payload)}",
+            timeout=15,
+        )
+        data = resp.json()
+        if isinstance(data, dict) and data.get("susertoken") and not data.get("access_token"):
+            data["access_token"] = data["susertoken"]
+        return data
+
+    def injectOAuthHeader(self, access_token: str, user_id: str, account_id: str) -> None:  # noqa: N802
+        self.access_token = access_token
+        self.username = user_id
+        self.account_id = account_id or user_id
+        self._session.headers.update({"Authorization": f"Bearer {access_token}"})
+
+    def _post(self, endpoint: str, body: Dict[str, Any]) -> Any:
+        if "Authorization" in self._session.headers:
+            data = f"jData={json.dumps(body)}"
+        else:
+            data = f"jData={json.dumps(body)}&jKey={self.access_token}"
+        resp = self._session.post(f"{self.host}{endpoint}", data=data, timeout=15)
+        resp.raise_for_status()
+        return resp.json()
+
+    def get_limits(self) -> Dict[str, Any]:
+        return self._post("Limits", {"uid": self.username, "actid": self.account_id})
+
+    def searchscrip(self, exchange: str, searchtext: str) -> Dict[str, Any]:
+        return self._post("SearchScrip", {"uid": self.username, "exch": exchange, "stext": searchtext})
+
+    def get_time_price_series(
+        self,
+        exchange: str,
+        token: str,
+        starttime: Optional[int] = None,
+        endtime: Optional[int] = None,
+        interval: Optional[str] = None,
+        intrv: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        payload: Dict[str, Any] = {
+            "uid": self.username,
+            "exch": exchange,
+            "token": str(token),
+            "intrv": str(intrv or interval or "5"),
+        }
+        if starttime is not None:
+            payload["st"] = str(int(starttime))
+        if endtime is not None:
+            payload["et"] = str(int(endtime))
+        resp = self._post("TPSeries", payload)
+        return resp if isinstance(resp, list) else []
+
+    def place_order(self, **kwargs: Any) -> Dict[str, Any]:
+        payload = {
+            "uid": self.username,
+            "actid": self.account_id,
+            "exch": kwargs["exchange"],
+            "tsym": kwargs["tradingsymbol"],
+            "qty": str(kwargs["quantity"]),
+            "prc": str(kwargs.get("price", 0)),
+            "trgprc": str(kwargs.get("trigger_price", 0)),
+            "dscqty": str(kwargs.get("discloseqty", 0)),
+            "prd": kwargs.get("product_type", "I"),
+            "trantype": kwargs["buy_or_sell"],
+            "prctyp": kwargs.get("price_type", "LMT"),
+            "ret": kwargs.get("retention", "DAY"),
+            "remarks": kwargs.get("remarks", ""),
+        }
+        return self._post("PlaceOrder", payload)
+
+    def modify_order(self, **kwargs: Any) -> Dict[str, Any]:
+        payload = {
+            "uid": self.username,
+            "norenordno": str(kwargs["orderno"]),
+            "exch": kwargs["exchange"],
+            "tsym": kwargs["tradingsymbol"],
+            "qty": str(kwargs["newquantity"]),
+            "prctyp": kwargs.get("newprice_type", "SL-LMT"),
+            "prc": str(kwargs.get("newprice", 0)),
+            "trgprc": str(kwargs.get("newtrigger_price", 0)),
+        }
+        return self._post("ModifyOrder", payload)
+
+    def cancel_order(self, orderno: str) -> Dict[str, Any]:
+        return self._post("CancelOrder", {"uid": self.username, "norenordno": str(orderno)})
+
+    def get_positions(self) -> List[Dict[str, Any]]:
+        resp = self._post("PositionBook", {"uid": self.username, "actid": self.account_id})
+        return resp if isinstance(resp, list) else []
+
+    def get_order_book(self) -> List[Dict[str, Any]]:
+        resp = self._post("OrderBook", {"uid": self.username})
+        return resp if isinstance(resp, list) else []
+
+    def start_websocket(
+        self,
+        order_update_callback: Optional[Callable[[Dict[str, Any]], None]] = None,
+        subscribe_callback: Optional[Callable[[Dict[str, Any]], None]] = None,
+        socket_open_callback: Optional[Callable[[], None]] = None,
+        socket_close_callback: Optional[Callable[[], None]] = None,
+        socket_error_callback: Optional[Callable[[Any], None]] = None,
+    ) -> None:
+        def _on_open(ws: Any) -> None:
+            self._ws_connected = True
+            connect_msg = {
+                "t": "c",
+                "uid": self.username,
+                "actid": self.account_id,
+                "susertoken": self.access_token,
+                "source": "API",
+            }
+            ws.send(json.dumps(connect_msg))
+            if socket_open_callback:
+                socket_open_callback()
+
+        def _on_message(_ws: Any, message: str) -> None:
+            try:
+                data = json.loads(message)
+            except Exception:
+                return
+            msg_type = data.get("t")
+            if msg_type in {"tk", "tf", "dk", "df"} and subscribe_callback:
+                subscribe_callback(data)
+            elif msg_type in {"om"} and order_update_callback:
+                order_update_callback(data)
+
+        def _on_error(_ws: Any, error: Any) -> None:
+            if socket_error_callback:
+                socket_error_callback(error)
+
+        def _on_close(_ws: Any, *_args: Any) -> None:
+            self._ws_connected = False
+            if socket_close_callback:
+                socket_close_callback()
+
+        self._ws_app = websocket.WebSocketApp(
+            self.websocket_url,
+            on_open=_on_open,
+            on_message=_on_message,
+            on_error=_on_error,
+            on_close=_on_close,
+        )
+        self._ws_thread = threading.Thread(
+            target=self._ws_app.run_forever,
+            kwargs={"ping_interval": 20, "ping_timeout": 10},
+            name="shoonya-ws",
+            daemon=True,
+        )
+        self._ws_thread.start()
+
+    def close_websocket(self) -> None:
+        if self._ws_app is not None:
+            try:
+                self._ws_app.close()
+            except Exception:
+                pass
+            self._ws_app = None
+            self._ws_connected = False
+
+    def subscribe(self, instrument: Any) -> None:
+        if self._ws_app is None or not self._ws_connected:
+            return
+        keys = instrument if isinstance(instrument, list) else [instrument]
+        payload = {"t": "t", "k": "#".join(str(k) for k in keys)}
+        self._ws_app.send(json.dumps(payload))
+
+
+class ShoonyaClient:
+    """Thread-safe Shoonya broker client supporting LIVE and PAPER modes with WS watchdog."""
+
+    def __init__(self, settings: AppSettings, raw_api: Optional[Any] = None) -> None:
+        self.settings = settings
+        self._lock = threading.RLock()
+        self.ltp_cache: Dict[str, float] = {}
+        self.volume_cache: Dict[str, int] = {}
+        self.subscribed_tokens: set[str] = set()
+        self.last_tick_monotonic: float = 0.0
+        self.ws_connected: bool = False
+
+        # Paper simulator state
+        self._paper_orders: Dict[str, Dict[str, Any]] = {}
+        self._paper_positions: Dict[str, Dict[str, Any]] = {}
+        self._token_by_tsym: Dict[str, str] = {}
+
+        # External callback hooks
+        self._tick_listeners: List[Callable[[Dict[str, Any]], None]] = []
+        self._order_listeners: List[Callable[[Dict[str, Any]], None]] = []
+        self._reconnect_callbacks: List[Callable[[], None]] = []
+
+        if raw_api is not None:
+            self.api = raw_api
+        elif _UpstreamNorenApi is not None:
+            self.api = _UpstreamNorenApi(
+                host=settings.shoonya_host,
+                websocket=settings.shoonya_ws_host,
+            )
+        else:
+            self.api = CompatibleNorenApi(
+                host=settings.shoonya_host,
+                websocket_url=settings.shoonya_ws_host,
+                api_key=settings.shoonya_api_key,
+                secret_key=settings.shoonya_secret_key,
+                redirect_uri=settings.shoonya_redirect_uri,
+                user_id=settings.shoonya_user_id,
+            )
+
+    def register_tick_listener(self, callback: Callable[[Dict[str, Any]], None]) -> None:
+        with self._lock:
+            self._tick_listeners.append(callback)
+
+    def register_order_listener(self, callback: Callable[[Dict[str, Any]], None]) -> None:
+        with self._lock:
+            self._order_listeners.append(callback)
+
+    def register_reconnect_callback(self, callback: Callable[[], None]) -> None:
+        with self._lock:
+            self._reconnect_callbacks.append(callback)
+
+    def register_symbol_token(self, tradingsymbol: str, exchange: str, token: str) -> None:
+        """Map tradingsymbol to exchange|token for paper order fill simulation."""
+        with self._lock:
+            self._token_by_tsym[tradingsymbol] = f"{exchange}|{token}"
+
+    def update_ltp(self, key: str, ltp: float, volume: Optional[int] = None) -> None:
+        """Update cached LTP & volume for a token key (e.g., NSE|26000) and evaluate paper fills."""
+        with self._lock:
+            self.ltp_cache[key] = float(ltp)
+            if volume is not None:
+                self.volume_cache[key] = int(volume)
+            self.last_tick_monotonic = time.monotonic()
+
+        if self.settings.mode == "PAPER":
+            self._evaluate_paper_orders_for_key(key, float(ltp))
+
+    def get_ltp(self, key: str) -> Optional[float]:
+        with self._lock:
+            return self.ltp_cache.get(key)
+
+    def get_volume(self, key: str) -> int:
+        with self._lock:
+            return self.volume_cache.get(key, 0)
+
+    def start_websocket(self) -> None:
+        """Connect to Shoonya WebSocket and begin streaming subscribed tokens."""
+        def _on_tick(tick: Dict[str, Any]) -> None:
+            exch = tick.get("e", "")
+            tok = tick.get("tk", "")
+            key = f"{exch}|{tok}" if exch and tok else ""
+            raw_lp = tick.get("lp")
+            if key and raw_lp is not None:
+                try:
+                    lp = float(raw_lp)
+                    vol = int(float(tick["v"])) if tick.get("v") is not None else None
+                    self.update_ltp(key, lp, vol)
+                except (ValueError, TypeError):
+                    pass
+
+            for listener in list(self._tick_listeners):
+                try:
+                    listener(tick)
+                except Exception as exc:
+                    logger.error("Tick listener error: %s", exc)
+
+        def _on_order_update(order_msg: Dict[str, Any]) -> None:
+            for listener in list(self._order_listeners):
+                try:
+                    listener(order_msg)
+                except Exception as exc:
+                    logger.error("Order listener error: %s", exc)
+
+        def _on_open() -> None:
+            with self._lock:
+                self.ws_connected = True
+                self.last_tick_monotonic = time.monotonic()
+                tokens = list(self.subscribed_tokens)
+            logger.info("Shoonya WebSocket connected; subscribing to %d tokens", len(tokens))
+            if tokens:
+                try:
+                    self.api.subscribe(tokens)
+                except Exception as exc:
+                    logger.error("Failed re-subscribing tokens on WS open: %s", exc)
+
+        def _on_close() -> None:
+            with self._lock:
+                self.ws_connected = False
+            logger.warning("Shoonya WebSocket closed")
+
+        def _on_error(err: Any) -> None:
+            logger.error("Shoonya WebSocket error: %s", err)
+
+        self.api.start_websocket(
+            order_update_callback=_on_order_update,
+            subscribe_callback=_on_tick,
+            socket_open_callback=_on_open,
+            socket_close_callback=_on_close,
+            socket_error_callback=_on_error,
+        )
+
+    def subscribe(self, keys: List[str]) -> None:
+        with self._lock:
+            new_keys = [k for k in keys if k]
+            self.subscribed_tokens.update(new_keys)
+        if new_keys and self.ws_connected:
+            try:
+                self.api.subscribe(new_keys)
+            except Exception as exc:
+                logger.error("WebSocket subscribe error: %s", exc)
+
+    def check_ws_watchdog(self, now_ist: Optional[datetime] = None) -> bool:
+        """Reconnect WebSocket and trigger candle backfill if feed stalls >15s in market hours."""
+        dt = now_ist or datetime.now(IST)
+        in_market = self.settings.market_open_time <= dt.time() <= self.settings.market_close_time
+        if not in_market or not self.subscribed_tokens:
+            return False
+
+        elapsed = time.monotonic() - self.last_tick_monotonic if self.last_tick_monotonic > 0 else 999.0
+        if self.ws_connected and elapsed <= self.settings.ws_watchdog_timeout_sec:
+            return False
+
+        logger.warning("WebSocket watchdog triggered (connected=%s, silent=%.1fs); reconnecting...", self.ws_connected, elapsed)
+        try:
+            if hasattr(self.api, "close_websocket"):
+                self.api.close_websocket()
+        except Exception:
+            pass
+        self.start_websocket()
+        for cb in list(self._reconnect_callbacks):
+            try:
+                cb()
+            except Exception as exc:
+                logger.error("Reconnect callback failed: %s", exc)
+        return True
+
+    def searchscrip(self, exchange: str, searchtext: str) -> Dict[str, Any]:
+        return self.api.searchscrip(exchange=exchange, searchtext=searchtext)
+
+    def get_time_price_series(
+        self,
+        exchange: str,
+        token: str,
+        starttime: int,
+        endtime: Optional[int] = None,
+        intrv: str = "5",
+    ) -> List[Dict[str, Any]]:
+        return self.api.get_time_price_series(
+            exchange=exchange,
+            token=token,
+            starttime=starttime,
+            endtime=endtime,
+            intrv=intrv,
+        )
+
+    def place_order(
+        self,
+        buy_or_sell: str,
+        exchange: str,
+        tradingsymbol: str,
+        quantity: int,
+        price_type: str = "LMT",
+        price: float = 0.0,
+        trigger_price: float = 0.0,
+        product_type: str = "I",
+        retention: str = "DAY",
+        discloseqty: int = 0,
+        remarks: str = "",
+    ) -> Dict[str, Any]:
+        """Place an order in LIVE mode or simulate fill/resting order in PAPER mode."""
+        if self.settings.mode == "LIVE":
+            return self.api.place_order(
+                buy_or_sell=buy_or_sell,
+                product_type=product_type,
+                exchange=exchange,
+                tradingsymbol=tradingsymbol,
+                quantity=quantity,
+                discloseqty=discloseqty,
+                price_type=price_type,
+                price=price,
+                trigger_price=trigger_price,
+                retention=retention,
+                remarks=remarks or self.settings.sebi_algo_id,
+            )
+
+        return self._paper_place_order(
+            buy_or_sell=buy_or_sell,
+            exchange=exchange,
+            tradingsymbol=tradingsymbol,
+            quantity=quantity,
+            price_type=price_type,
+            price=price,
+            trigger_price=trigger_price,
+            remarks=remarks or self.settings.sebi_algo_id,
+        )
+
+    def modify_order(
+        self,
+        orderno: str,
+        exchange: str,
+        tradingsymbol: str,
+        newquantity: int,
+        newprice_type: str = "SL-LMT",
+        newprice: float = 0.0,
+        newtrigger_price: float = 0.0,
+    ) -> Dict[str, Any]:
+        if self.settings.mode == "LIVE":
+            return self.api.modify_order(
+                orderno=orderno,
+                exchange=exchange,
+                tradingsymbol=tradingsymbol,
+                newquantity=newquantity,
+                newprice_type=newprice_type,
+                newprice=newprice,
+                newtrigger_price=newtrigger_price,
+            )
+
+        with self._lock:
+            order = self._paper_orders.get(orderno)
+            if not order:
+                return {"stat": "Not_Ok", "emsg": "Paper order not found"}
+            if order["status"] in {"COMPLETE", "CANCELED", "REJECTED"}:
+                return {"stat": "Not_Ok", "emsg": f"Cannot modify order in status {order['status']}"}
+            order["qty"] = int(newquantity)
+            order["prctyp"] = newprice_type
+            order["prc"] = float(newprice)
+            order["trgprc"] = float(newtrigger_price)
+            logger.info(
+                "[PAPER] Modified order %s (%s): qty=%s type=%s prc=%.2f trg=%.2f",
+                orderno,
+                tradingsymbol,
+                newquantity,
+                newprice_type,
+                newprice,
+                newtrigger_price,
+            )
+            return {"stat": "Ok", "result": orderno}
+
+    def cancel_order(self, orderno: str) -> Dict[str, Any]:
+        if self.settings.mode == "LIVE":
+            return self.api.cancel_order(orderno=orderno)
+
+        with self._lock:
+            order = self._paper_orders.get(orderno)
+            if not order:
+                return {"stat": "Not_Ok", "emsg": "Paper order not found"}
+            if order["status"] in {"COMPLETE", "CANCELED"}:
+                return {"stat": "Ok", "result": orderno}
+            order["status"] = "CANCELED"
+            logger.info("[PAPER] Canceled order %s", orderno)
+            return {"stat": "Ok", "result": orderno}
+
+    def get_order_book(self) -> List[Dict[str, Any]]:
+        if self.settings.mode == "LIVE":
+            return self.api.get_order_book()
+        with self._lock:
+            return [dict(o) for o in self._paper_orders.values()]
+
+    def get_order_status(self, orderno: str) -> Optional[Dict[str, Any]]:
+        for order in self.get_order_book():
+            if str(order.get("norenordno")) == str(orderno):
+                return order
+        return None
+
+    def get_positions(self) -> List[Dict[str, Any]]:
+        if self.settings.mode == "LIVE":
+            return self.api.get_positions()
+        with self._lock:
+            return [dict(pos) for pos in self._paper_positions.values()]
+
+    def _paper_place_order(
+        self,
+        buy_or_sell: str,
+        exchange: str,
+        tradingsymbol: str,
+        quantity: int,
+        price_type: str,
+        price: float,
+        trigger_price: float,
+        remarks: str,
+    ) -> Dict[str, Any]:
+        with self._lock:
+            orderno = f"PAPER-{uuid.uuid4().hex[:10].upper()}"
+            key = self._token_by_tsym.get(tradingsymbol, "")
+            ltp = self.ltp_cache.get(key) if key else None
+            order = {
+                "norenordno": orderno,
+                "exch": exchange,
+                "tsym": tradingsymbol,
+                "trantype": buy_or_sell,
+                "qty": int(quantity),
+                "fillshares": 0,
+                "prctyp": price_type,
+                "prc": float(price),
+                "trgprc": float(trigger_price),
+                "avgprc": 0.0,
+                "status": "OPEN" if price_type == "LMT" else "TRIGGER_PENDING",
+                "remarks": remarks,
+            }
+            self._paper_orders[orderno] = order
+
+            # Immediate realistic paper fill if market or marketable limit
+            slip = self.settings.paper_slippage_pts
+            if price_type == "MKT":
+                ref_px = ltp if ltp is not None else float(price)
+                fill_px = round((ref_px + slip) if buy_or_sell == "B" else max(0.05, ref_px - slip), 2)
+                self._fill_paper_order(order, fill_px)
+            elif price_type == "LMT" and ltp is not None:
+                if buy_or_sell == "B" and price >= ltp:
+                    fill_px = round(min(price, ltp + slip), 2)
+                    self._fill_paper_order(order, fill_px)
+                elif buy_or_sell == "S" and price <= ltp:
+                    fill_px = round(max(price, max(0.05, ltp - slip)), 2)
+                    self._fill_paper_order(order, fill_px)
+
+            logger.info(
+                "[PAPER] Placed %s %s %s qty=%d type=%s prc=%.2f trg=%.2f -> status=%s avg=%.2f",
+                orderno,
+                buy_or_sell,
+                tradingsymbol,
+                quantity,
+                price_type,
+                price,
+                trigger_price,
+                order["status"],
+                order["avgprc"],
+            )
+            return {"stat": "Ok", "norenordno": orderno}
+
+    def _fill_paper_order(self, order: Dict[str, Any], fill_price: float) -> None:
+        order["status"] = "COMPLETE"
+        order["fillshares"] = order["qty"]
+        order["avgprc"] = float(fill_price)
+        tsym = order["tsym"]
+        qty = int(order["qty"])
+        signed_qty = qty if order["trantype"] == "B" else -qty
+
+        pos = self._paper_positions.setdefault(
+            tsym,
+            {"tsym": tsym, "exch": order["exch"], "netqty": "0", "netavgprc": "0.0"},
+        )
+        prev_qty = int(pos["netqty"])
+        new_qty = prev_qty + signed_qty
+        pos["netqty"] = str(new_qty)
+        if new_qty != 0:
+            pos["netavgprc"] = f"{fill_price:.2f}"
+
+        for listener in list(self._order_listeners):
+            try:
+                listener(dict(order))
+            except Exception as exc:
+                logger.error("Paper order listener error: %s", exc)
+
+    def _evaluate_paper_orders_for_key(self, key: str, ltp: float) -> None:
+        with self._lock:
+            for order in list(self._paper_orders.values()):
+                if order["status"] not in {"OPEN", "TRIGGER_PENDING"}:
+                    continue
+                tsym_key = self._token_by_tsym.get(order["tsym"])
+                if tsym_key != key:
+                    continue
+
+                slip = self.settings.paper_slippage_pts
+                if order["prctyp"] == "SL-LMT" and order["trantype"] == "S" and ltp <= order["trgprc"]:
+                    fill_px = round(max(order["prc"], max(0.05, ltp - slip)), 2)
+                    self._fill_paper_order(order, fill_px)
+                elif order["prctyp"] == "LMT":
+                    if order["trantype"] == "B" and ltp <= order["prc"]:
+                        self._fill_paper_order(order, round(min(order["prc"], ltp + slip), 2))
+                    elif order["trantype"] == "S" and ltp >= order["prc"]:
+                        self._fill_paper_order(order, round(max(order["prc"], ltp - slip), 2))
