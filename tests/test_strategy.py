@@ -452,6 +452,10 @@ def test_web_ui_dashboard_endpoints(tmp_path: Path) -> None:
     assert payload["mode"] == "PAPER"
     assert "NIFTY" in payload["indices"]
     assert "BANKNIFTY" in payload["indices"]
+    assert "radar" in payload["indices"]["NIFTY"]
+    assert "radar_state" in payload["indices"]["NIFTY"]["radar"]
+    assert "schedule" in payload
+    assert len(payload["schedule"]["milestones"]) == 6
 
     toggle_resp = handlers["api_toggle_mode"]()
     assert toggle_resp.status_code == 200

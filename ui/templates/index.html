@@ -3,29 +3,90 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Shoonya ORB Algo Terminal</title>
+  <title>Shoonya Automated ORB Terminal</title>
   <style>
-    :root {
-      --bg: #0b1120;
-      --surface: #111827;
-      --surface-alt: #1f2937;
-      --border: #374151;
-      --text: #f3f4f6;
-      --muted: #9ca3af;
+    :root, body[data-theme="midnight"] {
+      --bg: #070b14;
+      --surface: #0f172a;
+      --surface-alt: #1e293b;
+      --border: #334155;
+      --text: #f1f5f9;
+      --muted: #94a3b8;
       --green: #10b981;
       --red: #ef4444;
       --amber: #f59e0b;
-      --blue: #3b82f6;
+      --accent: #3b82f6;
+      --accent-soft: rgba(59, 130, 246, 0.16);
+      --log-bg: #04070e;
     }
+    body[data-theme="emerald"] {
+      --bg: #040d0a;
+      --surface: #091914;
+      --surface-alt: #112a21;
+      --border: #1e4d3c;
+      --text: #ecfdf5;
+      --muted: #6ee7b7;
+      --green: #34d399;
+      --red: #fb7185;
+      --amber: #fbbf24;
+      --accent: #10b981;
+      --accent-soft: rgba(16, 185, 129, 0.18);
+      --log-bg: #020806;
+    }
+    body[data-theme="gold"] {
+      --bg: #0c0a09;
+      --surface: #181411;
+      --surface-alt: #27201a;
+      --border: #44372b;
+      --text: #fafaf9;
+      --muted: #d6c3a5;
+      --green: #22c55e;
+      --red: #ef4444;
+      --amber: #f59e0b;
+      --accent: #eab308;
+      --accent-soft: rgba(234, 179, 8, 0.16);
+      --log-bg: #070504;
+    }
+    body[data-theme="light"] {
+      --bg: #f1f5f9;
+      --surface: #ffffff;
+      --surface-alt: #f8fafc;
+      --border: #cbd5e1;
+      --text: #0f172a;
+      --muted: #475569;
+      --green: #059669;
+      --red: #dc2626;
+      --amber: #d97706;
+      --accent: #2563eb;
+      --accent-soft: rgba(37, 99, 235, 0.12);
+      --log-bg: #0f172a;
+    }
+    body[data-theme="nordic"] {
+      --bg: #0f141d;
+      --surface: #17202e;
+      --surface-alt: #222e42;
+      --border: #384a66;
+      --text: #e2e8f0;
+      --muted: #93c5fd;
+      --green: #2dd4bf;
+      --red: #f87171;
+      --amber: #fbbf24;
+      --accent: #38bdf8;
+      --accent-soft: rgba(56, 189, 248, 0.16);
+      --log-bg: #090d14;
+    }
+
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       background: var(--bg);
       color: var(--text);
-      padding: 20px;
-      line-height: 1.5;
+      padding: 16px;
+      line-height: 1.45;
+      transition: background 0.2s, color 0.2s;
     }
-    .container { max-width: 1380px; margin: 0 auto; }
+    .container { max-width: 1580px; margin: 0 auto; }
+
     .topbar {
       display: flex;
       flex-wrap: wrap;
@@ -34,31 +95,34 @@
       gap: 12px;
       background: var(--surface);
       border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 16px 20px;
-      margin-bottom: 18px;
+      border-radius: 14px;
+      padding: 14px 18px;
+      margin-bottom: 14px;
     }
-    .brand h1 { font-size: 1.25rem; font-weight: 700; }
-    .brand p { font-size: 0.85rem; color: var(--muted); }
-    .badges { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+    .brand h1 { font-size: 1.18rem; font-weight: 700; letter-spacing: -0.01em; }
+    .brand p { font-size: 0.8rem; color: var(--muted); }
+    .badges { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
     .badge {
-      padding: 5px 10px;
+      padding: 4px 10px;
       border-radius: 999px;
-      font-size: 0.78rem;
+      font-size: 0.74rem;
       font-weight: 600;
       background: var(--surface-alt);
       border: 1px solid var(--border);
+      color: var(--text);
     }
     .badge.paper { color: var(--amber); border-color: var(--amber); }
     .badge.live { color: var(--green); border-color: var(--green); }
     .badge.halted { color: var(--red); border-color: var(--red); }
-    .controls { display: flex; flex-wrap: wrap; gap: 10px; }
-    button, .btn {
+    .badge.info { color: var(--accent); border-color: var(--accent); background: var(--accent-soft); }
+
+    .controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+    button, .btn, select.theme-select {
       cursor: pointer;
       border: 1px solid var(--border);
       border-radius: 8px;
-      padding: 8px 14px;
-      font-size: 0.85rem;
+      padding: 7px 12px;
+      font-size: 0.8rem;
       font-weight: 600;
       color: var(--text);
       background: var(--surface-alt);
@@ -66,92 +130,148 @@
       transition: opacity 0.15s;
     }
     button:hover, .btn:hover { opacity: 0.88; }
+    .btn-primary { background: var(--accent); border-color: var(--accent); color: #fff; }
     .btn-kill { background: #991b1b; border-color: var(--red); color: #fff; }
-    .btn-primary { background: #1d4ed8; border-color: var(--blue); color: #fff; }
+    .btn-green { background: #065f46; border-color: var(--green); color: #fff; }
 
-    .metrics {
+    .kpi-strip {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
-      gap: 14px;
-      margin-bottom: 18px;
+      grid-template-columns: repeat(6, minmax(0, 1fr));
+      gap: 12px;
+      margin-bottom: 14px;
     }
     .card {
       background: var(--surface);
       border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 16px;
+      border-radius: 14px;
+      padding: 15px;
     }
-    .card-label { font-size: 0.78rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
-    .card-val { font-size: 1.45rem; font-weight: 700; margin-top: 4px; }
+    .card-label { font-size: 0.7rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+    .card-val { font-size: 1.28rem; font-weight: 700; margin-top: 3px; }
+    .card-sub { font-size: 0.72rem; color: var(--muted); margin-top: 2px; }
     .pos { color: var(--green); }
     .neg { color: var(--red); }
+    .warn { color: var(--amber); }
 
+    .grid-3 {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+      margin-bottom: 14px;
+      align-items: stretch;
+    }
     .grid-2 {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
-      gap: 16px;
-      margin-bottom: 18px;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+      margin-bottom: 14px;
+      align-items: stretch;
     }
-    .section-title { font-size: 1rem; font-weight: 600; margin-bottom: 12px; display: flex; justify-content: space-between; }
-    .kv-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
-    .kv { background: var(--surface-alt); padding: 10px; border-radius: 8px; }
-    .kv small { display: block; color: var(--muted); font-size: 0.72rem; }
-    .kv strong { font-size: 1rem; }
+    .stack { display: flex; flex-direction: column; gap: 14px; }
 
-    table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
-    th, td { text-align: left; padding: 10px 8px; border-bottom: 1px solid var(--border); }
-    th { color: var(--muted); font-weight: 600; font-size: 0.78rem; text-transform: uppercase; }
-    .empty { color: var(--muted); font-style: italic; padding: 14px 0; }
+    @media (max-width: 1220px) {
+      .kpi-strip { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+      .grid-3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+    @media (max-width: 820px) {
+      .kpi-strip, .grid-3, .grid-2 { grid-template-columns: 1fr; }
+    }
 
-    .logs-box {
-      background: #050810;
+    .section-title {
+      font-size: 0.94rem;
+      font-weight: 700;
+      margin-bottom: 10px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+    }
+    .kv-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-bottom: 10px; }
+    .kv { background: var(--surface-alt); padding: 9px; border-radius: 8px; border: 1px solid var(--border); }
+    .kv small { display: block; color: var(--muted); font-size: 0.69rem; }
+    .kv strong { font-size: 0.94rem; }
+
+    .progress-wrap {
+      background: var(--surface-alt);
       border: 1px solid var(--border);
-      border-radius: 10px;
-      padding: 12px;
-      height: 240px;
-      overflow-y: auto;
-      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-      font-size: 0.78rem;
+      border-radius: 999px;
+      height: 8px;
+      overflow: hidden;
+      margin: 8px 0;
     }
-    .log-line { margin-bottom: 4px; white-space: pre-wrap; word-break: break-word; }
-    .log-WARN, .log-WARNING { color: var(--amber); }
-    .log-ERROR, .log-CRITICAL { color: var(--red); }
-    .log-INFO { color: #d1d5db; }
+    .progress-fill { height: 100%; background: var(--accent); transition: width 0.3s; }
+    .gates-row { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 8px; }
+    .gate-chip {
+      font-size: 0.7rem;
+      font-weight: 600;
+      padding: 3px 8px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: var(--surface-alt);
+      color: var(--muted);
+    }
+    .gate-chip.pass { color: var(--green); border-color: var(--green); }
+    .radar-banner {
+      font-size: 0.78rem;
+      padding: 8px 10px;
+      border-radius: 8px;
+      background: var(--accent-soft);
+      border: 1px solid var(--accent);
+      margin-top: 6px;
+    }
+    .radar-banner.imminent {
+      background: rgba(16, 185, 129, 0.16);
+      border-color: var(--green);
+      color: var(--green);
+      font-weight: 600;
+    }
+
+    .timeline { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+    .ms-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 6px 10px;
+      border-radius: 8px;
+      background: var(--surface-alt);
+      border: 1px solid var(--border);
+      font-size: 0.77rem;
+    }
+    .ms-status { font-weight: 700; font-size: 0.7rem; }
+
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+    th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--border); }
+    th { color: var(--muted); font-weight: 600; font-size: 0.72rem; text-transform: uppercase; }
+    .empty { color: var(--muted); font-style: italic; padding: 10px 0; font-size: 0.82rem; }
 
     .form-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
-      gap: 10px;
-      margin-top: 10px;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 8px;
       align-items: end;
     }
     .field label {
       display: block;
-      font-size: 0.72rem;
+      font-size: 0.69rem;
       color: var(--muted);
-      margin-bottom: 4px;
+      margin-bottom: 3px;
       text-transform: uppercase;
     }
     .field input, .field select {
       width: 100%;
-      padding: 8px 10px;
+      padding: 7px 9px;
       border-radius: 8px;
       border: 1px solid var(--border);
       background: var(--surface-alt);
       color: var(--text);
-      font-size: 0.85rem;
+      font-size: 0.8rem;
     }
-    .row-actions {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      align-items: center;
-      margin-top: 12px;
-    }
+    .row-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 10px; }
     .status-note {
-      margin-top: 10px;
-      font-size: 0.83rem;
-      padding: 8px 12px;
+      margin-top: 8px;
+      font-size: 0.78rem;
+      padding: 7px 10px;
       border-radius: 8px;
       background: var(--surface-alt);
       border: 1px solid var(--border);
@@ -160,141 +280,184 @@
     .status-note.show { display: block; }
     .status-note.ok { border-color: var(--green); color: var(--green); }
     .status-note.err { border-color: var(--red); color: var(--red); }
-    .btn-green { background: #065f46; border-color: var(--green); color: #fff; }
-    details summary { cursor: pointer; font-weight: 600; font-size: 0.96rem; list-style: none; }
-    .table-wrap { overflow-x: auto; }
+
+    .logs-box {
+      background: var(--log-bg);
+      color: #d1d5db;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 10px;
+      height: 360px;
+      overflow-y: auto;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 0.75rem;
+    }
+    .log-line { margin-bottom: 4px; white-space: pre-wrap; word-break: break-word; }
+    .log-WARN, .log-WARNING { color: #f59e0b; }
+    .log-ERROR, .log-CRITICAL { color: #ef4444; }
+    details summary { cursor: pointer; font-weight: 700; font-size: 0.9rem; list-style: none; }
   </style>
 </head>
-<body>
+<body data-theme="midnight">
   <div class="container">
     <header class="topbar">
       <div class="brand">
         <h1>Shoonya Automated ORB Terminal</h1>
-        <p>15-Min ORB (09:15-09:30) + Intraday VWAP + Wilder RSI(14) | SEBI Algo ID: <span id="algo-id">{{ snapshot.sebi_algo_id }}</span></p>
+        <p>15-Min ORB + Intraday VWAP + Wilder RSI(14) | SEBI Algo ID: <span id="algo-id">{{ snapshot.sebi_algo_id }}</span></p>
       </div>
       <div class="badges">
-        <span id="user-badge" class="badge">Client: {{ snapshot.user_id or '--' }}</span>
+        <span id="user-badge" class="badge info">Client: {{ snapshot.user_id or '--' }}</span>
         <span id="mode-badge" class="badge {{ 'live' if snapshot.mode == 'LIVE' else 'paper' }}">MODE: {{ snapshot.mode }}</span>
         <span id="oauth-badge" class="badge">OAuth: {{ snapshot.oauth_status }}</span>
         <span id="ws-badge" class="badge">WS: {{ 'ONLINE' if snapshot.ws_connected else 'OFFLINE' }}</span>
         <span id="ip-badge" class="badge">IP: {{ snapshot.public_ip }}</span>
+        <span id="phase-badge" class="badge info">{{ snapshot.schedule.phase if snapshot.schedule else '--' }}</span>
         <span id="clock-badge" class="badge">IST: {{ snapshot.ist_time }}</span>
       </div>
       <div class="controls">
+        <select id="theme-select" class="theme-select" onchange="applyTheme(this.value)" title="Switch UI Theme">
+          <option value="midnight">Theme: Midnight Pro</option>
+          <option value="emerald">Theme: Cyber Emerald</option>
+          <option value="gold">Theme: Obsidian Gold</option>
+          <option value="light">Theme: Arctic Light</option>
+          <option value="nordic">Theme: Nordic Frost</option>
+        </select>
         <button class="btn-primary" onclick="triggerOAuth()">Run OAuth Login</button>
         <button onclick="toggleMode()">Toggle PAPER/LIVE</button>
-        <a class="btn" href="/api/trades/csv">Download CSV</a>
-        <button class="btn-kill" onclick="triggerKillSwitch()">PANIC KILL SWITCH</button>
+        <a class="btn" href="/api/trades/csv">CSV</a>
+        <button class="btn-kill" onclick="triggerKillSwitch()">KILL SWITCH</button>
       </div>
     </header>
 
-    <section class="metrics">
+    <section class="kpi-strip">
       <div class="card">
         <div class="card-label">Live Total MTM</div>
         <div id="mtm-val" class="card-val {{ 'pos' if snapshot.mtm_pnl >= 0 else 'neg' }}">₹{{ "%.2f"|format(snapshot.mtm_pnl) }}</div>
+        <div class="card-sub">Max Daily Loss: -₹{{ "%.0f"|format(snapshot.max_daily_loss) }}</div>
+      </div>
+      <div class="card">
+        <div class="card-label">Broker Cash / Net Margin</div>
+        <div id="kpi-brk-cash" class="card-val">₹0.00</div>
+        <div id="kpi-brk-status" class="card-sub">Checking Shoonya Limits...</div>
+      </div>
+      <div class="card">
+        <div class="card-label">Strategy Capital</div>
+        <div id="kpi-capital" class="card-val">₹{{ "%.2f"|format(snapshot.capital) }}</div>
+        <div class="card-sub">NIFTY 130 qty | BNF 60 qty</div>
       </div>
       <div class="card">
         <div class="card-label">Trades Today</div>
         <div id="trades-val" class="card-val">{{ snapshot.trades_taken }} / {{ snapshot.max_trades }}</div>
+        <div class="card-sub">Entry cutoff: 14:15 IST</div>
       </div>
       <div class="card">
         <div class="card-label">India VIX (Min 12.0)</div>
         <div id="vix-val" class="card-val">{{ snapshot.india_vix if snapshot.india_vix is not none else '--' }}</div>
+        <div class="card-sub">NFO Contracts: <span id="kpi-contracts">{{ snapshot.cached_contracts }}</span></div>
       </div>
       <div class="card">
-        <div class="card-label">System State</div>
-        <div id="halt-val" class="card-val {{ 'neg' if snapshot.halted else 'pos' }}">{{ snapshot.halt_reason if snapshot.halted else 'ACTIVE' }}</div>
+        <div class="card-label">Next 5m Candle Eval</div>
+        <div id="candle-countdown" class="card-val pos">--</div>
+        <div id="halt-val" class="card-sub">{{ snapshot.halt_reason if snapshot.halted else 'Engine: ACTIVE' }}</div>
       </div>
     </section>
 
-    <section class="card" style="margin-bottom: 18px;">
-      <div class="section-title">
-        <span>Live Shoonya Broker Account &amp; Funds</span>
-        <span id="broker-conn-badge" class="badge">BROKER: CHECKING...</span>
-      </div>
-      <div class="kv-grid" id="broker-limits-grid" style="grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));">
-        <div class="kv"><small>Client / Profile</small><strong id="brk-client">--</strong></div>
-        <div class="kv"><small>Available Cash</small><strong id="brk-cash">--</strong></div>
-        <div class="kv"><small>Payin / Payout</small><strong id="brk-payin">--</strong></div>
-        <div class="kv"><small>Collateral</small><strong id="brk-coll">--</strong></div>
-        <div class="kv"><small>Margin Used</small><strong id="brk-margin">--</strong></div>
-        <div class="kv"><small>Net Available</small><strong id="brk-net">--</strong></div>
-        <div class="kv"><small>Strategy Capital</small><strong id="brk-capital">₹{{ "%.2f"|format(snapshot.capital) }}</strong></div>
-      </div>
-      <div class="row-actions">
-        <button class="btn-primary" onclick="refreshBrokerData()">Sync Broker Funds &amp; Orders</button>
-        <a class="btn btn-green" href="https://prism.shoonya.com/" target="_blank" rel="noopener">+ Add Real Funds (Shoonya Prism)</a>
-        <a class="btn" href="https://trade.shoonya.com/" target="_blank" rel="noopener">Open Shoonya Web Terminal</a>
-        <div style="display:flex;gap:8px;align-items:center;margin-left:auto;flex-wrap:wrap;">
-          <input id="funds-amount" type="number" step="1000" value="50000" style="width:125px;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--surface-alt);color:var(--text);" />
-          <select id="funds-action" style="padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--surface-alt);color:var(--text);">
-            <option value="add">Add Capital</option>
-            <option value="set">Set Capital</option>
-          </select>
-          <button onclick="submitFunds()">Update Strategy Capital</button>
+    <section class="grid-3">
+      <div class="card" id="nifty-radar-card">Loading NIFTY Radar...</div>
+      <div class="card" id="bnf-radar-card">Loading BANKNIFTY Radar...</div>
+      <div class="card">
+        <div class="section-title">
+          <span>Shoonya Broker, Funds &amp; Auto-Schedule</span>
+          <span id="broker-conn-badge" class="badge">CHECKING...</span>
         </div>
-      </div>
-      <div id="funds-msg" class="status-note"></div>
-    </section>
-
-    <section class="card" style="margin-bottom: 18px;">
-      <details>
-        <summary>Connect / Switch Any Shoonya Account (Multi-User Onboarding) ▾</summary>
-        <p style="font-size:0.82rem;color:var(--muted);margin-top:6px;">
-          Enter any Finvasia Shoonya account's API credentials below to switch and authenticate immediately for this session.
-        </p>
-        <div class="form-grid">
-          <div class="field"><label>Shoonya User ID *</label><input id="conn-uid" type="text" placeholder="e.g. FA53975" /></div>
-          <div class="field"><label>Account ID (Optional)</label><input id="conn-actid" type="text" placeholder="Defaults to User ID" /></div>
-          <div class="field"><label>Password *</label><input id="conn-pwd" type="password" placeholder="Shoonya login password" /></div>
-          <div class="field"><label>TOTP Secret (Base32) *</label><input id="conn-totp" type="password" placeholder="Base32 2FA key" /></div>
-          <div class="field"><label>API Key / Client ID</label><input id="conn-apikey" type="text" placeholder="Default: <USER_ID>_U" /></div>
-          <div class="field"><label>Secret Key (64-char) *</label><input id="conn-skey" type="password" placeholder="Shoonya API secret key" /></div>
-          <div class="field"><label>SEBI Algo ID</label><input id="conn-algoid" type="text" placeholder="Optional Algo ID" /></div>
+        <div class="kv-grid" style="grid-template-columns: repeat(2, minmax(0, 1fr));">
+          <div class="kv"><small>Client / Profile</small><strong id="brk-client">--</strong></div>
+          <div class="kv"><small>Broker Cash / Margin Used</small><strong id="brk-cash">--</strong></div>
+          <div class="kv"><small>Payin / Collateral</small><strong id="brk-coll">--</strong></div>
+          <div class="kv"><small>Net Available Margin</small><strong id="brk-net">--</strong></div>
         </div>
         <div class="row-actions">
-          <button class="btn-primary" onclick="connectBrokerAccount()">Connect &amp; Login Shoonya Account</button>
+          <button class="btn-primary" onclick="refreshBrokerData()">Sync Broker</button>
+          <a class="btn btn-green" href="https://prism.shoonya.com/" target="_blank" rel="noopener">+ Add Real Funds</a>
+          <a class="btn" href="https://trade.shoonya.com/" target="_blank" rel="noopener">Shoonya Web</a>
         </div>
-        <div id="connect-msg" class="status-note"></div>
-      </details>
-    </section>
-
-    <section class="card" style="margin-bottom: 18px;">
-      <div class="section-title"><span>Live Shoonya Broker Order Book &amp; Quick Order Test</span></div>
-      <div class="form-grid" style="margin-bottom: 14px;">
-        <div class="field"><label>Exchange</label><select id="ord-exch"><option value="NSE">NSE</option><option value="NFO">NFO</option></select></div>
-        <div class="field"><label>Trading Symbol</label><input id="ord-tsym" type="text" value="TCS-EQ" /></div>
-        <div class="field"><label>Side</label><select id="ord-side"><option value="B">BUY (B)</option><option value="S">SELL (S)</option></select></div>
-        <div class="field"><label>Product</label><select id="ord-prd"><option value="C">CNC (C)</option><option value="I">MIS (I)</option><option value="M">NRML (M)</option></select></div>
-        <div class="field"><label>Order Type</label><select id="ord-prctyp"><option value="LMT">LMT</option><option value="MKT">MKT</option></select></div>
-        <div class="field"><label>Qty</label><input id="ord-qty" type="number" min="1" value="1" /></div>
-        <div class="field"><label>Price</label><input id="ord-prc" type="number" step="0.05" value="2407.50" /></div>
-        <div class="field"><button class="btn-primary" style="width:100%;" onclick="placeBrokerOrder()">Send Live Broker Order</button></div>
+        <div class="row-actions">
+          <input id="funds-amount" type="number" step="1000" value="50000" style="width:105px;padding:6px 8px;border-radius:8px;border:1px solid var(--border);background:var(--surface-alt);color:var(--text);" />
+          <select id="funds-action" style="padding:6px 8px;border-radius:8px;border:1px solid var(--border);background:var(--surface-alt);color:var(--text);">
+            <option value="add">Add Cap</option>
+            <option value="set">Set Cap</option>
+          </select>
+          <button onclick="submitFunds()">Update Cap</button>
+        </div>
+        <div id="funds-msg" class="status-note"></div>
+        <div class="section-title" style="margin-top:12px;margin-bottom:4px;"><span>Automated Daily Timeline</span></div>
+        <div id="auto-note" class="card-sub"></div>
+        <div class="timeline" id="schedule-timeline"></div>
       </div>
-      <div id="order-msg" class="status-note" style="margin-bottom: 12px;"></div>
-      <div class="table-wrap" id="broker-orders-container"><p class="empty">No broker orders loaded yet (connect or run OAuth login).</p></div>
     </section>
 
-    <section class="card" style="margin-bottom: 18px;">
-      <div class="section-title"><span>Live Shoonya Broker Positions (Broker PositionBook)</span></div>
-      <div class="table-wrap" id="broker-positions-container"><p class="empty">No live broker positions.</p></div>
+    <section class="grid-2">
+      <div class="stack">
+        <div class="card">
+          <div class="section-title"><span>Active Strategy Bracket Positions</span></div>
+          <div class="table-wrap" id="positions-container"><p class="empty">No active strategy positions.</p></div>
+        </div>
+        <div class="card">
+          <div class="section-title"><span>Completed Strategy Trades Today</span></div>
+          <div class="table-wrap" id="trades-container"><p class="empty">No completed trades yet.</p></div>
+        </div>
+      </div>
+      <div class="stack">
+        <div class="card">
+          <div class="section-title"><span>Live Shoonya Broker Order Book (OrderBook)</span></div>
+          <div class="table-wrap" id="broker-orders-container"><p class="empty">Waiting for broker orders...</p></div>
+        </div>
+        <div class="card">
+          <div class="section-title"><span>Live Shoonya Broker Positions (PositionBook)</span></div>
+          <div class="table-wrap" id="broker-positions-container"><p class="empty">No open broker positions.</p></div>
+        </div>
+      </div>
     </section>
 
-    <section class="grid-2" id="indices-grid"></section>
+    <section class="grid-2">
+      <div class="stack">
+        <div class="card">
+          <div class="section-title"><span>Quick Live Broker Order (Manual Test)</span></div>
+          <div class="form-grid">
+            <div class="field"><label>Exch</label><select id="ord-exch"><option value="NSE">NSE</option><option value="NFO">NFO</option></select></div>
+            <div class="field"><label>Symbol</label><input id="ord-tsym" type="text" value="TCS-EQ" /></div>
+            <div class="field"><label>Side</label><select id="ord-side"><option value="B">BUY</option><option value="S">SELL</option></select></div>
+            <div class="field"><label>Prod</label><select id="ord-prd"><option value="C">CNC</option><option value="I">MIS</option><option value="M">NRML</option></select></div>
+            <div class="field"><label>Type</label><select id="ord-prctyp"><option value="LMT">LMT</option><option value="MKT">MKT</option></select></div>
+            <div class="field"><label>Qty</label><input id="ord-qty" type="number" min="1" value="1" /></div>
+            <div class="field"><label>Price</label><input id="ord-prc" type="number" step="0.05" value="2407.50" /></div>
+            <div class="field"><button class="btn-primary" style="width:100%;" onclick="placeBrokerOrder()">Send Order</button></div>
+          </div>
+          <div id="order-msg" class="status-note"></div>
+        </div>
 
-    <section class="card" style="margin-bottom: 18px;">
-      <div class="section-title"><span>Active Positions & Bracket Lifecycle</span></div>
-      <div id="positions-container"><p class="empty">No active positions.</p></div>
-    </section>
+        <div class="card">
+          <details>
+            <summary>Connect / Switch Any Shoonya Account (Multi-User) ▾</summary>
+            <div class="form-grid" style="margin-top:8px;">
+              <div class="field"><label>User ID *</label><input id="conn-uid" type="text" placeholder="e.g. FA53975" /></div>
+              <div class="field"><label>Account ID</label><input id="conn-actid" type="text" placeholder="Optional" /></div>
+              <div class="field"><label>Password *</label><input id="conn-pwd" type="password" /></div>
+              <div class="field"><label>TOTP Secret *</label><input id="conn-totp" type="password" /></div>
+              <div class="field"><label>API Key</label><input id="conn-apikey" type="text" placeholder="<UID>_U" /></div>
+              <div class="field"><label>Secret Key *</label><input id="conn-skey" type="password" /></div>
+              <div class="field"><label>Algo ID</label><input id="conn-algoid" type="text" placeholder="Optional" /></div>
+              <div class="field"><button class="btn-primary" style="width:100%;" onclick="connectBrokerAccount()">Connect Account</button></div>
+            </div>
+            <div id="connect-msg" class="status-note"></div>
+          </details>
+        </div>
+      </div>
 
-    <section class="card" style="margin-bottom: 18px;">
-      <div class="section-title"><span>Completed Trades Today</span></div>
-      <div id="trades-container"><p class="empty">No completed trades yet.</p></div>
-    </section>
-
-    <section class="card">
-      <div class="section-title"><span>Live Engine Logs</span></div>
-      <div class="logs-box" id="logs-box"></div>
+      <div class="card">
+        <div class="section-title"><span>Live Engine &amp; Auto-Execution Logs</span></div>
+        <div class="logs-box" id="logs-box"></div>
+      </div>
     </section>
   </div>
 
@@ -310,11 +473,56 @@
       }[s]));
     }
 
+    function applyTheme(themeName) {
+      const chosen = ["midnight", "emerald", "gold", "light", "nordic"].includes(themeName) ? themeName : "midnight";
+      document.body.setAttribute("data-theme", chosen);
+      const sel = document.getElementById("theme-select");
+      if (sel && sel.value !== chosen) sel.value = chosen;
+      try { localStorage.setItem("orb_ui_theme", chosen); } catch (e) {}
+    }
+
     function showNote(id, ok, msg) {
       const el = document.getElementById(id);
       if (!el) return;
       el.textContent = msg;
       el.className = "status-note show " + (ok ? "ok" : "err");
+    }
+
+    function renderRadarCard(containerId, name, st) {
+      const el = document.getElementById(containerId);
+      if (!el || !st) return;
+      const r = st.radar || {};
+      const statusBadge = st.no_trade_reason
+        ? `<span class="badge halted">${esc(st.no_trade_reason)}</span>`
+        : (st.is_locked ? `<span class="badge live">ORB LOCKED</span>` : `<span class="badge">WAITING 09:30</span>`);
+
+      const gates = [
+        ["Sys/Slot", r.system_ready],
+        ["VIX >= 12", r.vix_ready],
+        ["ORB <= 0.75%", r.orb_ready],
+        ["Spot Break+VWAP", r.ce_price_ok || r.pe_price_ok],
+        ["RSI >60 / <40", r.ce_rsi_ok || r.pe_rsi_ok],
+      ].map(([lbl, ok]) => `<span class="gate-chip ${ok ? 'pass' : ''}">${ok ? '✓' : '○'} ${lbl}</span>`).join("");
+
+      const isImm = r.radar_state === "IMMINENT_CE_BREAKOUT" || r.radar_state === "IMMINENT_PE_BREAKOUT";
+      el.innerHTML = `
+        <div class="section-title"><span>${esc(name)} Spot &amp; Auto-Order Radar</span>${statusBadge}</div>
+        <div class="kv-grid">
+          <div class="kv"><small>Spot LTP</small><strong>${fmt(st.spot_ltp)}</strong></div>
+          <div class="kv"><small>ORH (9:15-9:30)</small><strong>${fmt(st.orh)}</strong></div>
+          <div class="kv"><small>ORL (9:15-9:30)</small><strong>${fmt(st.orl)}</strong></div>
+          <div class="kv"><small>Range %</small><strong>${st.range_pct !== null && st.range_pct !== undefined ? fmt(st.range_pct) + "%" : "--"}</strong></div>
+          <div class="kv"><small>Intraday VWAP</small><strong>${fmt(st.vwap)}</strong></div>
+          <div class="kv"><small>Wilder RSI(14)</small><strong>${fmt(st.rsi)}</strong></div>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:0.74rem;color:var(--muted);">
+          <span>Auto-Trigger Readiness</span><strong>${r.readiness_pct ?? 0}%</strong>
+        </div>
+        <div class="progress-wrap"><div class="progress-fill" style="width:${r.readiness_pct ?? 0}%"></div></div>
+        <div class="gates-row">${gates}</div>
+        <div style="font-size:0.74rem;color:var(--muted);">Next Candidate: <strong>${esc(r.candidate_ce || '--')}</strong> | <strong>${esc(r.candidate_pe || '--')}</strong></div>
+        <div class="radar-banner ${isImm ? 'imminent' : ''}">${esc(r.radar_summary || 'Waiting for 09:30 ORB lock.')}</div>
+      `;
     }
 
     function renderSnapshot(data) {
@@ -329,19 +537,81 @@
       document.getElementById("ip-badge").textContent = "IP: " + (data.public_ip || "--");
       document.getElementById("clock-badge").textContent = "IST: " + data.ist_time;
 
-      const brk = data.broker || {};
-      const brkBadge = document.getElementById("broker-conn-badge");
-      brkBadge.textContent = brk.connected ? `BROKER: CONNECTED (${brk.user_id || data.user_id || "--"})` : "BROKER: NOT CONNECTED";
-      brkBadge.className = "badge " + (brk.connected ? "live" : "halted");
+      const sched = data.schedule || {};
+      document.getElementById("phase-badge").textContent = sched.phase || "--";
 
+      const mtmEl = document.getElementById("mtm-val");
+      mtmEl.textContent = "₹" + fmt(data.mtm_pnl, 2);
+      mtmEl.className = "card-val " + (data.mtm_pnl >= 0 ? "pos" : "neg");
+
+      const brk = data.broker || {};
+      document.getElementById("kpi-brk-cash").textContent = "₹" + fmt(brk.cash || 0);
+      document.getElementById("kpi-brk-status").textContent = brk.connected
+        ? `Net Avail: ₹${fmt(brk.net_available || 0)}`
+        : "Run OAuth / Connect Account";
+      document.getElementById("kpi-capital").textContent = "₹" + fmt(data.capital || 0);
+      document.getElementById("trades-val").textContent = `${data.trades_taken} / ${data.max_trades}`;
+      document.getElementById("vix-val").textContent = data.india_vix !== null ? fmt(data.india_vix, 2) : "--";
+      document.getElementById("kpi-contracts").textContent = data.cached_contracts ?? 0;
+
+      const cDown = document.getElementById("candle-countdown");
+      cDown.textContent = sched.next_candle_close_sec ? `${sched.next_candle_close_sec}s` : (sched.phase === "WEEKEND_STANDBY" ? "WEEKEND" : "CLOSED");
+      const haltEl = document.getElementById("halt-val");
+      haltEl.textContent = data.halted ? (data.halt_reason || "HALTED") : "Engine: ACTIVE";
+      haltEl.className = "card-sub " + (data.halted ? "neg" : "pos");
+
+      renderRadarCard("nifty-radar-card", "NIFTY", (data.indices || {}).NIFTY);
+      renderRadarCard("bnf-radar-card", "BANKNIFTY", (data.indices || {}).BANKNIFTY);
+
+      const brkBadge = document.getElementById("broker-conn-badge");
+      brkBadge.textContent = brk.connected ? `CONNECTED (${brk.user_id || data.user_id || "--"})` : "NOT CONNECTED";
+      brkBadge.className = "badge " + (brk.connected ? "live" : "halted");
       const clientLabel = [brk.user_id || data.user_id || "--", brk.profile_name, brk.account_name].filter(Boolean).join(" / ");
       document.getElementById("brk-client").textContent = clientLabel || "--";
-      document.getElementById("brk-cash").textContent = "₹" + fmt(brk.cash || 0);
-      document.getElementById("brk-payin").textContent = `₹${fmt(brk.payin || 0)} / ₹${fmt(brk.payout || 0)}`;
-      document.getElementById("brk-coll").textContent = "₹" + fmt(brk.collateral || 0);
-      document.getElementById("brk-margin").textContent = "₹" + fmt(brk.margin_used || 0);
+      document.getElementById("brk-cash").textContent = `₹${fmt(brk.cash || 0)} / ₹${fmt(brk.margin_used || 0)}`;
+      document.getElementById("brk-coll").textContent = `₹${fmt(brk.payin || 0)} / ₹${fmt(brk.collateral || 0)}`;
       document.getElementById("brk-net").textContent = "₹" + fmt(brk.net_available || 0);
-      document.getElementById("brk-capital").textContent = "₹" + fmt(data.capital || 0);
+
+      document.getElementById("auto-note").textContent = sched.auto_mode_note || "";
+      document.getElementById("schedule-timeline").innerHTML = (sched.milestones || []).map(m => {
+        const cls = m.status === "DONE" ? "pos" : (m.status === "ACTIVE" ? "warn" : "");
+        return `<div class="ms-row"><span><strong>${esc(m.time)}</strong> — ${esc(m.label)}</span><span class="ms-status ${cls}">${esc(m.status)}</span></div>`;
+      }).join("");
+
+      const posContainer = document.getElementById("positions-container");
+      if (!data.positions || data.positions.length === 0) {
+        posContainer.innerHTML = '<p class="empty">No active strategy positions.</p>';
+      } else {
+        const rows = data.positions.map(p => `
+          <tr>
+            <td><strong>${esc(p.tradingsymbol)}</strong></td>
+            <td>${esc(p.state)}</td>
+            <td>${p.remaining_qty}/${p.initial_qty}</td>
+            <td>₹${fmt(p.entry_avg_price)}</td>
+            <td>₹${fmt(p.last_ltp)}</td>
+            <td>₹${fmt(p.sl_trigger_price)}</td>
+            <td>₹${fmt(p.target1_price)}</td>
+            <td class="${(p.unrealized_pnl + p.realized_pnl) >= 0 ? 'pos' : 'neg'}">₹${fmt(p.unrealized_pnl + p.realized_pnl)}</td>
+          </tr>`).join("");
+        posContainer.innerHTML = `<table><thead><tr><th>Contract</th><th>State</th><th>Qty</th><th>Entry</th><th>LTP</th><th>SL</th><th>T1</th><th>P&L</th></tr></thead><tbody>${rows}</tbody></table>`;
+      }
+
+      const trdContainer = document.getElementById("trades-container");
+      if (!data.completed_trades || data.completed_trades.length === 0) {
+        trdContainer.innerHTML = '<p class="empty">No completed strategy trades yet.</p>';
+      } else {
+        const rows = data.completed_trades.map(t => `
+          <tr>
+            <td>${esc(t.tradingsymbol)}</td>
+            <td>${esc(t.signal_type)}</td>
+            <td>${t.quantity}</td>
+            <td>${esc(t.entry_time)} @ ₹${fmt(t.entry_price)}</td>
+            <td>${esc(t.exit_time)} @ ₹${fmt(t.exit_price)}</td>
+            <td>${esc(t.exit_reason)}</td>
+            <td class="${t.net_pnl >= 0 ? 'pos' : 'neg'}">₹${fmt(t.net_pnl)}</td>
+          </tr>`).join("");
+        trdContainer.innerHTML = `<table><thead><tr><th>Contract</th><th>Side</th><th>Qty</th><th>Entry</th><th>Exit</th><th>Reason</th><th>Net P&L</th></tr></thead><tbody>${rows}</tbody></table>`;
+      }
 
       const brkOrdBox = document.getElementById("broker-orders-container");
       const brkOrders = brk.orders || [];
@@ -352,32 +622,26 @@
       } else {
         const rows = brkOrders.map(o => {
           const st = (o.status || "").toUpperCase();
-          const stCls = st === "COMPLETE" ? "pos" : ((st === "REJECTED" || st === "CANCELED") ? "neg" : "");
+          const stCls = st === "COMPLETE" ? "pos" : ((st === "REJECTED" || st === "CANCELED") ? "neg" : "warn");
           return `
             <tr>
               <td><strong>${esc(o.norenordno)}</strong></td>
               <td>${esc(o.norentm)}</td>
               <td>${esc(o.exch)}:${esc(o.tsym)}</td>
-              <td>${esc(o.trantype)} (${esc(o.prctyp)})</td>
-              <td>${esc(o.prd)}</td>
-              <td>${esc(o.fillshares)} / ${esc(o.qty)}</td>
+              <td>${esc(o.trantype)} (${esc(o.prd)})</td>
+              <td>${esc(o.fillshares)}/${esc(o.qty)}</td>
               <td>₹${esc(o.prc)}</td>
               <td class="${stCls}"><strong>${esc(o.status)}</strong></td>
-              <td>${esc(o.ordersource)}</td>
               <td>${esc(o.reason)}</td>
             </tr>`;
         }).join("");
-        brkOrdBox.innerHTML = `
-          <table>
-            <thead><tr><th>Order No</th><th>Time</th><th>Symbol</th><th>Side</th><th>Prod</th><th>Qty</th><th>Price</th><th>Status</th><th>Source</th><th>Reason / Remarks</th></tr></thead>
-            <tbody>${rows}</tbody>
-          </table>`;
+        brkOrdBox.innerHTML = `<table><thead><tr><th>Order No</th><th>Time</th><th>Symbol</th><th>Side</th><th>Qty</th><th>Price</th><th>Status</th><th>Reason</th></tr></thead><tbody>${rows}</tbody></table>`;
       }
 
       const brkPosBox = document.getElementById("broker-positions-container");
       const brkPositions = brk.positions || [];
       if (brkPositions.length === 0) {
-        brkPosBox.innerHTML = '<p class="empty">No live broker positions open in Shoonya.</p>';
+        brkPosBox.innerHTML = '<p class="empty">No open broker positions in Shoonya.</p>';
       } else {
         const rows = brkPositions.map(p => `
           <tr>
@@ -389,94 +653,12 @@
             <td>₹${esc(p.rpnl)}</td>
             <td>₹${esc(p.urmtom)}</td>
           </tr>`).join("");
-        brkPosBox.innerHTML = `
-          <table>
-            <thead><tr><th>Symbol</th><th>Prod</th><th>Net Qty</th><th>Avg Price</th><th>LTP</th><th>Realized P&L</th><th>Unrealized MTM</th></tr></thead>
-            <tbody>${rows}</tbody>
-          </table>`;
+        brkPosBox.innerHTML = `<table><thead><tr><th>Symbol</th><th>Prod</th><th>Qty</th><th>Avg</th><th>LTP</th><th>RPnL</th><th>MTM</th></tr></thead><tbody>${rows}</tbody></table>`;
       }
 
-      const mtmEl = document.getElementById("mtm-val");
-      mtmEl.textContent = "₹" + fmt(data.mtm_pnl, 2);
-      mtmEl.className = "card-val " + (data.mtm_pnl >= 0 ? "pos" : "neg");
-
-      document.getElementById("trades-val").textContent = `${data.trades_taken} / ${data.max_trades}`;
-      document.getElementById("vix-val").textContent = data.india_vix !== null ? fmt(data.india_vix, 2) : "--";
-
-      const haltEl = document.getElementById("halt-val");
-      haltEl.textContent = data.halted ? (data.halt_reason || "HALTED") : "ACTIVE";
-      haltEl.className = "card-val " + (data.halted ? "neg" : "pos");
-
-      // Render Index Cards
-      const idxGrid = document.getElementById("indices-grid");
-      idxGrid.innerHTML = "";
-      Object.entries(data.indices || {}).forEach(([name, st]) => {
-        const statusBadge = st.no_trade_reason
-          ? `<span class="badge halted">${st.no_trade_reason}</span>`
-          : (st.is_locked ? `<span class="badge live">ORB LOCKED</span>` : `<span class="badge">WAITING 09:30</span>`);
-        idxGrid.innerHTML += `
-          <div class="card">
-            <div class="section-title"><span>${name} Spot & ORB</span>${statusBadge}</div>
-            <div class="kv-grid">
-              <div class="kv"><small>Spot LTP</small><strong>${fmt(st.spot_ltp)}</strong></div>
-              <div class="kv"><small>ORH (9:15-9:30)</small><strong>${fmt(st.orh)}</strong></div>
-              <div class="kv"><small>ORL (9:15-9:30)</small><strong>${fmt(st.orl)}</strong></div>
-              <div class="kv"><small>Range % (<=0.75%)</small><strong>${st.range_pct !== null ? fmt(st.range_pct, 2) + "%" : "--"}</strong></div>
-              <div class="kv"><small>Intraday VWAP</small><strong>${fmt(st.vwap)}</strong></div>
-              <div class="kv"><small>Wilder RSI(14)</small><strong>${fmt(st.rsi, 2)}</strong></div>
-            </div>
-          </div>`;
-      });
-
-      // Render Positions
-      const posContainer = document.getElementById("positions-container");
-      if (!data.positions || data.positions.length === 0) {
-        posContainer.innerHTML = '<p class="empty">No active positions.</p>';
-      } else {
-        const rows = data.positions.map(p => `
-          <tr>
-            <td><strong>${p.tradingsymbol}</strong></td>
-            <td>${p.state}</td>
-            <td>${p.remaining_qty} / ${p.initial_qty}</td>
-            <td>₹${fmt(p.entry_avg_price)}</td>
-            <td>₹${fmt(p.last_ltp)}</td>
-            <td>₹${fmt(p.sl_trigger_price)}</td>
-            <td>₹${fmt(p.target1_price)}</td>
-            <td class="${(p.unrealized_pnl + p.realized_pnl) >= 0 ? 'pos' : 'neg'}">₹${fmt(p.unrealized_pnl + p.realized_pnl)}</td>
-          </tr>`).join("");
-        posContainer.innerHTML = `
-          <table>
-            <thead><tr><th>Contract</th><th>State</th><th>Qty</th><th>Entry</th><th>LTP</th><th>SL Trig</th><th>Target 1</th><th>P&L</th></tr></thead>
-            <tbody>${rows}</tbody>
-          </table>`;
-      }
-
-      // Render Completed Trades
-      const trdContainer = document.getElementById("trades-container");
-      if (!data.completed_trades || data.completed_trades.length === 0) {
-        trdContainer.innerHTML = '<p class="empty">No completed trades yet.</p>';
-      } else {
-        const rows = data.completed_trades.map(t => `
-          <tr>
-            <td>${t.tradingsymbol}</td>
-            <td>${t.signal_type}</td>
-            <td>${t.quantity}</td>
-            <td>${t.entry_time} @ ₹${fmt(t.entry_price)}</td>
-            <td>${t.exit_time} @ ₹${fmt(t.exit_price)}</td>
-            <td>${t.exit_reason}</td>
-            <td class="${t.net_pnl >= 0 ? 'pos' : 'neg'}">₹${fmt(t.net_pnl)}</td>
-          </tr>`).join("");
-        trdContainer.innerHTML = `
-          <table>
-            <thead><tr><th>Contract</th><th>Side</th><th>Qty</th><th>Entry</th><th>Exit</th><th>Reason</th><th>Net P&L</th></tr></thead>
-            <tbody>${rows}</tbody>
-          </table>`;
-      }
-
-      // Render Logs
       const logsBox = document.getElementById("logs-box");
       logsBox.innerHTML = (data.logs || []).map(l =>
-        `<div class="log-line log-${l.level}">[${l.timestamp}] ${l.level} | ${l.logger} | ${l.message}</div>`
+        `<div class="log-line log-${l.level}">[${esc(l.timestamp)}] ${esc(l.level)} | ${esc(l.logger)} | ${esc(l.message)}</div>`
       ).join("");
       logsBox.scrollTop = logsBox.scrollHeight;
     }
@@ -484,17 +666,12 @@
     async function refreshStatus() {
       try {
         const res = await fetch("/api/status");
-        if (res.ok) {
-          const data = await res.json();
-          renderSnapshot(data);
-        }
-      } catch (e) {
-        console.error(e);
-      }
+        if (res.ok) renderSnapshot(await res.json());
+      } catch (e) { console.error(e); }
     }
 
     async function triggerKillSwitch() {
-      if (!confirm("Execute EMERGENCY KILL SWITCH? This will liquidate all positions and halt trading for today.")) return;
+      if (!confirm("Execute EMERGENCY KILL SWITCH? Liquidates all strategy positions and halts trading today.")) return;
       const res = await fetch("/api/kill-switch", { method: "POST" });
       if (res.ok) await refreshStatus();
     }
@@ -509,18 +686,15 @@
     async function toggleMode() {
       const res = await fetch("/api/toggle-mode", { method: "POST" });
       const data = await res.json();
-      if (!res.ok) {
-        alert("Cannot toggle mode: " + (data.detail || "error"));
-      } else {
-        await refreshStatus();
-      }
+      if (!res.ok) alert("Cannot toggle mode: " + (data.detail || "error"));
+      else await refreshStatus();
     }
 
     async function refreshBrokerData() {
       const res = await fetch("/api/broker/refresh", { method: "POST" });
       const data = await res.json();
       if (data.snapshot) renderSnapshot(data.snapshot);
-      showNote("funds-msg", data.ok, data.ok ? "Synced live Shoonya funds, orders, and positions." : "Broker session offline — click Run OAuth Login or Connect Account.");
+      showNote("funds-msg", data.ok, data.ok ? "Synced live Shoonya funds & orders." : "Broker offline — Run OAuth Login or Connect Account.");
     }
 
     async function submitFunds() {
@@ -579,6 +753,10 @@
       showNote("order-msg", data.ok, data.message || "Order request completed.");
     }
 
+    try {
+      const saved = localStorage.getItem("orb_ui_theme");
+      if (saved) applyTheme(saved);
+    } catch (e) {}
     refreshStatus();
     setInterval(refreshStatus, 1000);
   </script>

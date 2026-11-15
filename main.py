@@ -12,7 +12,7 @@ from typing import Any, Dict, Optional, Tuple
 import uvicorn
 
 from broker.auth import ShoonyaAuthenticator
-from broker.instrument_mapper import InstrumentMapper
+from broker.instrument_mapper import InstrumentMapper, round_to_strike
 from broker.shoonya_client import ShoonyaClient
 from config.settings import INDEX_SPECS, INDIA_VIX_KEY, IST, AppSettings, load_settings
 from engine.candle_builder import Candle, CandleBuilder
@@ -398,14 +398,211 @@ class TradingSystemOrchestrator:
             self._loop_thread.join(timeout=3.0)
         self.notifier.stop()
 
+    def _build_index_radar(
+        self,
+        index_name: str,
+        spot_ltp: Optional[float],
+        vix: Optional[float],
+        now_ist: datetime,
+    ) -> Dict[str, Any]:
+        """Compute live 5-gate auto-order readiness metrics for an index."""
+        spec = INDEX_SPECS[index_name]
+        st = self.strategy.get_state(index_name)
+
+        system_ready = (
+            not self.risk_manager.halted
+            and self.risk_manager.trades_taken_today < self.settings.max_trades_per_day
+            and index_name not in self.risk_manager.positions
+        )
+        vix_ready = vix is not None and vix >= self.settings.min_india_vix
+        orb_ready = bool(st.is_locked and not st.no_trade_reason)
+        in_window = (
+            now_ist.weekday() < 5
+            and self.settings.orb_end_time <= now_ist.time() <= self.settings.entry_cutoff_time
+        )
+
+        ce_price_ok = bool(
+            spot_ltp is not None
+            and st.orh is not None
+            and spot_ltp > st.orh
+            and (st.last_vwap is None or spot_ltp > st.last_vwap)
+        )
+        pe_price_ok = bool(
+            spot_ltp is not None
+            and st.orl is not None
+            and spot_ltp < st.orl
+            and (st.last_vwap is None or spot_ltp < st.last_vwap)
+        )
+        ce_rsi_ok = bool(st.last_rsi is not None and st.last_rsi > 60.0)
+        pe_rsi_ok = bool(st.last_rsi is not None and st.last_rsi < 40.0)
+
+        dist_to_orh = round(st.orh - spot_ltp, 2) if (spot_ltp is not None and st.orh is not None) else None
+        dist_to_orl = round(spot_ltp - st.orl, 2) if (spot_ltp is not None and st.orl is not None) else None
+
+        candidate_ce = "--"
+        candidate_pe = "--"
+        if spot_ltp is not None and spot_ltp > 0:
+            strike = round_to_strike(spot_ltp, spec.strike_step)
+            candidate_ce = f"{index_name} {strike} CE ({spec.default_quantity} qty)"
+            candidate_pe = f"{index_name} {strike} PE ({spec.default_quantity} qty)"
+
+        ce_score = sum([system_ready, vix_ready, orb_ready, ce_price_ok, ce_rsi_ok])
+        pe_score = sum([system_ready, vix_ready, orb_ready, pe_price_ok, pe_rsi_ok])
+        readiness_pct = int(round((max(ce_score, pe_score) / 5.0) * 100))
+
+        if index_name in self.risk_manager.positions:
+            radar_state = "ACTIVE_POSITION"
+            radar_summary = "Auto position active — SL-LMT, Breakeven (+25/+55) & Trailing active."
+        elif self.risk_manager.halted or self.risk_manager.trades_taken_today >= self.settings.max_trades_per_day:
+            radar_state = "HALTED_OR_MAX_TRADES"
+            radar_summary = f"Auto entries paused: {self.risk_manager.halt_reason or 'Max daily trades reached'}."
+        elif st.no_trade_reason:
+            radar_state = "NO_TRADE_DAY"
+            radar_summary = f"No auto-trade today: {st.no_trade_reason}."
+        elif not st.is_locked:
+            radar_state = "WAITING_ORB_LOCK"
+            radar_summary = "Collecting 09:15-09:30 IST opening candles; ORH/ORL locks at 09:30."
+        elif orb_ready and ce_price_ok:
+            radar_state = "IMMINENT_CE_BREAKOUT"
+            if ce_rsi_ok and vix_ready and in_window:
+                radar_summary = f"ALL 5 GATES MET! Auto-BUY {candidate_ce} arms on 5m close."
+            else:
+                rsi_txt = f"{st.last_rsi:.1f}" if st.last_rsi is not None else "--"
+                radar_summary = f"Above ORH & VWAP! Need RSI > 60 (now {rsi_txt}) & 5m close -> {candidate_ce}."
+        elif orb_ready and pe_price_ok:
+            radar_state = "IMMINENT_PE_BREAKOUT"
+            if pe_rsi_ok and vix_ready and in_window:
+                radar_summary = f"ALL 5 GATES MET! Auto-BUY {candidate_pe} arms on 5m close."
+            else:
+                rsi_txt = f"{st.last_rsi:.1f}" if st.last_rsi is not None else "--"
+                radar_summary = f"Below ORL & VWAP! Need RSI < 40 (now {rsi_txt}) & 5m close -> {candidate_pe}."
+        else:
+            radar_state = "SCANNING_RANGE"
+            orh_txt = f"{dist_to_orh:+.2f}" if dist_to_orh is not None else "--"
+            orl_txt = f"{dist_to_orl:+.2f}" if dist_to_orl is not None else "--"
+            radar_summary = f"Inside range: {orh_txt} pts to ORH (CE) | {orl_txt} pts above ORL (PE)."
+
+        return {
+            "system_ready": system_ready,
+            "vix_ready": vix_ready,
+            "orb_ready": orb_ready,
+            "in_window": in_window,
+            "ce_price_ok": ce_price_ok,
+            "pe_price_ok": pe_price_ok,
+            "ce_rsi_ok": ce_rsi_ok,
+            "pe_rsi_ok": pe_rsi_ok,
+            "dist_to_orh": dist_to_orh,
+            "dist_to_orl": dist_to_orl,
+            "candidate_ce": candidate_ce,
+            "candidate_pe": candidate_pe,
+            "readiness_pct": readiness_pct,
+            "radar_state": radar_state,
+            "radar_summary": radar_summary,
+        }
+
+    def _build_schedule_status(self, now_ist: datetime) -> Dict[str, Any]:
+        """Return automated daily IST schedule phase, candle countdown, and milestones."""
+        today = now_ist.date()
+        t = now_ist.time()
+        is_weekday = now_ist.weekday() < 5
+
+        if not is_weekday:
+            phase = "WEEKEND_STANDBY"
+        elif t < self.settings.market_open_time:
+            phase = "PRE_MARKET"
+        elif t < self.settings.orb_end_time:
+            phase = "ORB_FORMATION (09:15-09:30)"
+        elif t <= self.settings.entry_cutoff_time:
+            phase = "AUTO_BREAKOUT_SCANNER (09:30-14:15)"
+        elif t < self.settings.auto_squareoff_time:
+            phase = "POSITION_MANAGEMENT (14:15-15:15)"
+        elif t <= self.settings.market_close_time:
+            phase = "POST_SQUARE_OFF (15:15-15:30)"
+        else:
+            phase = "MARKET_CLOSED"
+
+        next_candle_close_sec: Optional[int] = None
+        if is_weekday and self.settings.market_open_time <= t < self.settings.market_close_time:
+            sec_into_5m = (now_ist.minute % 5) * 60 + now_ist.second
+            next_candle_close_sec = max(1, 300 - sec_into_5m)
+
+        all_locked = all(self.strategy.get_state(name).is_locked for name in INDEX_SPECS)
+
+        def _ms_status(done_cond: bool, active_cond: bool = False) -> str:
+            if done_cond:
+                return "DONE"
+            if active_cond:
+                return "ACTIVE"
+            return "PENDING"
+
+        milestones = [
+            {
+                "time": "08:40 IST",
+                "label": "Auto OAuth Login",
+                "status": _ms_status(
+                    bool(self.auth.last_token_date == today.strftime("%Y-%m-%d"))
+                    or self._milestone_done.get("auth") == today
+                ),
+            },
+            {
+                "time": "08:55 IST",
+                "label": "NFO Contract Cache",
+                "status": _ms_status(
+                    self.mapper.cached_count > 0 or self._milestone_done.get("cache") == today
+                ),
+            },
+            {
+                "time": "09:14 IST",
+                "label": "WS & 3D Backfill",
+                "status": _ms_status(
+                    self.client.ws_connected or self._milestone_done.get("ws") == today
+                ),
+            },
+            {
+                "time": "09:30 IST",
+                "label": "15-Min ORB Lock",
+                "status": _ms_status(all_locked or self._milestone_done.get("orb_lock") == today),
+            },
+            {
+                "time": "09:30-14:15",
+                "label": "Auto Breakout Orders",
+                "status": _ms_status(
+                    is_weekday and t > self.settings.entry_cutoff_time,
+                    active_cond=is_weekday
+                    and self.settings.orb_end_time <= t <= self.settings.entry_cutoff_time,
+                ),
+            },
+            {
+                "time": "15:15 IST",
+                "label": "Auto EOD Square-Off",
+                "status": _ms_status(
+                    self._milestone_done.get("squareoff") == today
+                    or (is_weekday and t >= self.settings.auto_squareoff_time)
+                ),
+            },
+        ]
+
+        return {
+            "phase": phase,
+            "is_market_day": is_weekday,
+            "next_candle_close_sec": next_candle_close_sec,
+            "milestones": milestones,
+            "auto_mode_note": (
+                f"Auto orders trigger automatically on 5m candle closes (09:30-14:15 IST) in {self.settings.mode} mode "
+                f"when all 5 gates align."
+            ),
+        }
+
     def get_status_snapshot(self) -> Dict[str, Any]:
         """Return thread-safe JSON snapshot for the live FastAPI Web UI."""
         now_ist = datetime.now(IST)
+        vix = self.client.get_ltp(INDIA_VIX_KEY)
         indices_data: Dict[str, Any] = {}
         for name, spec in INDEX_SPECS.items():
             st = self.strategy.get_state(name)
+            spot_ltp = self.client.get_ltp(spec.spot_key) or st.last_spot
             indices_data[name] = {
-                "spot_ltp": self.client.get_ltp(spec.spot_key) or st.last_spot,
+                "spot_ltp": spot_ltp,
                 "orh": st.orh,
                 "orl": st.orl,
                 "range_pct": st.range_pct,
@@ -415,6 +612,7 @@ class TradingSystemOrchestrator:
                 "rsi": st.last_rsi,
                 "last_signal": st.last_signal,
                 "last_eval_time": st.last_eval_time,
+                "radar": self._build_index_radar(name, spot_ltp, vix, now_ist),
             }
 
         positions_data = []
@@ -449,7 +647,7 @@ class TradingSystemOrchestrator:
             "ist_time": now_ist.strftime("%Y-%m-%d %H:%M:%S"),
             "ws_connected": self.client.ws_connected,
             "public_ip": self.public_ip,
-            "india_vix": self.client.get_ltp(INDIA_VIX_KEY),
+            "india_vix": vix,
             "mtm_pnl": self.risk_manager.total_mtm(),
             "realized_pnl": self.risk_manager.realized_pnl_today,
             "trades_taken": self.risk_manager.trades_taken_today,
@@ -459,6 +657,7 @@ class TradingSystemOrchestrator:
             "halt_reason": self.risk_manager.halt_reason,
             "cached_contracts": self.mapper.cached_count,
             "indices": indices_data,
+            "schedule": self._build_schedule_status(now_ist),
             "positions": positions_data,
             "completed_trades": [t.__dict__ for t in self.risk_manager.completed_trades],
             "broker": self.client.get_live_broker_snapshot(force=False),
