@@ -42,6 +42,7 @@ class CompatibleNorenApi:
         self.secret_key = secret_key
         self.redirect_uri = redirect_uri
         self.access_token: str = ""
+        self.susertoken: str = ""
         self.username: str = user_id.strip().upper()
         self.account_id: str = user_id.strip().upper()
         self._session = requests.Session()
@@ -97,8 +98,11 @@ class CompatibleNorenApi:
             timeout=15,
         )
         data = resp.json()
-        if data.get("stat") == "Ok" and data.get("code"):
-            return str(data["code"]).strip()
+        if data.get("stat") == "Ok":
+            if data.get("susertoken"):
+                self.susertoken = str(data["susertoken"]).strip()
+            if data.get("code"):
+                return str(data["code"]).strip()
         raise RuntimeError(f"QuickAuth OAuth code request failed: {data}")
 
     def getAccessToken(self, code: str) -> Dict[str, Any]:  # noqa: N802
@@ -120,8 +124,18 @@ class CompatibleNorenApi:
             data["access_token"] = data["susertoken"]
         return data
 
-    def injectOAuthHeader(self, access_token: str, user_id: str, account_id: str) -> None:  # noqa: N802
+    def injectOAuthHeader(
+        self,
+        access_token: str,
+        user_id: str,
+        account_id: str,
+        susertoken: str = "",
+    ) -> None:  # noqa: N802
         self.access_token = access_token
+        if susertoken:
+            self.susertoken = susertoken
+        elif not getattr(self, "susertoken", ""):
+            self.susertoken = access_token
         self.username = user_id
         self.account_id = account_id or user_id
         self._session.headers.update({"Authorization": f"Bearer {access_token}"})
@@ -218,17 +232,15 @@ class CompatibleNorenApi:
         socket_error_callback: Optional[Callable[[Any], None]] = None,
     ) -> None:
         def _on_open(ws: Any) -> None:
-            self._ws_connected = True
+            token_to_send = getattr(self, "susertoken", None) or self.access_token
             connect_msg = {
                 "t": "c",
                 "uid": self.username,
                 "actid": self.account_id,
-                "susertoken": self.access_token,
+                "susertoken": token_to_send,
                 "source": "API",
             }
             ws.send(json.dumps(connect_msg))
-            if socket_open_callback:
-                socket_open_callback()
 
         def _on_message(_ws: Any, message: str) -> None:
             try:
@@ -236,7 +248,17 @@ class CompatibleNorenApi:
             except Exception:
                 return
             msg_type = data.get("t")
-            if msg_type in {"tk", "tf", "dk", "df"} and subscribe_callback:
+            if msg_type in {"ck", "ak"}:
+                if data.get("s") in ("OK", "Ok"):
+                    self._ws_connected = True
+                    logger.info("Shoonya WebSocket handshake confirmed (%s=OK)", msg_type)
+                    if socket_open_callback:
+                        socket_open_callback()
+                else:
+                    logger.error("Shoonya WebSocket auth rejected: %s", data)
+                    if socket_error_callback:
+                        socket_error_callback(data)
+            elif msg_type in {"tk", "tf", "dk", "df"} and subscribe_callback:
                 subscribe_callback(data)
             elif msg_type in {"om"} and order_update_callback:
                 order_update_callback(data)
@@ -305,14 +327,10 @@ class ShoonyaClient:
         self._tick_listeners: List[Callable[[Dict[str, Any]], None]] = []
         self._order_listeners: List[Callable[[Dict[str, Any]], None]] = []
         self._reconnect_callbacks: List[Callable[[], None]] = []
+        self._last_reconnect_monotonic: float = 0.0
 
         if raw_api is not None:
             self.api = raw_api
-        elif _UpstreamNorenApi is not None:
-            self.api = _UpstreamNorenApi(
-                host=settings.shoonya_host,
-                websocket=settings.shoonya_ws_host,
-            )
         else:
             self.api = CompatibleNorenApi(
                 host=settings.shoonya_host,
@@ -432,10 +450,15 @@ class ShoonyaClient:
         if not in_market or not self.subscribed_tokens:
             return False
 
-        elapsed = time.monotonic() - self.last_tick_monotonic if self.last_tick_monotonic > 0 else 999.0
+        now_m = time.monotonic()
+        if not self.ws_connected and (now_m - self._last_reconnect_monotonic) < self.settings.ws_watchdog_timeout_sec:
+            return False
+
+        elapsed = now_m - self.last_tick_monotonic if self.last_tick_monotonic > 0 else 999.0
         if self.ws_connected and elapsed <= self.settings.ws_watchdog_timeout_sec:
             return False
 
+        self._last_reconnect_monotonic = now_m
         logger.warning("WebSocket watchdog triggered (connected=%s, silent=%.1fs); reconnecting...", self.ws_connected, elapsed)
         try:
             if hasattr(self.api, "close_websocket"):
