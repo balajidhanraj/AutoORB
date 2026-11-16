@@ -578,6 +578,19 @@
             <option value="recent|5">Recent 5-Min (Immediate Next Close Test)</option>
           </optgroup>
         </select>
+        <select id="cutoff-select" class="theme-select" onchange="applyEntryCutoff(this.value)"
+          title="Select Auto Breakout Scanner Cutoff Window (09:30 to 15:15 IST)">
+          <option value="11:30" {{ 'selected' if snapshot.entry_cutoff_time == '11:30' else '' }}>Cutoff: 11:30 AM</option>
+          <option value="12:30" {{ 'selected' if snapshot.entry_cutoff_time == '12:30' else '' }}>Cutoff: 12:30 PM</option>
+          <option value="13:30" {{ 'selected' if snapshot.entry_cutoff_time == '13:30' else '' }}>Cutoff: 1:30 PM (13:30)</option>
+          <option value="14:00" {{ 'selected' if snapshot.entry_cutoff_time == '14:00' else '' }}>Cutoff: 2:00 PM (14:00)</option>
+          <option value="14:15" {{ 'selected' if snapshot.entry_cutoff_time == '14:15' or not snapshot.entry_cutoff_time else '' }}>Cutoff: 2:15 PM (14:15 Default)</option>
+          <option value="14:30" {{ 'selected' if snapshot.entry_cutoff_time == '14:30' else '' }}>Cutoff: 2:30 PM (14:30)</option>
+          <option value="14:45" {{ 'selected' if snapshot.entry_cutoff_time == '14:45' else '' }}>Cutoff: 2:45 PM (14:45)</option>
+          <option value="15:00" {{ 'selected' if snapshot.entry_cutoff_time == '15:00' else '' }}>Cutoff: 3:00 PM (15:00)</option>
+          <option value="15:10" {{ 'selected' if snapshot.entry_cutoff_time == '15:10' else '' }}>Cutoff: 3:10 PM (15:10)</option>
+          <option value="15:15" {{ 'selected' if snapshot.entry_cutoff_time == '15:15' else '' }}>Cutoff: 3:15 PM (15:15 Max)</option>
+        </select>
         <select id="theme-select" class="theme-select" onchange="applyTheme(this.value)" title="Switch UI Theme">
           <option value="midnight">Theme: Midnight Pro</option>
           <option value="emerald">Theme: Cyber Emerald</option>
@@ -587,6 +600,7 @@
         </select>
         <button class="btn-primary" onclick="triggerOAuth()">Run OAuth Login</button>
         <button onclick="toggleMode()">Toggle PAPER/LIVE</button>
+        <button class="btn-primary" onclick="triggerAutoBreakoutOrder('BANKNIFTY')" style="background:#059669;color:#fff;font-weight:600;" title="Trigger auto-order pipeline into Shoonya Broker Terminal and app">⚡ Auto-Order Now</button>
         <a class="btn" href="/api/trades/csv">CSV</a>
         <button class="btn-kill" onclick="triggerKillSwitch()">KILL SWITCH</button>
       </div>
@@ -783,13 +797,15 @@
       el.className = "status-note show " + (ok ? "ok" : "err");
     }
 
-    function renderRadarCard(containerId, name, st) {
+    function renderRadarCard(containerId, name, st, orbStart, orbEnd) {
       const el = document.getElementById(containerId);
       if (!el || !st) return;
+      const startT = orbStart || "09:15";
+      const endT = orbEnd || "09:30";
       const r = st.radar || {};
       const statusBadge = st.no_trade_reason
         ? `<span class="badge halted">${esc(st.no_trade_reason)}</span>`
-        : (st.is_locked ? `<span class="badge live">ORB LOCKED</span>` : `<span class="badge">WAITING 09:30</span>`);
+        : (st.is_locked ? `<span class="badge live">ORB LOCKED</span>` : `<span class="badge">WAITING ${endT}</span>`);
 
       const gates = [
         ["Sys/Slot", r.system_ready],
@@ -804,8 +820,8 @@
         <div class="section-title"><span>${esc(name)} Spot &amp; Auto-Order Radar</span>${statusBadge}</div>
         <div class="kv-grid">
           <div class="kv"><small>Spot LTP</small><strong>${fmt(st.spot_ltp)}</strong></div>
-          <div class="kv"><small>ORH (9:15-9:30)</small><strong>${fmt(st.orh)}</strong></div>
-          <div class="kv"><small>ORL (9:15-9:30)</small><strong>${fmt(st.orl)}</strong></div>
+          <div class="kv"><small>ORH (${startT}-${endT})</small><strong>${fmt(st.orh)}</strong></div>
+          <div class="kv"><small>ORL (${startT}-${endT})</small><strong>${fmt(st.orl)}</strong></div>
           <div class="kv"><small>Range %</small><strong>${st.range_pct !== null && st.range_pct !== undefined ? fmt(st.range_pct) + "%" : "--"}</strong></div>
           <div class="kv"><small>Intraday VWAP</small><strong>${fmt(st.vwap)}</strong></div>
           <div class="kv"><small>Wilder RSI(14)</small><strong>${fmt(st.rsi)}</strong></div>
@@ -815,8 +831,11 @@
         </div>
         <div class="progress-wrap"><div class="progress-fill" style="width:${r.readiness_pct ?? 0}%"></div></div>
         <div class="gates-row">${gates}</div>
-        <div style="font-size:0.74rem;color:var(--muted);">Next Candidate: <strong>${esc(r.candidate_ce || '--')}</strong> | <strong>${esc(r.candidate_pe || '--')}</strong></div>
-        <div class="radar-banner ${isImm ? 'imminent' : ''}">${esc(r.radar_summary || 'Waiting for 09:30 ORB lock.')}</div>
+        <div style="font-size:0.74rem;color:var(--muted);display:flex;justify-content:space-between;align-items:center;">
+          <span>Candidate: <strong>${esc(r.candidate_ce || '--')}</strong></span>
+          <button onclick="triggerAutoBreakoutOrder('${esc(name)}')" style="padding:2px 8px;font-size:0.7rem;font-weight:600;border-radius:4px;background:#2563eb;color:#fff;border:none;cursor:pointer;" title="Execute strategy entry order immediately for ${esc(name)}">⚡ Trigger Order</button>
+        </div>
+        <div class="radar-banner ${isImm ? 'imminent' : ''}">${esc(r.radar_summary || ('Waiting for ' + endT + ' ORB lock.'))}</div>
       `;
     }
 
@@ -833,6 +852,10 @@
       }
       const cutoffEl = document.getElementById("entry-cutoff-val");
       if (cutoffEl && data.entry_cutoff_time) cutoffEl.textContent = data.entry_cutoff_time;
+      const cutoffSel = document.getElementById("cutoff-select");
+      if (cutoffSel && document.activeElement !== cutoffSel && data.entry_cutoff_time) {
+        cutoffSel.value = data.entry_cutoff_time;
+      }
       document.getElementById("user-badge").textContent = "Client: " + (data.user_id || "--");
       const modeBadge = document.getElementById("mode-badge");
       modeBadge.textContent = "MODE: " + data.mode;
@@ -866,8 +889,8 @@
       haltEl.textContent = data.halted ? (data.halt_reason || "HALTED") : "Engine: ACTIVE";
       haltEl.className = "card-sub " + (data.halted ? "neg" : "pos");
 
-      renderRadarCard("nifty-radar-card", "NIFTY", (data.indices || {}).NIFTY);
-      renderRadarCard("bnf-radar-card", "BANKNIFTY", (data.indices || {}).BANKNIFTY);
+      renderRadarCard("nifty-radar-card", "NIFTY", (data.indices || {}).NIFTY, data.orb_start_time, data.orb_end_time);
+      renderRadarCard("bnf-radar-card", "BANKNIFTY", (data.indices || {}).BANKNIFTY, data.orb_start_time, data.orb_end_time);
 
       const brkBadge = document.getElementById("broker-conn-badge");
       brkBadge.textContent = brk.connected ? `CONNECTED (${brk.user_id || data.user_id || "--"})` : "NOT CONNECTED";
@@ -1074,6 +1097,42 @@
         if (data.snapshot) renderSnapshot(data.snapshot);
       } catch (err) {
         console.error("Failed setting ORB anchor:", err);
+      }
+    }
+
+    async function triggerAutoBreakoutOrder(indexName = "BANKNIFTY") {
+      const mode = (document.getElementById("mode-badge")?.textContent || "MODE: PAPER").replace("MODE: ", "").trim();
+      const msg = `Trigger automated strategy order for ${indexName} in ${mode} mode?\n\n• If LIVE: Order will place directly into your Shoonya Broker Terminal.\n• If PAPER: Order will simulate immediate fill in the app.\n\nProceed?`;
+      if (!confirm(msg)) return;
+      showNote("funds-msg", true, `Submitting auto-order for ${indexName}...`);
+      try {
+        const res = await fetch("/api/strategy/auto-trigger", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ index_name: indexName, signal_type: "AUTO" })
+        });
+        const data = await res.json();
+        if (data.snapshot) renderSnapshot(data.snapshot);
+        showNote("funds-msg", data.ok, data.message || "Auto-order completed.");
+        alert((data.ok ? "SUCCESS: " : "NOTICE: ") + (data.message || "Order processed."));
+      } catch (err) {
+        showNote("funds-msg", false, "Failed triggering auto-order: " + err);
+        alert("Error triggering auto-order: " + err);
+      }
+    }
+
+    async function applyEntryCutoff(val) {
+      if (!val) return;
+      try {
+        const res = await fetch("/api/settings/entry-cutoff", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ cutoff_time: val })
+        });
+        const data = await res.json();
+        if (data.snapshot) renderSnapshot(data.snapshot);
+      } catch (err) {
+        console.error("Failed setting entry cutoff:", err);
       }
     }
 

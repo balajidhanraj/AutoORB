@@ -47,6 +47,15 @@ class OrbAnchorRequest(BaseModel):
     minutes: int = 15
 
 
+class EntryCutoffRequest(BaseModel):
+    cutoff_time: str = "14:15"
+
+
+class AutoTriggerRequest(BaseModel):
+    index_name: str = "BANKNIFTY"
+    signal_type: Optional[str] = "AUTO"
+
+
 def create_app(orchestrator: Any) -> FastAPI:
     """Build and return the FastAPI web dashboard application."""
     app = FastAPI(title="Shoonya ORB Algo Terminal", version="1.0.0")
@@ -212,6 +221,33 @@ def create_app(orchestrator: Any) -> FastAPI:
             }
         )
 
+    @app.post("/api/settings/entry-cutoff")
+    def api_set_entry_cutoff(payload: EntryCutoffRequest) -> JSONResponse:
+        ok, msg = orchestrator.set_entry_cutoff_time(payload.cutoff_time)
+        return JSONResponse(
+            content={
+                "ok": ok,
+                "message": msg,
+                "entry_cutoff_time": orchestrator.settings.entry_cutoff_time.strftime("%H:%M"),
+                "snapshot": orchestrator.get_status_snapshot(),
+            }
+        )
+
+    @app.post("/api/strategy/auto-trigger")
+    def api_auto_trigger(payload: AutoTriggerRequest) -> JSONResponse:
+        ok, msg, data = orchestrator.trigger_auto_order(
+            index_name=payload.index_name,
+            signal_type=payload.signal_type,
+        )
+        return JSONResponse(
+            content={
+                "ok": ok,
+                "message": msg,
+                "data": data,
+                "snapshot": orchestrator.get_status_snapshot(),
+            }
+        )
+
     @app.get("/health")
     def health() -> JSONResponse:
         return JSONResponse(content={"status": "ok", "mode": orchestrator.settings.mode})
@@ -229,6 +265,8 @@ def create_app(orchestrator: Any) -> FastAPI:
         "api_broker_order": api_broker_order,
         "api_set_orb_window": api_set_orb_window,
         "api_set_orb_anchor": api_set_orb_anchor,
+        "api_set_entry_cutoff": api_set_entry_cutoff,
+        "api_auto_trigger": api_auto_trigger,
         "api_reset_trades": api_reset_trades,
         "health": health,
     }

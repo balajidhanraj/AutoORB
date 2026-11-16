@@ -153,19 +153,25 @@ def _table_html(headers: Iterable[str], rows_html: str, empty_msg: str, p: Dict[
     )
 
 
-def _render_radar_card(name: str, st: Dict[str, Any], p: Dict[str, str]) -> str:
+def _render_radar_card(
+    name: str,
+    st: Dict[str, Any],
+    p: Dict[str, str],
+    orb_start: str = "09:15",
+    orb_end: str = "09:30",
+) -> str:
     r = st.get("radar") or {}
     if st.get("no_trade_reason"):
         status = _badge(str(st["no_trade_reason"]), "danger", p)
     elif st.get("is_locked"):
         status = _badge("ORB LOCKED", "live", p)
     else:
-        status = _badge("WAITING 09:30", "neutral", p)
+        status = _badge(f"WAITING {orb_end}", "neutral", p)
 
     kvs = [
         ("Spot LTP", _fmt_num(st.get("spot_ltp"))),
-        ("ORH (9:15-9:30)", _fmt_num(st.get("orh"))),
-        ("ORL (9:15-9:30)", _fmt_num(st.get("orl"))),
+        (f"ORH ({orb_start}-{orb_end})", _fmt_num(st.get("orh"))),
+        (f"ORL ({orb_start}-{orb_end})", _fmt_num(st.get("orl"))),
         ("Range %", _fmt_num(st.get("range_pct"), suffix="%")),
         ("Intraday VWAP", _fmt_num(st.get("vwap"))),
         ("Wilder RSI(14)", _fmt_num(st.get("rsi"))),
@@ -321,10 +327,12 @@ def render_dashboard_html(theme_name: Optional[str] = None) -> str:
     )
 
     indices = snap.get("indices", {})
+    orb_start = str(snap.get("orb_start_time") or "09:15")
+    orb_end = str(snap.get("orb_end_time") or "09:30")
     col3_html = (
         f'<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(310px,1fr));gap:14px;margin-bottom:14px;">'
-        f'{_render_radar_card("NIFTY", indices.get("NIFTY", {}), p)}'
-        f'{_render_radar_card("BANKNIFTY", indices.get("BANKNIFTY", {}), p)}'
+        f'{_render_radar_card("NIFTY", indices.get("NIFTY", {}), p, orb_start=orb_start, orb_end=orb_end)}'
+        f'{_render_radar_card("BANKNIFTY", indices.get("BANKNIFTY", {}), p, orb_start=orb_start, orb_end=orb_end)}'
         f"{_render_broker_and_schedule_col(snap, p)}"
         f"</div>"
     )
@@ -555,6 +563,13 @@ def reset_trades_ui() -> Tuple[str, str]:
     return banner, render_dashboard_html()
 
 
+def change_entry_cutoff_ui(cutoff_choice: str) -> Tuple[str, str]:
+    """Change Auto Breakout entry cutoff window (09:30 to 15:15 IST)."""
+    _ok, msg = orchestrator.set_entry_cutoff_time(cutoff_choice)
+    banner = f"**Entry Cutoff**: {msg}"
+    return banner, render_dashboard_html()
+
+
 def refresh_dashboard() -> str:
     """Return the latest HTML snapshot for periodic Gradio timer updates."""
     return render_dashboard_html()
@@ -595,6 +610,22 @@ def build_gradio_demo() -> Any:
                 ],
                 value="15m (09:15-09:30 Morning)",
                 label="ORB Anchor Window",
+            )
+            cutoff_selector = gr.Dropdown(
+                choices=[
+                    "11:30",
+                    "12:30",
+                    "13:30",
+                    "14:00",
+                    "14:15",
+                    "14:30",
+                    "14:45",
+                    "15:00",
+                    "15:10",
+                    "15:15",
+                ],
+                value=orchestrator.settings.entry_cutoff_time.strftime("%H:%M"),
+                label="Entry Cutoff",
             )
             oauth_btn = gr.Button("Run OAuth Login", variant="primary")
             sync_btn = gr.Button("Sync Broker Funds")
@@ -650,6 +681,12 @@ def build_gradio_demo() -> Any:
             inputs=[orb_window_selector],
             outputs=[status_banner, dashboard_html],
             api_name="change_orb_window",
+        )
+        cutoff_selector.change(
+            fn=change_entry_cutoff_ui,
+            inputs=[cutoff_selector],
+            outputs=[status_banner, dashboard_html],
+            api_name="change_entry_cutoff",
         )
         oauth_btn.click(
             fn=run_oauth_login,

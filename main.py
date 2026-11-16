@@ -416,6 +416,93 @@ class TradingSystemOrchestrator:
         logger.info(msg)
         return True, msg
 
+    def set_entry_cutoff_time(self, cutoff_time_str: str) -> Tuple[bool, str]:
+        """Configure entry cutoff time between ORB end time (e.g. 09:30) and Auto Squareoff (15:15)."""
+        clean_str = str(cutoff_time_str).strip()
+        try:
+            parts = clean_str.split(":")
+            ch = int(parts[0])
+            cm = int(parts[1]) if len(parts) > 1 else 0
+            cutoff_t = dt_time(ch, cm, 0)
+        except Exception:
+            return False, f"Invalid time format: '{cutoff_time_str}'. Use 'HH:MM' (e.g. '14:30' or '15:15')."
+
+        min_allowed = dt_time(9, 30, 0)
+        max_allowed = self.settings.auto_squareoff_time  # 15:15:00
+        if cutoff_t < min_allowed:
+            return False, f"Entry cutoff time cannot be before {min_allowed.strftime('%H:%M')} IST."
+        if cutoff_t > max_allowed:
+            return False, f"Entry cutoff time cannot be after auto square-off at {max_allowed.strftime('%H:%M')} IST."
+
+        with self._lock:
+            self.settings.entry_cutoff_time = cutoff_t
+
+        msg = f"Auto breakout entry window updated to {self.settings.orb_end_time.strftime('%H:%M')}–{cutoff_t.strftime('%H:%M')} IST."
+        logger.info(msg)
+        return True, msg
+
+    def trigger_auto_order(
+        self,
+        index_name: str = "BANKNIFTY",
+        signal_type: Optional[str] = None,
+    ) -> Tuple[bool, str, Dict[str, Any]]:
+        """Trigger strategy automated entry order immediately into broker terminal (LIVE) or paper (PAPER)."""
+        idx = index_name.strip().upper()
+        if idx not in INDEX_SPECS:
+            return False, f"Invalid index: '{index_name}'. Use 'NIFTY' or 'BANKNIFTY'.", {}
+
+        st = self.strategy.get_state(idx)
+        spec = INDEX_SPECS[idx]
+        now_ist = datetime.now(IST)
+        spot_ltp = self.client.get_ltp(spec.spot_key) or st.last_spot or 0.0
+
+        if spot_ltp <= 0:
+            return False, f"Cannot trigger auto-order: No live spot LTP available for {idx}.", {}
+
+        sig_type = signal_type.strip().upper() if signal_type else "AUTO"
+        if sig_type not in {"CE", "PE"}:
+            vwap = st.last_vwap or spot_ltp
+            sig_type = "CE" if spot_ltp >= vwap else "PE"
+
+        orh = st.orh or round(spot_ltp + 10.0, 2)
+        orl = st.orl or round(spot_ltp - 10.0, 2)
+        vwap = st.last_vwap or spot_ltp
+        rsi = st.last_rsi or (65.0 if sig_type == "CE" else 35.0)
+        vix = self.client.get_ltp(INDIA_VIX_KEY) or 15.0
+
+        from engine.strategy_orb import ORBSignal
+        signal = ORBSignal(
+            index_name=idx,
+            signal_type=sig_type,
+            candle_time=now_ist,
+            spot_close=spot_ltp,
+            orh=orh,
+            orl=orl,
+            vwap=vwap,
+            rsi=rsi,
+            india_vix=vix,
+        )
+
+        logger.info(
+            "Triggering automated strategy entry: %s %s spot=%.2f VWAP=%.2f RSI=%.1f (MODE=%s)",
+            idx, sig_type, spot_ltp, vwap, rsi, self.settings.mode
+        )
+        pos = self.risk_manager.execute_entry(signal)
+        if pos is None:
+            return False, "Strategy entry execution skipped or rejected by risk manager.", {}
+
+        self.client.get_live_broker_snapshot(force=True)
+        order_id = pos.entry_order_id or "SUBMITTED"
+        msg = f"Auto-order triggered successfully: {idx} {pos.contract.tradingsymbol} qty={pos.initial_qty} (Order ID: {order_id}) in {self.settings.mode} mode."
+        logger.info(msg)
+        return True, msg, {
+            "order_id": order_id,
+            "tradingsymbol": pos.contract.tradingsymbol,
+            "quantity": pos.initial_qty,
+            "price": pos.entry_limit_price,
+            "mode": self.settings.mode,
+        }
+
     def trigger_kill_switch(self, reason: str = "MANUAL_UI_KILL_SWITCH") -> None:
         self.risk_manager.emergency_kill_switch(reason=reason)
 
