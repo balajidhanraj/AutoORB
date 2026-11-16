@@ -423,7 +423,7 @@ def render_dashboard_html(theme_name: Optional[str] = None) -> str:
         f'<div style="background:{p["surface"]};border:1px solid {p["border"]};border-radius:14px;padding:14px 16px;margin-bottom:14px;color:{p["text"]} !important;">'
         f'<div style="font-size:18px;font-weight:700;margin-bottom:4px;color:{p["text"]} !important;">Shoonya Automated ORB Terminal '
         f'<span style="font-size:12px;color:{p["muted"]} !important;font-weight:500;">(Theme: {html.escape(chosen)})</span></div>'
-        f'<div style="font-size:12px;color:{p["muted"]} !important;margin-bottom:8px;">15-Min ORB (09:15-09:30) + Intraday VWAP + Wilder RSI(14) | Algo ID: {html.escape(str(snap.get("sebi_algo_id", "--")))}</div>'
+        f'<div style="font-size:12px;color:{p["muted"]} !important;margin-bottom:8px;">{snap.get("orb_window_minutes", 15)}-Min ORB (09:15-{snap.get("orb_end_time", "09:30")}) + Intraday VWAP + Wilder RSI(14) | Algo ID: {html.escape(str(snap.get("sebi_algo_id", "--")))}</div>'
         f"<div>{badges_html}</div></div>"
         f'<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-bottom:14px;">{kpi_html}</div>'
         f"{col3_html}{col2_books}"
@@ -524,6 +524,21 @@ def connect_account_ui(
     return msg, render_dashboard_html()
 
 
+def change_orb_window_ui(window_choice: str) -> Tuple[str, str]:
+    """Change ORB duration window (5m, 15m, 30m, 45m, 60m) dynamically."""
+    mapping = {
+        "5 Min (09:15-09:20)": 5,
+        "15 Min (09:15-09:30)": 15,
+        "30 Min (09:15-09:45)": 30,
+        "45 Min (09:15-10:00)": 45,
+        "60 Min (09:15-10:15)": 60,
+    }
+    mins = mapping.get(window_choice, 15)
+    _ok, msg = orchestrator.set_orb_window(mins)
+    banner = f"**ORB Window**: {msg}"
+    return banner, render_dashboard_html()
+
+
 def refresh_dashboard() -> str:
     """Return the latest HTML snapshot for periodic Gradio timer updates."""
     return render_dashboard_html()
@@ -543,6 +558,17 @@ def build_gradio_demo() -> Any:
                 choices=["midnight", "emerald", "gold", "light", "nordic"],
                 value="midnight",
                 label="UI Theme",
+            )
+            orb_window_selector = gr.Dropdown(
+                choices=[
+                    "5 Min (09:15-09:20)",
+                    "15 Min (09:15-09:30)",
+                    "30 Min (09:15-09:45)",
+                    "45 Min (09:15-10:00)",
+                    "60 Min (09:15-10:15)",
+                ],
+                value=f"{orchestrator.settings.orb_window_minutes} Min (09:15-{orchestrator.settings.orb_end_time.strftime('%H:%M')})",
+                label="ORB Range Window",
             )
             oauth_btn = gr.Button("Run OAuth Login", variant="primary")
             sync_btn = gr.Button("Sync Broker Funds & Orders")
@@ -591,6 +617,12 @@ def build_gradio_demo() -> Any:
             inputs=[theme_selector],
             outputs=[dashboard_html],
             api_name="change_theme",
+        )
+        orb_window_selector.change(
+            fn=change_orb_window_ui,
+            inputs=[orb_window_selector],
+            outputs=[status_banner, dashboard_html],
+            api_name="change_orb_window",
         )
         oauth_btn.click(
             fn=run_oauth_login,
