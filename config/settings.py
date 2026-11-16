@@ -133,6 +133,7 @@ class AppSettings(BaseModel):
     log_dir: str = Field(default="logs")
 
     # Market session timings (IST)
+    orb_window_minutes: int = Field(default=15)
     auth_time: time = Field(default=time(8, 40, 0))
     instrument_cache_time: time = Field(default=time(8, 55, 0))
     ws_connect_time: time = Field(default=time(9, 14, 0))
