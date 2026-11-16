@@ -56,6 +56,10 @@ class AutoTriggerRequest(BaseModel):
     signal_type: Optional[str] = "AUTO"
 
 
+class PositionExitRequest(BaseModel):
+    index_name: str = "CRUDEOILM"
+
+
 def create_app(orchestrator: Any) -> FastAPI:
     """Build and return the FastAPI web dashboard application."""
     app = FastAPI(title="Shoonya ORB Algo Terminal", version="1.0.0")
@@ -248,6 +252,17 @@ def create_app(orchestrator: Any) -> FastAPI:
             }
         )
 
+    @app.post("/api/positions/exit")
+    def api_exit_position(payload: PositionExitRequest) -> JSONResponse:
+        ok, msg = orchestrator.exit_position(payload.index_name)
+        return JSONResponse(
+            content={
+                "ok": ok,
+                "message": msg,
+                "snapshot": orchestrator.get_status_snapshot(),
+            }
+        )
+
     @app.get("/health")
     def health() -> JSONResponse:
         return JSONResponse(content={"status": "ok", "mode": orchestrator.settings.mode})
@@ -267,6 +282,7 @@ def create_app(orchestrator: Any) -> FastAPI:
         "api_set_orb_anchor": api_set_orb_anchor,
         "api_set_entry_cutoff": api_set_entry_cutoff,
         "api_auto_trigger": api_auto_trigger,
+        "api_exit_position": api_exit_position,
         "api_reset_trades": api_reset_trades,
         "health": health,
     }

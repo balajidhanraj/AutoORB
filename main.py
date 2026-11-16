@@ -525,10 +525,27 @@ class TradingSystemOrchestrator:
     def trigger_kill_switch(self, reason: str = "MANUAL_UI_KILL_SWITCH") -> None:
         self.risk_manager.emergency_kill_switch(reason=reason)
 
-    def toggle_mode(self) -> Tuple[bool, str]:
+    def exit_position(self, index_name: str) -> Tuple[bool, str]:
+        """Manually exit / square off an active position for an index or commodity."""
+        idx = index_name.strip().upper()
+        ok = self.risk_manager.exit_position(idx, reason="UI_MANUAL_EXIT")
+        if ok:
+            msg = f"Successfully squared off {idx} position."
+            logger.info(msg)
+            return True, msg
+        return False, f"No active position found for '{idx}'."
+
+    def toggle_mode(self, force_clear_paper: bool = True) -> Tuple[bool, str]:
         with self._lock:
             if self.risk_manager.positions:
-                return False, "Cannot toggle MODE while positions are active."
+                if self.settings.mode == "PAPER" or force_clear_paper:
+                    logger.info("Auto-clearing %d simulated PAPER position(s) to switch MODE", len(self.risk_manager.positions))
+                    for idx_name in list(self.risk_manager.positions.keys()):
+                        self.risk_manager.exit_position(idx_name, reason="MODE_SWITCH_CLEANUP")
+                    self.risk_manager.halted = False
+                    self.risk_manager.halt_reason = None
+                else:
+                    return False, "Cannot toggle MODE while real LIVE broker positions are active. Square off live positions first."
             new_mode = "LIVE" if self.settings.mode == "PAPER" else "PAPER"
             self.settings.mode = new_mode
             logger.warning("Trading MODE switched to %s via UI", new_mode)

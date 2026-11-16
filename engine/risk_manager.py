@@ -577,6 +577,20 @@ class RiskManager:
                 self.notifier.send_async(f"🚨 CRITICAL KILL SWITCH: {reason}")
             return True
 
+    def exit_position(self, index_name: str, reason: str = "MANUAL_EXIT") -> bool:
+        """Exit an active position for a specific index or commodity."""
+        with self._lock:
+            pos = self.positions.get(index_name)
+            if pos is None:
+                return False
+            if pos.state == PositionState.ENTERING:
+                self.client.cancel_order(pos.entry_order_id)
+                self.positions.pop(index_name, None)
+            elif pos.state in (PositionState.ENTERED, PositionState.PARTIAL_EXIT):
+                self._exit_position_market(pos, reason)
+            logger.info("Manually exited position for %s (%s)", index_name, reason)
+            return True
+
     def emergency_kill_switch(self, reason: str = "MANUAL_UI_KILL_SWITCH") -> None:
         """Immediately cancel pending orders, exit all positions, and halt trading."""
         with self._lock:

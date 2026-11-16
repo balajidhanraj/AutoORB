@@ -3,7 +3,8 @@
 
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="viewport"
+    content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="theme-color" content="#070b14" />
@@ -726,16 +727,26 @@
         </select>
         <select id="cutoff-select" class="theme-select" onchange="applyEntryCutoff(this.value)"
           title="Select Auto Breakout Scanner Cutoff Window (09:30 to 15:15 IST)">
-          <option value="11:30" {{ 'selected' if snapshot.entry_cutoff_time == '11:30' else '' }}>Cutoff: 11:30 AM</option>
-          <option value="12:30" {{ 'selected' if snapshot.entry_cutoff_time == '12:30' else '' }}>Cutoff: 12:30 PM</option>
-          <option value="13:30" {{ 'selected' if snapshot.entry_cutoff_time == '13:30' else '' }}>Cutoff: 1:30 PM (13:30)</option>
-          <option value="14:00" {{ 'selected' if snapshot.entry_cutoff_time == '14:00' else '' }}>Cutoff: 2:00 PM (14:00)</option>
-          <option value="14:15" {{ 'selected' if snapshot.entry_cutoff_time == '14:15' or not snapshot.entry_cutoff_time else '' }}>Cutoff: 2:15 PM (14:15 Default)</option>
-          <option value="14:30" {{ 'selected' if snapshot.entry_cutoff_time == '14:30' else '' }}>Cutoff: 2:30 PM (14:30)</option>
-          <option value="14:45" {{ 'selected' if snapshot.entry_cutoff_time == '14:45' else '' }}>Cutoff: 2:45 PM (14:45)</option>
-          <option value="15:00" {{ 'selected' if snapshot.entry_cutoff_time == '15:00' else '' }}>Cutoff: 3:00 PM (15:00)</option>
-          <option value="15:10" {{ 'selected' if snapshot.entry_cutoff_time == '15:10' else '' }}>Cutoff: 3:10 PM (15:10)</option>
-          <option value="15:15" {{ 'selected' if snapshot.entry_cutoff_time == '15:15' else '' }}>Cutoff: 3:15 PM (15:15 Max)</option>
+          <option value="11:30" {{ 'selected' if snapshot.entry_cutoff_time=='11:30' else '' }}>Cutoff: 11:30 AM
+          </option>
+          <option value="12:30" {{ 'selected' if snapshot.entry_cutoff_time=='12:30' else '' }}>Cutoff: 12:30 PM
+          </option>
+          <option value="13:30" {{ 'selected' if snapshot.entry_cutoff_time=='13:30' else '' }}>Cutoff: 1:30 PM (13:30)
+          </option>
+          <option value="14:00" {{ 'selected' if snapshot.entry_cutoff_time=='14:00' else '' }}>Cutoff: 2:00 PM (14:00)
+          </option>
+          <option value="14:15" {{ 'selected' if snapshot.entry_cutoff_time=='14:15' or not snapshot.entry_cutoff_time
+            else '' }}>Cutoff: 2:15 PM (14:15 Default)</option>
+          <option value="14:30" {{ 'selected' if snapshot.entry_cutoff_time=='14:30' else '' }}>Cutoff: 2:30 PM (14:30)
+          </option>
+          <option value="14:45" {{ 'selected' if snapshot.entry_cutoff_time=='14:45' else '' }}>Cutoff: 2:45 PM (14:45)
+          </option>
+          <option value="15:00" {{ 'selected' if snapshot.entry_cutoff_time=='15:00' else '' }}>Cutoff: 3:00 PM (15:00)
+          </option>
+          <option value="15:10" {{ 'selected' if snapshot.entry_cutoff_time=='15:10' else '' }}>Cutoff: 3:10 PM (15:10)
+          </option>
+          <option value="15:15" {{ 'selected' if snapshot.entry_cutoff_time=='15:15' else '' }}>Cutoff: 3:15 PM (15:15
+            Max)</option>
         </select>
         <select id="theme-select" class="theme-select" onchange="applyTheme(this.value)" title="Switch UI Theme">
           <option value="midnight">Theme: Midnight Pro</option>
@@ -746,8 +757,12 @@
         </select>
         <button class="btn-primary" onclick="triggerOAuth()">Run OAuth Login</button>
         <button onclick="toggleMode()">Toggle PAPER/LIVE</button>
-        <button class="btn-primary" onclick="triggerAutoBreakoutOrder('CRUDEOILM')" style="background:#d97706;color:#fff;font-weight:600;" title="Trigger automated order for MCX Crude Mini">⚡ Crude Mini Order</button>
-        <button class="btn-primary" onclick="triggerAutoBreakoutOrder('BANKNIFTY')" style="background:#059669;color:#fff;font-weight:600;" title="Trigger auto-order pipeline into Shoonya Broker Terminal and app">⚡ Auto-Order Now</button>
+        <button class="btn-primary" onclick="triggerAutoBreakoutOrder('CRUDEOILM')"
+          style="background:#d97706;color:#fff;font-weight:600;" title="Trigger automated order for MCX Crude Mini">⚡
+          Crude Mini Order</button>
+        <button class="btn-primary" onclick="triggerAutoBreakoutOrder('BANKNIFTY')"
+          style="background:#059669;color:#fff;font-weight:600;"
+          title="Trigger auto-order pipeline into Shoonya Broker Terminal and app">⚡ Auto-Order Now</button>
         <a class="btn" href="/api/trades/csv">CSV</a>
         <button class="btn-kill" onclick="triggerKillSwitch()">KILL SWITCH</button>
       </div>
@@ -771,9 +786,12 @@
         <div class="card-sub">NIFTY 130 | BNF 60 | CRUDE 10 qty</div>
       </div>
       <div class="card">
-        <div class="card-label">Trades Today <button onclick="resetTradesCounter()" class="badge info" style="cursor:pointer;padding:1px 6px;margin-left:6px;" title="Reset counter to 0/2 for testing">Reset</button></div>
+        <div class="card-label">Trades Today <button onclick="resetTradesCounter()" class="badge info"
+            style="cursor:pointer;padding:1px 6px;margin-left:6px;"
+            title="Reset counter to 0/2 for testing">Reset</button></div>
         <div id="trades-val" class="card-val">{{ snapshot.trades_taken }} / {{ snapshot.max_trades }}</div>
-        <div class="card-sub">Cutoff: <span id="entry-cutoff-val">{{ snapshot.entry_cutoff_time or '14:15' }}</span> IST</div>
+        <div class="card-sub">Cutoff: <span id="entry-cutoff-val">{{ snapshot.entry_cutoff_time or '14:15' }}</span> IST
+        </div>
       </div>
       <div class="card">
         <div class="card-label">India VIX (Min 12.0)</div>
@@ -1072,8 +1090,9 @@
             <td>₹${fmt(p.sl_trigger_price)}</td>
             <td>₹${fmt(p.target1_price)}</td>
             <td class="${(p.unrealized_pnl + p.realized_pnl) >= 0 ? 'pos' : 'neg'}">₹${fmt(p.unrealized_pnl + p.realized_pnl)}</td>
+            <td><button onclick="exitActivePosition('${esc(p.index_name)}')" style="background:#dc2626;color:#fff;border:none;border-radius:4px;padding:3px 8px;font-size:0.7rem;cursor:pointer;font-weight:600;" title="Square off this active position">Square Off</button></td>
           </tr>`).join("");
-        posContainer.innerHTML = `<table><thead><tr><th>Contract</th><th>State</th><th>Qty</th><th>Entry</th><th>LTP</th><th>SL</th><th>T1</th><th>P&L</th></tr></thead><tbody>${rows}</tbody></table>`;
+        posContainer.innerHTML = `<table><thead><tr><th>Contract</th><th>State</th><th>Qty</th><th>Entry</th><th>LTP</th><th>SL</th><th>T1</th><th>P&L</th><th>Action</th></tr></thead><tbody>${rows}</tbody></table>`;
       }
 
       const trdContainer = document.getElementById("trades-container");
@@ -1164,10 +1183,36 @@
     }
 
     async function toggleMode() {
-      const res = await fetch("/api/toggle-mode", { method: "POST" });
-      const data = await res.json();
-      if (!res.ok) alert("Cannot toggle mode: " + (data.detail || "error"));
-      else await refreshStatus();
+      try {
+        const res = await fetch("/api/toggle-mode", { method: "POST" });
+        const data = await res.json();
+        if (!res.ok) {
+          alert("Cannot toggle mode: " + (data.detail || "error"));
+        } else {
+          if (data.snapshot) renderSnapshot(data.snapshot);
+          showNote("funds-msg", true, data.message || "Switched mode.");
+          await refreshStatus();
+        }
+      } catch (e) {
+        alert("Failed toggling mode: " + e);
+      }
+    }
+
+    async function exitActivePosition(indexName) {
+      if (!confirm(`Square off active position for ${indexName}?`)) return;
+      try {
+        const res = await fetch("/api/positions/exit", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ index_name: indexName })
+        });
+        const data = await res.json();
+        if (data.snapshot) renderSnapshot(data.snapshot);
+        showNote("funds-msg", data.ok, data.message || "Position squared off.");
+        alert(data.message || "Position squared off.");
+      } catch (err) {
+        alert("Error squaring off position: " + err);
+      }
     }
 
     async function refreshBrokerData() {
