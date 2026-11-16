@@ -101,7 +101,7 @@ INDEX_SPECS: Dict[str, IndexSpec] = {
         trail_step_pts=10.0,
         target_delta_min=0.40,
         target_delta_max=0.75,
-        product_type="M",
+        product_type="I",
     ),
 }
 

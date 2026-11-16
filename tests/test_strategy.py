@@ -674,7 +674,7 @@ def test_crudeoilm_mcx_strategy_and_auto_trigger(tmp_path: Path) -> None:
     assert crude_spec.spot_exchange == "MCX"
     assert crude_spec.opt_exchange == "MCX"
     assert crude_spec.lot_size == 10
-    assert crude_spec.product_type == "M"
+    assert crude_spec.product_type == "I"
 
     # 2. Verify Option Contract Selection for CRUDEOILM
     contract = orch.mapper.select_option_contract(

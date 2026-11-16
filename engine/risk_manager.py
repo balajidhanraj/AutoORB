@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import csv
 import math
+import re
 import threading
 import time
 import uuid
@@ -171,10 +172,16 @@ class RiskManager:
                     values = resp.get("values", []) if isinstance(resp, dict) else []
                     for item in values:
                         if item.get("instname") in {"OPTIDX", "OPTFUT"} and (item.get("optt") or "").strip().upper() == signal.signal_type:
-                            stk_val = int(float(item.get("strike") or item.get("strprc") or 0))
+                            raw_stk = item.get("strike") or item.get("strprc")
+                            item_tsym = str(item.get("tsym") or "").strip()
+                            if raw_stk is not None and str(raw_stk).strip() != "":
+                                stk_val = int(float(raw_stk))
+                            else:
+                                m = re.search(r'[CP](\d+)$', item_tsym)
+                                stk_val = int(m.group(1)) if m else 0
                             if stk_val == contract.strike:
                                 real_token = str(item.get("token") or "")
-                                real_tsym = str(item.get("tsym") or "")
+                                real_tsym = item_tsym
                                 if real_token:
                                     contract.token = real_token
                                     contract.tradingsymbol = real_tsym

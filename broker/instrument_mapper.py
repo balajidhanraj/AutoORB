@@ -6,6 +6,7 @@ import calendar
 import csv
 import io
 import math
+import re
 import zipfile
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
@@ -313,7 +314,12 @@ class InstrumentMapper:
                 if not tsym or not token or opt_type not in {"CE", "PE"}:
                     continue
                 try:
-                    strike = int(float(item.get("strike") or item.get("strprc") or 0))
+                    raw_stk = item.get("strike") or item.get("strprc")
+                    if raw_stk is not None and str(raw_stk).strip() != "":
+                        strike = int(float(raw_stk))
+                    else:
+                        m = re.search(r'[CP](\d+)$', tsym)
+                        strike = int(m.group(1)) if m else 0
                     lot_size = int(float(item.get("ls") or spec.lot_size))
                     exp_date = self._parse_expiry_str(item.get("exd", ""))
                 except ValueError:
@@ -387,12 +393,18 @@ class InstrumentMapper:
             values = resp.get("values", []) if isinstance(resp, dict) else []
             for item in values:
                 if item.get("instname") in {"OPTIDX", "OPTFUT"} and (item.get("optt") or "").strip().upper() == opt:
-                    stk_val = int(float(item.get("strike") or item.get("strprc") or 0))
+                    raw_stk = item.get("strike") or item.get("strprc")
+                    tsym_str = str(item.get("tsym") or "").strip()
+                    if raw_stk is not None and str(raw_stk).strip() != "":
+                        stk_val = int(float(raw_stk))
+                    else:
+                        m = re.search(r'[CP](\d+)$', tsym_str)
+                        stk_val = int(m.group(1)) if m else 0
                     if stk_val == strike:
                         exp_dt = self._parse_expiry_str(item.get("exd", ""))
                         live_contract = InstrumentContract(
                             index_name=index_name,
-                            tradingsymbol=str(item.get("tsym") or "").strip(),
+                            tradingsymbol=tsym_str,
                             token=str(item.get("token") or "").strip(),
                             exchange=spec.opt_exchange,
                             lot_size=int(float(item.get("ls") or spec.lot_size)),
