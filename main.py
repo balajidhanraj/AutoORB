@@ -162,6 +162,9 @@ class TradingSystemOrchestrator:
         now_ist = datetime.now(IST)
         for name, builder in self.candle_builders.items():
             builder.backfill_from_api(self.client, lookback_days=3, now_ist=now_ist)
+        if now_ist.weekday() < 5 and now_ist.time() >= self.settings.orb_end_time:
+            if not all(self.strategy.get_state(n).is_locked for n in INDEX_SPECS):
+                self.run_lock_orb(now_ist)
 
     def run_daily_login(self, force_refresh: bool = False) -> Optional[str]:
         token = self.auth.ensure_authenticated(force_refresh=force_refresh)
@@ -278,9 +281,10 @@ class TradingSystemOrchestrator:
             self.client.start_websocket()
             self._backfill_all_indices()
 
-    def run_lock_orb(self, now_ist: Optional[datetime] = None) -> None:
+    def run_lock_orb(self, now_ist: Optional[datetime] = None) -> bool:
         dt = now_ist or datetime.now(IST)
         lines = [f"<b>ORB Locked ({dt.strftime('%Y-%m-%d')}) [{self.settings.mode}]</b>"]
+        all_locked = True
         for name, builder in self.candle_builders.items():
             state = self.strategy.lock_opening_range(name, builder.get_candles(), session_date=dt.date())
             if state.is_locked:
@@ -289,8 +293,10 @@ class TradingSystemOrchestrator:
                     f"• {name}: ORH={state.orh}, ORL={state.orl}, Range={state.range_pct:.2f}% ({status})"
                 )
             else:
+                all_locked = False
                 lines.append(f"• {name}: Pending opening candles")
         self.notifier.send_async("\n".join(lines))
+        return all_locked
 
     def run_eod_squareoff(self) -> None:
         self.risk_manager.auto_square_off_all()
@@ -347,8 +353,9 @@ class TradingSystemOrchestrator:
             if current_t >= self.settings.orb_end_time and self._milestone_ready("orb_lock", today):
                 for builder in self.candle_builders.values():
                     builder.flush_due_candles(dt)
-                self.run_lock_orb(dt)
-                self._mark_milestone("orb_lock", today)
+                locked = self.run_lock_orb(dt)
+                if locked:
+                    self._mark_milestone("orb_lock", today)
 
             if current_t >= self.settings.auto_squareoff_time and self._milestone_ready("squareoff", today):
                 self.run_eod_squareoff()
