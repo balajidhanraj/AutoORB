@@ -170,7 +170,7 @@ class RiskManager:
                     resp = self.client.searchscrip(contract.exchange, f"{signal.index_name} {contract.strike}")
                     values = resp.get("values", []) if isinstance(resp, dict) else []
                     for item in values:
-                        if item.get("instname") == "OPTIDX" and (item.get("optt") or "").strip().upper() == signal.signal_type:
+                        if item.get("instname") in {"OPTIDX", "OPTFUT"} and (item.get("optt") or "").strip().upper() == signal.signal_type:
                             stk_val = int(float(item.get("strike") or item.get("strprc") or 0))
                             if stk_val == contract.strike:
                                 real_token = str(item.get("token") or "")
@@ -209,6 +209,7 @@ class RiskManager:
             qty = contract.lot_size * spec.default_lots
             limit_px = round(float(ltp) + self.settings.entry_slippage_buffer, 1)
 
+            prd_type = getattr(spec, "product_type", "I")
             resp = self.client.place_order(
                 buy_or_sell="B",
                 exchange=contract.exchange,
@@ -216,7 +217,7 @@ class RiskManager:
                 quantity=qty,
                 price_type="LMT",
                 price=limit_px,
-                product_type="I",
+                product_type=prd_type,
                 retention="DAY",
                 discloseqty=0,
                 remarks=self.settings.sebi_algo_id,
@@ -284,6 +285,7 @@ class RiskManager:
         spec = INDEX_SPECS[pos.index_name]
         trig_px = round(max(0.1, pos.entry_avg_price - spec.sl_pts), 1)
         limit_px = round(max(0.05, trig_px - spec.sl_buffer_pts), 1)
+        prd_type = getattr(INDEX_SPECS.get(pos.index_name), "product_type", "I") if pos.index_name in INDEX_SPECS else "I"
         resp = self.client.place_order(
             buy_or_sell="S",
             exchange=pos.contract.exchange,
@@ -292,7 +294,7 @@ class RiskManager:
             price_type="SL-LMT",
             price=limit_px,
             trigger_price=trig_px,
-            product_type="I",
+            product_type=prd_type,
             retention="DAY",
             discloseqty=0,
             remarks=self.settings.sebi_algo_id,
@@ -434,6 +436,7 @@ class RiskManager:
 
         # Step B: Book 50% Target 1 via marketable LMT sell order
         exit_lmt = round(max(0.05, ltp - 1.0), 1)
+        prd_type = getattr(INDEX_SPECS.get(pos.index_name), "product_type", "I") if pos.index_name in INDEX_SPECS else "I"
         resp = self.client.place_order(
             buy_or_sell="S",
             exchange=pos.contract.exchange,
@@ -441,7 +444,7 @@ class RiskManager:
             quantity=partial_qty,
             price_type="LMT",
             price=exit_lmt,
-            product_type="I",
+            product_type=prd_type,
             retention="DAY",
             discloseqty=0,
             remarks=self.settings.sebi_algo_id,
@@ -585,11 +588,24 @@ class RiskManager:
                 self.notifier.send_async(f"🛑 EMERGENCY KILL SWITCH: {reason}")
 
     def auto_square_off_all(self, reason: str = "EOD_1515_SQUAREOFF") -> None:
-        """Mandatory 15:15 IST square-off of all open positions and pending orders."""
+        """Mandatory square-off of open positions and pending orders."""
         with self._lock:
-            self._liquidate_all_locked(exit_reason=reason)
-            self.halted = True
-            self.halt_reason = PositionState.COMPLETED_FOR_DAY.value
+            # If MCX commodity is traded, only square-off NSE positions at 15:15; MCX squares off at 23:15
+            has_mcx = any(getattr(s, "spot_exchange", "") == "MCX" for s in INDEX_SPECS.values())
+            is_1515 = "1515" in reason
+            for index_name, pos in list(self.positions.items()):
+                spec = INDEX_SPECS.get(index_name)
+                if is_1515 and spec and spec.spot_exchange == "MCX":
+                    continue  # Keep MCX position open until evening square-off
+                if pos.state == PositionState.ENTERING:
+                    self.client.cancel_order(pos.entry_order_id)
+                    self.positions.pop(index_name, None)
+                elif pos.state in (PositionState.ENTERED, PositionState.PARTIAL_EXIT):
+                    self._exit_position_market(pos, reason)
+
+            if not has_mcx or not is_1515:
+                self.halted = True
+                self.halt_reason = PositionState.COMPLETED_FOR_DAY.value
             logger.info("Auto square-off completed (%s)", reason)
 
     def _liquidate_all_locked(self, exit_reason: str) -> None:
@@ -605,6 +621,7 @@ class RiskManager:
             token_key = f"{pos.contract.exchange}|{pos.contract.token}"
             ltp = self.client.get_ltp(token_key) or pos.last_ltp or pos.entry_avg_price
             aggr_limit = round(max(0.05, float(ltp) - 5.0), 1)
+            prd_type = getattr(INDEX_SPECS.get(pos.index_name), "product_type", "I") if pos.index_name in INDEX_SPECS else "I"
             resp = self.client.place_order(
                 buy_or_sell="S",
                 exchange=pos.contract.exchange,
@@ -612,7 +629,7 @@ class RiskManager:
                 quantity=pos.remaining_qty,
                 price_type="MKT",
                 price=aggr_limit,
-                product_type="I",
+                product_type=prd_type,
                 retention="DAY",
                 discloseqty=0,
                 remarks=self.settings.sebi_algo_id,

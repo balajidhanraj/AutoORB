@@ -661,3 +661,38 @@ def test_afternoon_orb_anchor_and_reauth_resilience(tmp_path: Path) -> None:
     orch.client.register_reauth_callback(fake_reauth)
     assert orch.client._reauth_callback is fake_reauth
     assert orch.client.api._reauth_callback is fake_reauth
+
+
+def test_crudeoilm_mcx_strategy_and_auto_trigger(tmp_path: Path) -> None:
+    from config.settings import INDEX_SPECS
+    settings = _make_settings(tmp_path, mode="PAPER")
+    orch = TradingSystemOrchestrator(settings=settings)
+
+    # 1. Verify MCX CRUDEOILM spec
+    assert "CRUDEOILM" in INDEX_SPECS
+    crude_spec = INDEX_SPECS["CRUDEOILM"]
+    assert crude_spec.spot_exchange == "MCX"
+    assert crude_spec.opt_exchange == "MCX"
+    assert crude_spec.lot_size == 10
+    assert crude_spec.product_type == "M"
+
+    # 2. Verify Option Contract Selection for CRUDEOILM
+    contract = orch.mapper.select_option_contract(
+        index_name="CRUDEOILM",
+        spot_price=8165.0,
+        option_type="CE",
+        ref_date=date(2026, 11, 16),
+    )
+    assert contract.index_name == "CRUDEOILM"
+    assert contract.exchange == "MCX"
+    assert contract.lot_size == 10
+    assert contract.strike in {8150, 8100}
+
+    # 3. Verify Auto Order Trigger for CRUDEOILM
+    orch.client.update_ltp("MCX|573423", 8165.0)
+    ok, msg, data = orch.trigger_auto_order("CRUDEOILM", signal_type="CE")
+    assert ok is True
+    assert "CRUDEOILM" in msg
+    assert data["quantity"] == 10
+    assert "CRUDEOILM" in orch.risk_manager.positions
+

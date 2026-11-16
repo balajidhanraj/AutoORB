@@ -330,9 +330,10 @@ def render_dashboard_html(theme_name: Optional[str] = None) -> str:
     orb_start = str(snap.get("orb_start_time") or "09:15")
     orb_end = str(snap.get("orb_end_time") or "09:30")
     col3_html = (
-        f'<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(310px,1fr));gap:14px;margin-bottom:14px;">'
+        f'<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px;margin-bottom:14px;">'
         f'{_render_radar_card("NIFTY", indices.get("NIFTY", {}), p, orb_start=orb_start, orb_end=orb_end)}'
         f'{_render_radar_card("BANKNIFTY", indices.get("BANKNIFTY", {}), p, orb_start=orb_start, orb_end=orb_end)}'
+        f'{_render_radar_card("CRUDEOILM", indices.get("CRUDEOILM", {}), p, orb_start=orb_start, orb_end=orb_end)}'
         f"{_render_broker_and_schedule_col(snap, p)}"
         f"</div>"
     )
@@ -647,7 +648,7 @@ def build_gradio_demo() -> Any:
 
             with gr.Accordion("Place Live Broker Order (Test / Manual)", open=False):
                 with gr.Row():
-                    ord_exch = gr.Dropdown(["NSE", "NFO"], value="NSE", label="Exchange")
+                    ord_exch = gr.Dropdown(["NSE", "NFO", "MCX"], value="NSE", label="Exchange")
                     ord_tsym = gr.Textbox(value="TCS-EQ", label="Symbol")
                     ord_side = gr.Dropdown(["B", "S"], value="B", label="Side")
                     ord_prd = gr.Dropdown(["C", "I", "M"], value="C", label="Prod")

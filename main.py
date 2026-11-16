@@ -449,7 +449,8 @@ class TradingSystemOrchestrator:
         """Trigger strategy automated entry order immediately into broker terminal (LIVE) or paper (PAPER)."""
         idx = index_name.strip().upper()
         if idx not in INDEX_SPECS:
-            return False, f"Invalid index: '{index_name}'. Use 'NIFTY' or 'BANKNIFTY'.", {}
+            valid_names = ", ".join(f"'{k}'" for k in INDEX_SPECS)
+            return False, f"Invalid index: '{index_name}'. Use one of: {valid_names}.", {}
 
         st = self.strategy.get_state(idx)
         spec = INDEX_SPECS[idx]
@@ -457,7 +458,25 @@ class TradingSystemOrchestrator:
         spot_ltp = self.client.get_ltp(spec.spot_key) or st.last_spot or 0.0
 
         if spot_ltp <= 0:
+            try:
+                q = self.client.get_quotes(spec.spot_exchange, spec.spot_token)
+                if isinstance(q, dict):
+                    raw_lp = q.get("lp") or q.get("c") or q.get("bp1") or q.get("sp1")
+                    if raw_lp and float(raw_lp) > 0:
+                        spot_ltp = float(raw_lp)
+                        self.client.update_ltp(spec.spot_key, spot_ltp)
+                        logger.info("Fetched live quote for %s (%s): %.2f", idx, spec.spot_key, spot_ltp)
+            except Exception as exc:
+                logger.debug("Failed fetching REST quote for %s: %s", idx, exc)
+
+        if spot_ltp <= 0:
             return False, f"Cannot trigger auto-order: No live spot LTP available for {idx}.", {}
+
+        # Allow testing on-demand even if market day was marked completed
+        if self.risk_manager.halted and self.risk_manager.halt_reason in {"COMPLETED_FOR_DAY", "EOD_SQUAREOFF"}:
+            self.risk_manager.halted = False
+            self.risk_manager.halt_reason = None
+            logger.info("Cleared COMPLETED_FOR_DAY halt for on-demand %s trigger", idx)
 
         sig_type = signal_type.strip().upper() if signal_type else "AUTO"
         if sig_type not in {"CE", "PE"}:
@@ -555,8 +574,11 @@ class TradingSystemOrchestrator:
                 self.run_eod_report()
                 self._mark_milestone("eod_report", today)
 
-            # Continuous intraday checks
-            if self.settings.market_open_time <= current_t <= self.settings.market_close_time:
+            # Continuous intraday checks (NSE equity 09:15-15:30; MCX commodity 09:00-23:30)
+            has_mcx = any(getattr(s, "spot_exchange", "") == "MCX" for s in INDEX_SPECS.values())
+            mkt_open = dt_time(9, 0, 0) if has_mcx else self.settings.market_open_time
+            mkt_close = dt_time(23, 30, 0) if has_mcx else self.settings.market_close_time
+            if mkt_open <= current_t <= mkt_close:
                 for builder in self.candle_builders.values():
                     builder.flush_due_candles(dt)
                 self.risk_manager.check_pending_entries()
@@ -605,17 +627,22 @@ class TradingSystemOrchestrator:
         """Compute live 5-gate auto-order readiness metrics for an index."""
         spec = INDEX_SPECS[index_name]
         st = self.strategy.get_state(index_name)
+        is_mcx = (index_name == "CRUDEOILM")
 
         system_ready = (
             not self.risk_manager.halted
             and self.risk_manager.trades_taken_today < self.settings.max_trades_per_day
             and index_name not in self.risk_manager.positions
         )
-        vix_ready = vix is not None and vix >= self.settings.min_india_vix
+        vix_ready = True if is_mcx else (vix is not None and vix >= self.settings.min_india_vix)
         orb_ready = bool(st.is_locked and not st.no_trade_reason)
         in_window = (
             now_ist.weekday() < 5
-            and self.settings.orb_end_time <= now_ist.time() <= self.settings.entry_cutoff_time
+            and (
+                (dt_time(9, 15, 0) <= now_ist.time() <= dt_time(23, 15, 0))
+                if is_mcx
+                else (self.settings.orb_end_time <= now_ist.time() <= self.settings.entry_cutoff_time)
+            )
         )
 
         ce_price_ok = bool(
@@ -630,8 +657,8 @@ class TradingSystemOrchestrator:
             and spot_ltp < st.orl
             and (st.last_vwap is None or spot_ltp < st.last_vwap)
         )
-        ce_rsi_ok = bool(st.last_rsi is not None and st.last_rsi > 60.0)
-        pe_rsi_ok = bool(st.last_rsi is not None and st.last_rsi < 40.0)
+        ce_rsi_ok = bool(st.last_rsi is not None and (st.last_rsi > (52.0 if is_mcx else 60.0)))
+        pe_rsi_ok = bool(st.last_rsi is not None and (st.last_rsi < (48.0 if is_mcx else 40.0)))
 
         dist_to_orh = round(st.orh - spot_ltp, 2) if (spot_ltp is not None and st.orh is not None) else None
         dist_to_orl = round(spot_ltp - st.orl, 2) if (spot_ltp is not None and st.orl is not None) else None
@@ -717,11 +744,15 @@ class TradingSystemOrchestrator:
             phase = f"POSITION_MANAGEMENT ({self.settings.entry_cutoff_time.strftime('%H:%M')}-{self.settings.auto_squareoff_time.strftime('%H:%M')})"
         elif t <= self.settings.market_close_time:
             phase = "POST_SQUARE_OFF (15:15-15:30)"
+        elif t <= dt_time(23, 30, 0) and any(getattr(s, "spot_exchange", "") == "MCX" for s in INDEX_SPECS.values()):
+            phase = f"MCX_COMMODITY_SESSION (09:00-23:30 IST)"
         else:
             phase = "MARKET_CLOSED"
 
         next_candle_close_sec: Optional[int] = None
-        if is_weekday and self.settings.market_open_time <= t < self.settings.market_close_time:
+        has_mcx = any(getattr(s, "spot_exchange", "") == "MCX" for s in INDEX_SPECS.values())
+        is_trading_hour = (self.settings.market_open_time <= t < self.settings.market_close_time) or (has_mcx and t <= dt_time(23, 30, 0))
+        if is_weekday and is_trading_hour:
             sec_into_5m = (now_ist.minute % 5) * 60 + now_ist.second
             next_candle_close_sec = max(1, 300 - sec_into_5m)
 

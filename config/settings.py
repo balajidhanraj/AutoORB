@@ -34,6 +34,7 @@ class IndexSpec:
     trail_step_pts: float
     target_delta_min: float = 0.55
     target_delta_max: float = 0.65
+    product_type: str = "I"
 
     @property
     def default_quantity(self) -> int:
@@ -82,6 +83,25 @@ INDEX_SPECS: Dict[str, IndexSpec] = {
         breakeven_trigger_pts=55.0,
         target1_pts=65.0,
         trail_step_pts=30.0,
+        product_type="I",
+    ),
+    "CRUDEOILM": IndexSpec(
+        name="CRUDEOILM",
+        spot_exchange="MCX",
+        spot_token="573423",
+        opt_exchange="MCX",
+        lot_size=10,
+        default_lots=1,
+        strike_step=50,
+        expiry_type="MCX_EXPIRY",
+        sl_pts=15.0,
+        sl_buffer_pts=2.0,
+        breakeven_trigger_pts=20.0,
+        target1_pts=25.0,
+        trail_step_pts=10.0,
+        target_delta_min=0.40,
+        target_delta_max=0.75,
+        product_type="M",
     ),
 }
 

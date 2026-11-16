@@ -100,14 +100,18 @@ class ORBStrategy:
             if ts_ist.date() == target_date and ts_ist.time() in target_candle_times:
                 orb_candles.append(c)
 
+        is_mcx = (index_name == "CRUDEOILM")
         if len(orb_candles) < expected_count:
-            logger.warning(
-                "Cannot lock ORB for %s yet: only %d/%d opening candles present",
-                index_name,
-                len(orb_candles),
-                expected_count,
-            )
-            return state
+            if is_mcx and candles:
+                orb_candles = list(candles[:expected_count]) if len(candles) >= expected_count else list(candles)
+            else:
+                logger.warning(
+                    "Cannot lock ORB for %s yet: only %d/%d opening candles present",
+                    index_name,
+                    len(orb_candles),
+                    expected_count,
+                )
+                return state
 
         orh = max(c.high for c in orb_candles)
         orl = min(c.low for c in orb_candles)
@@ -126,9 +130,10 @@ class ORBStrategy:
             state.last_vwap = calculate_intraday_vwap(candles_seq, session_date=target_date)
             state.last_rsi = calculate_wilder_rsi([c.close for c in candles_seq], period=14)
 
-        if range_pct > self.settings.max_orb_range_pct:
+        max_range_limit = 2.50 if is_mcx else self.settings.max_orb_range_pct
+        if range_pct > max_range_limit:
             state.no_trade_reason = (
-                f"Range {range_pct:.2f}% > {self.settings.max_orb_range_pct:.2f}%"
+                f"Range {range_pct:.2f}% > {max_range_limit:.2f}%"
             )
             logger.warning(
                 "%s marked NO-TRADE for %s: ORH=%.2f ORL=%.2f (%s)",
@@ -188,23 +193,31 @@ class ORBStrategy:
         if state.no_trade_reason is not None:
             return None
 
-        # Entry Window: 09:30:01 to 14:15:00 IST
-        if not (time(9, 30, 1) <= eval_time <= self.settings.entry_cutoff_time):
-            return None
+        is_mcx = (index_name == "CRUDEOILM")
+        # Entry Window: MCX Commodity trades 09:00 to 23:15 IST; NSE equity trades 09:30 to cutoff
+        if is_mcx:
+            if not (time(9, 15, 0) <= eval_time <= time(23, 15, 0)):
+                return None
+            vix_val = 15.0  # India VIX applies to NSE; MCX commodity uses default benchmark
+        else:
+            if not (time(9, 30, 1) <= eval_time <= self.settings.entry_cutoff_time):
+                return None
+            # Volatility Filter: Skip if India VIX < 12.0
+            vix_val = float(india_vix) if india_vix is not None else 15.0
+            if vix_val < self.settings.min_india_vix:
+                logger.info(
+                    "%s signal skipped: India VIX %.2f < %.2f",
+                    index_name,
+                    vix_val,
+                    self.settings.min_india_vix,
+                )
+                return None
 
-        # Volatility Filter: Skip if India VIX < 12.0
-        vix_val = float(india_vix) if india_vix is not None else 15.0
-        if vix_val < self.settings.min_india_vix:
-            logger.info(
-                "%s signal skipped: India VIX %.2f < %.2f",
-                index_name,
-                vix_val,
-                self.settings.min_india_vix,
-            )
-            return None
+        rsi_bull = 52.0 if is_mcx else 60.0
+        rsi_bear = 48.0 if is_mcx else 40.0
 
         close_px = closed_candle.close
-        if close_px > state.orh and close_px > vwap and rsi > 60.0:
+        if close_px > state.orh and close_px > vwap and rsi > rsi_bull:
             state.last_signal = f"CE @ {close_px:.2f} (RSI {rsi:.1f})"
             return ORBSignal(
                 index_name=index_name,
@@ -218,7 +231,7 @@ class ORBStrategy:
                 india_vix=vix_val,
             )
 
-        if close_px < state.orl and close_px < vwap and rsi < 40.0:
+        if close_px < state.orl and close_px < vwap and rsi < rsi_bear:
             state.last_signal = f"PE @ {close_px:.2f} (RSI {rsi:.1f})"
             return ORBSignal(
                 index_name=index_name,

@@ -69,6 +69,14 @@ def get_target_expiry(
             candidate = today + timedelta(days=((1 - today.weekday()) % 7 or 7))
         return candidate
 
+    if spec.expiry_type == "MCX_EXPIRY":
+        # MCX Commodity options nearest active expiry date (typically Tuesday)
+        days_ahead = (1 - today.weekday()) % 7
+        candidate = today + timedelta(days=days_ahead)
+        if candidate < today:
+            candidate = today + timedelta(days=1)
+        return candidate
+
     # MONTHLY_LAST_TUESDAY
     year, month = today.year, today.month
     for _ in range(2):
@@ -198,8 +206,13 @@ class InstrumentMapper:
 
         if loaded == 0:
             loaded = self._load_from_searchscrip(target_expiries)
+        else:
+            # Also load any non-NFO instruments (e.g. MCX commodity options)
+            non_nfo = {name: exp for name, exp in target_expiries.items() if INDEX_SPECS[name].opt_exchange != "NFO"}
+            if non_nfo:
+                loaded += self._load_from_searchscrip(non_nfo)
 
-        logger.info("Instrument cache refreshed: %d NFO contracts cached", loaded)
+        logger.info("Instrument cache refreshed: %d contracts cached", loaded)
         return loaded
 
     def _load_from_master_zip(
@@ -282,15 +295,17 @@ class InstrumentMapper:
 
     def _load_from_searchscrip(self, target_expiries: Dict[str, date]) -> int:
         loaded = 0
+        today = datetime.now(IST).date()
         for index_name, target_exp in target_expiries.items():
+            spec = INDEX_SPECS[index_name]
             try:
-                resp = self.client.searchscrip(exchange="NFO", searchtext=index_name)
+                resp = self.client.searchscrip(exchange=spec.opt_exchange, searchtext=index_name)
             except Exception as exc:
                 logger.warning("searchscrip failed for %s: %s", index_name, exc)
                 continue
             values = resp.get("values", []) if isinstance(resp, dict) else []
             for item in values:
-                if item.get("instname") != "OPTIDX":
+                if item.get("instname") not in {"OPTIDX", "OPTFUT"}:
                     continue
                 tsym = (item.get("tsym") or "").strip()
                 token = str(item.get("token") or "").strip()
@@ -299,17 +314,19 @@ class InstrumentMapper:
                     continue
                 try:
                     strike = int(float(item.get("strike") or item.get("strprc") or 0))
-                    lot_size = int(float(item.get("ls") or INDEX_SPECS[index_name].lot_size))
+                    lot_size = int(float(item.get("ls") or spec.lot_size))
                     exp_date = self._parse_expiry_str(item.get("exd", ""))
                 except ValueError:
                     continue
-                if exp_date != target_exp:
+                if exp_date < today:
                     continue
+                if index_name not in self._resolved_expiries:
+                    self._resolved_expiries[index_name] = exp_date
                 self._contracts[(index_name, exp_date, opt_type, strike)] = InstrumentContract(
                     index_name=index_name,
                     tradingsymbol=tsym,
                     token=token,
-                    exchange="NFO",
+                    exchange=spec.opt_exchange,
                     lot_size=lot_size,
                     strike=strike,
                     option_type=opt_type,
@@ -336,7 +353,7 @@ class InstrumentMapper:
         vix: float = 15.0,
         ref_date: Optional[date] = None,
     ) -> InstrumentContract:
-        """Select the cached NFO option contract matching target delta/strike and expiry."""
+        """Select the cached option contract matching target delta/strike and expiry."""
         spec: IndexSpec = INDEX_SPECS[index_name]
         opt = option_type.upper()
         expiry = self._resolve_expiry(index_name, ref_date=ref_date)
@@ -366,10 +383,10 @@ class InstrumentMapper:
                 opt,
                 strike,
             )
-            resp = self.client.searchscrip(exchange="NFO", searchtext=f"{index_name} {strike}")
+            resp = self.client.searchscrip(exchange=spec.opt_exchange, searchtext=f"{index_name} {strike}")
             values = resp.get("values", []) if isinstance(resp, dict) else []
             for item in values:
-                if item.get("instname") == "OPTIDX" and (item.get("optt") or "").strip().upper() == opt:
+                if item.get("instname") in {"OPTIDX", "OPTFUT"} and (item.get("optt") or "").strip().upper() == opt:
                     stk_val = int(float(item.get("strike") or item.get("strprc") or 0))
                     if stk_val == strike:
                         exp_dt = self._parse_expiry_str(item.get("exd", ""))
@@ -377,7 +394,7 @@ class InstrumentMapper:
                             index_name=index_name,
                             tradingsymbol=str(item.get("tsym") or "").strip(),
                             token=str(item.get("token") or "").strip(),
-                            exchange="NFO",
+                            exchange=spec.opt_exchange,
                             lot_size=int(float(item.get("ls") or spec.lot_size)),
                             strike=strike,
                             option_type=opt,
