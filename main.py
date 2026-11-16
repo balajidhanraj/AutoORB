@@ -317,10 +317,15 @@ class TradingSystemOrchestrator:
 
     def _handle_reauth(self) -> bool:
         """Triggered automatically when a 401 Unauthorized or WebSocket auth rejection occurs."""
+        now_m = time.monotonic()
+        if hasattr(self, "_last_reauth_time") and (now_m - self._last_reauth_time) < 15.0:
+            logger.debug("Shoonya re-auth triggered within 15s cooldown; skipping duplicate")
+            return True
         if not self._reauth_lock.acquire(blocking=False):
             logger.debug("Shoonya re-auth already in progress; skipping duplicate trigger")
             return False
         try:
+            self._last_reauth_time = now_m
             logger.warning("Shoonya session invalid or expired; executing automatic token renewal...")
             token = self.auth.ensure_authenticated(force_refresh=True)
             if token:
@@ -334,8 +339,9 @@ class TradingSystemOrchestrator:
                         self.settings.shoonya_account_id,
                         susertoken=susertoken,
                     )
-                self.client.reconnect_websocket()
-                self._backfill_all_indices()
+                if not self.client.ws_connected:
+                    self.client.reconnect_websocket()
+                    self._backfill_all_indices()
                 return True
             else:
                 logger.error("Automated Shoonya re-login failed to return a valid access token")

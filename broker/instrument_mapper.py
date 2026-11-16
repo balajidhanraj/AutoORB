@@ -136,7 +136,10 @@ class InstrumentMapper:
         return len(self._contracts)
 
     def _resolve_expiry(self, index_name: str, ref_date: Optional[date] = None) -> date:
-        if ref_date is None and index_name in self._resolved_expiries:
+        today = datetime.now(IST).date()
+        if index_name in self._resolved_expiries and (ref_date is None or ref_date == today):
+            return self._resolved_expiries[index_name]
+        if index_name in self._resolved_expiries and not ref_date:
             return self._resolved_expiries[index_name]
         return get_target_expiry(index_name, ref_date=ref_date)
 
@@ -342,6 +345,49 @@ class InstrumentMapper:
         contract = self._contracts.get((index_name, expiry, opt, strike))
         if contract is not None:
             return contract
+
+        # Secondary search across all cached expiries for the same symbol, option type, and strike
+        for (sym, exp, opt_t, stk), c in self._contracts.items():
+            if sym == index_name and opt_t == opt and stk == strike:
+                logger.info(
+                    "Matched contract %s across alternative expiry (%s -> %s)",
+                    c.tradingsymbol,
+                    expiry,
+                    exp,
+                )
+                return c
+
+        # Live Shoonya SearchScrip fallback if missing from cache
+        try:
+            logger.info(
+                "Contract (%s, %s, %s, %s) not in cache; querying live searchscrip...",
+                index_name,
+                expiry,
+                opt,
+                strike,
+            )
+            resp = self.client.searchscrip(exchange="NFO", searchtext=f"{index_name} {strike}")
+            values = resp.get("values", []) if isinstance(resp, dict) else []
+            for item in values:
+                if item.get("instname") == "OPTIDX" and (item.get("optt") or "").strip().upper() == opt:
+                    stk_val = int(float(item.get("strike") or item.get("strprc") or 0))
+                    if stk_val == strike:
+                        exp_dt = self._parse_expiry_str(item.get("exd", ""))
+                        live_contract = InstrumentContract(
+                            index_name=index_name,
+                            tradingsymbol=str(item.get("tsym") or "").strip(),
+                            token=str(item.get("token") or "").strip(),
+                            exchange="NFO",
+                            lot_size=int(float(item.get("ls") or spec.lot_size)),
+                            strike=strike,
+                            option_type=opt,
+                            expiry=exp_dt,
+                        )
+                        self._contracts[(index_name, exp_dt, opt, strike)] = live_contract
+                        logger.info("Discovered live contract via searchscrip: %s (token=%s)", live_contract.tradingsymbol, live_contract.token)
+                        return live_contract
+        except Exception as exc:
+            logger.warning("Live searchscrip fallback error for %s: %s", index_name, exc)
 
         # Deterministic synthetic fallback for PAPER mode / offline tests
         tsym = format_shoonya_option_symbol(index_name, expiry, opt, strike)

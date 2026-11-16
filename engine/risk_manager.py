@@ -164,6 +164,32 @@ class RiskManager:
                     if ltp is not None and ltp > 0:
                         break
 
+            if (ltp is None or ltp <= 0) and contract.token.startswith("SIM_"):
+                try:
+                    logger.info("Attempting live searchscrip resolution for %s %d %s...", signal.index_name, contract.strike, signal.signal_type)
+                    resp = self.client.searchscrip(contract.exchange, f"{signal.index_name} {contract.strike}")
+                    values = resp.get("values", []) if isinstance(resp, dict) else []
+                    for item in values:
+                        if item.get("instname") == "OPTIDX" and (item.get("optt") or "").strip().upper() == signal.signal_type:
+                            stk_val = int(float(item.get("strike") or item.get("strprc") or 0))
+                            if stk_val == contract.strike:
+                                real_token = str(item.get("token") or "")
+                                real_tsym = str(item.get("tsym") or "")
+                                if real_token:
+                                    contract.token = real_token
+                                    contract.tradingsymbol = real_tsym
+                                    token_key = f"{contract.exchange}|{contract.token}"
+                                    self.client.subscribe([token_key])
+                                    q = self.client.get_quotes(contract.exchange, real_token)
+                                    raw_lp = q.get("lp") or q.get("sp1") or q.get("bp1") or q.get("c")
+                                    if raw_lp is not None and float(raw_lp) > 0:
+                                        ltp = float(raw_lp)
+                                        self.client.update_ltp(token_key, ltp)
+                                        logger.info("Resolved real live option LTP via searchscrip for %s: %.2f", real_tsym, ltp)
+                                        break
+                except Exception as exc:
+                    logger.warning("Live searchscrip resolution failed: %s", exc)
+
             if ltp is None or ltp <= 0:
                 if self.settings.mode == "PAPER":
                     intrinsic = max(
