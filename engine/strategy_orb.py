@@ -109,6 +109,12 @@ class ORBStrategy:
         state.is_locked = True
         state.no_trade_reason = None
 
+        if candles:
+            candles_seq = list(candles)
+            state.last_spot = candles_seq[-1].close
+            state.last_vwap = calculate_intraday_vwap(candles_seq, session_date=target_date)
+            state.last_rsi = calculate_wilder_rsi([c.close for c in candles_seq], period=14)
+
         if range_pct > self.settings.max_orb_range_pct:
             state.no_trade_reason = (
                 f"Range {range_pct:.2f}% > {self.settings.max_orb_range_pct:.2f}%"
