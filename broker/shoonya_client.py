@@ -49,6 +49,7 @@ class CompatibleNorenApi:
         self._ws_app: Optional[websocket.WebSocketApp] = None
         self._ws_thread: Optional[threading.Thread] = None
         self._ws_connected = False
+        self._reauth_callback: Optional[Callable[[], bool]] = None
 
     def _resolve_client_id(self) -> str:
         """Resolve Shoonya OAuth client_id (typically <USER_ID>_U, not the 64-char secret)."""
@@ -140,14 +141,32 @@ class CompatibleNorenApi:
         self.account_id = account_id or user_id
         self._session.headers.update({"Authorization": f"Bearer {access_token}"})
 
-    def _post(self, endpoint: str, body: Dict[str, Any]) -> Any:
+    def _post(self, endpoint: str, body: Dict[str, Any], _retry: bool = True) -> Any:
         if "Authorization" in self._session.headers:
             data = f"jData={json.dumps(body)}"
         else:
             data = f"jData={json.dumps(body)}&jKey={self.access_token}"
-        resp = self._session.post(f"{self.host}{endpoint}", data=data, timeout=15)
-        resp.raise_for_status()
-        return resp.json()
+        try:
+            resp = self._session.post(f"{self.host}{endpoint}", data=data, timeout=15)
+            if resp.status_code == 401 and _retry and self._reauth_callback:
+                logger.warning("Shoonya API returned 401 on %s; attempting automatic re-auth...", endpoint)
+                if self._reauth_callback():
+                    return self._post(endpoint, body, _retry=False)
+            resp.raise_for_status()
+            res = resp.json()
+            if isinstance(res, dict) and res.get("stat") == "Not_Ok" and _retry and self._reauth_callback:
+                emsg = str(res.get("emsg") or "").lower()
+                if any(err in emsg for err in ("session", "invalid session", "not logged in", "expired")):
+                    logger.warning("Shoonya API session invalid on %s (%s); triggering re-auth...", endpoint, emsg)
+                    if self._reauth_callback():
+                        return self._post(endpoint, body, _retry=False)
+            return res
+        except requests.HTTPError as exc:
+            if exc.response is not None and exc.response.status_code == 401 and _retry and self._reauth_callback:
+                logger.warning("Shoonya API 401 HTTPError on %s; triggering re-auth...", endpoint)
+                if self._reauth_callback():
+                    return self._post(endpoint, body, _retry=False)
+            raise
 
     def get_limits(self) -> Dict[str, Any]:
         return self._post("Limits", {"uid": self.username, "actid": self.account_id})
@@ -260,6 +279,9 @@ class CompatibleNorenApi:
                         socket_open_callback()
                 else:
                     logger.error("Shoonya WebSocket auth rejected: %s", data)
+                    if self._reauth_callback:
+                        logger.warning("Shoonya WebSocket auth rejected; triggering background re-auth...")
+                        threading.Thread(target=self._reauth_callback, name="ws-auth-refresh", daemon=True).start()
                     if socket_error_callback:
                         socket_error_callback(data)
             elif msg_type in {"tk", "tf", "dk", "df"} and subscribe_callback:
@@ -331,6 +353,7 @@ class ShoonyaClient:
         self._tick_listeners: List[Callable[[Dict[str, Any]], None]] = []
         self._order_listeners: List[Callable[[Dict[str, Any]], None]] = []
         self._reconnect_callbacks: List[Callable[[], None]] = []
+        self._reauth_callback: Optional[Callable[[], bool]] = None
         self._last_reconnect_monotonic: float = 0.0
 
         if raw_api is not None:
@@ -356,6 +379,24 @@ class ShoonyaClient:
     def register_reconnect_callback(self, callback: Callable[[], None]) -> None:
         with self._lock:
             self._reconnect_callbacks.append(callback)
+
+    def register_reauth_callback(self, callback: Callable[[], bool]) -> None:
+        with self._lock:
+            self._reauth_callback = callback
+            if hasattr(self.api, "_reauth_callback"):
+                self.api._reauth_callback = callback
+
+    def reconnect_websocket(self) -> None:
+        """Close existing WebSocket and restart connection with fresh session credentials."""
+        logger.info("Restarting Shoonya WebSocket connection with fresh credentials...")
+        with self._lock:
+            self.ws_connected = False
+        try:
+            if hasattr(self.api, "close_websocket"):
+                self.api.close_websocket()
+        except Exception:
+            pass
+        self.start_websocket()
 
     def register_symbol_token(self, tradingsymbol: str, exchange: str, token: str) -> None:
         """Map tradingsymbol to exchange|token for paper order fill simulation."""
@@ -639,11 +680,18 @@ class ShoonyaClient:
                 self.api.api_key = settings.shoonya_api_key.strip()
             if hasattr(self.api, "secret_key"):
                 self.api.secret_key = settings.shoonya_secret_key.strip()
-            if hasattr(self.api, "access_token"):
-                self.api.access_token = ""
-            sess = getattr(self.api, "_session", None)
-            if sess is not None and hasattr(sess, "headers"):
-                sess.headers.pop("Authorization", None)
+            if settings.shoonya_access_token:
+                if hasattr(self.api, "access_token"):
+                    self.api.access_token = settings.shoonya_access_token
+                if hasattr(self.api, "injectOAuthHeader"):
+                    susertoken = getattr(self.api, "susertoken", "") or settings.shoonya_access_token
+                    self.api.injectOAuthHeader(settings.shoonya_access_token, uid, actid, susertoken=susertoken)
+            else:
+                if hasattr(self.api, "access_token"):
+                    self.api.access_token = ""
+                sess = getattr(self.api, "_session", None)
+                if sess is not None and hasattr(sess, "headers"):
+                    sess.headers.pop("Authorization", None)
 
     def get_live_broker_snapshot(self, force: bool = False) -> Dict[str, Any]:
         """Fetch live Shoonya account limits, order book, and positions (10s cached)."""

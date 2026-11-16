@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import sys
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, time, timedelta
 from pathlib import Path
 from typing import Any, Dict, List
 from unittest.mock import MagicMock
@@ -570,3 +570,94 @@ def test_live_broker_ui_endpoints(tmp_path: Path) -> None:
     refresh_resp = handlers["api_broker_refresh"]()
     assert refresh_resp.status_code == 200
     assert json.loads(refresh_resp.body.decode("utf-8"))["ok"] is True
+
+
+def test_dynamic_orb_window_and_option_quote_fallback(tmp_path: Path) -> None:
+    settings = _make_settings(tmp_path, mode="PAPER")
+    orch = TradingSystemOrchestrator(settings=settings)
+    app = create_app(orch)
+    handlers = app.state.handlers
+
+    # 1. Test invalid window rejected
+    ok, msg = orch.set_orb_window(20)
+    assert ok is False
+
+    # 2. Test 30-minute ORB window
+    ok, msg = orch.set_orb_window(30)
+    assert ok is True
+    assert orch.settings.orb_window_minutes == 30
+    assert orch.settings.orb_end_time == time(9, 45, 0)
+    assert len(orch.strategy.get_orb_candle_times()) == 6
+
+    # 3. Test API endpoint for ORB window selection
+    from ui.dashboard import OrbWindowRequest
+    res = app.state.handlers.get("api_set_orb_window", None)
+    if res is None:
+        for route in app.routes:
+            if getattr(route, "path", "") == "/api/settings/orb-window":
+                res = route.endpoint
+                break
+    assert res is not None
+    endpoint_resp = res(OrbWindowRequest(minutes=5))
+    data = json.loads(endpoint_resp.body.decode("utf-8"))
+    assert data["ok"] is True
+    assert data["orb_window_minutes"] == 5
+    assert orch.settings.orb_end_time == time(9, 20, 0)
+
+    # 4. Test REST quote fallback in RiskManager execute_entry
+    orch.client.get_quotes = MagicMock(return_value={"stat": "Ok", "lp": "145.50"})
+    signal = ORBSignal(
+        index_name="NIFTY",
+        signal_type="CE",
+        candle_time=_ist_dt(2026, 11, 16, 9, 30),
+        spot_close=25320.0,
+        orh=25310.0,
+        orl=25200.0,
+        vwap=25270.0,
+        rsi=70.0,
+        india_vix=15.0,
+    )
+    pos = orch.risk_manager.execute_entry(signal)
+    assert pos is not None
+    assert pos.index_name == "NIFTY"
+    assert pos.last_ltp == 145.50
+
+
+def test_afternoon_orb_anchor_and_reauth_resilience(tmp_path: Path) -> None:
+    settings = _make_settings(tmp_path, mode="PAPER")
+    orch = TradingSystemOrchestrator(settings=settings)
+    app = create_app(orch)
+
+    # 1. Test Afternoon 1:00 PM - 1:15 PM ORB Anchor
+    ok, msg = orch.set_orb_anchor("13:00", 15)
+    assert ok is True
+    assert orch.settings.orb_start_time == time(13, 0, 0)
+    assert orch.settings.orb_end_time == time(13, 15, 0)
+    assert orch.settings.orb_window_minutes == 15
+    candle_times = orch.strategy.get_orb_candle_times()
+    assert candle_times == (time(13, 0, 0), time(13, 5, 0), time(13, 10, 0))
+
+    # 2. Test Recent / Auto Anchor
+    ok, msg = orch.set_orb_anchor("recent", 15)
+    assert ok is True
+    assert orch.settings.orb_window_minutes == 15
+
+    # 3. Test Reset Trades Counter
+    orch.risk_manager.trades_taken_today = 2
+    orch.risk_manager.halted = True
+    orch.risk_manager.halt_reason = "MAX_TRADES_REACHED"
+    ok, msg = orch.reset_daily_trades()
+    assert ok is True
+    assert orch.risk_manager.trades_taken_today == 0
+    assert orch.risk_manager.halted is False
+    assert orch.risk_manager.halt_reason is None
+
+    # 4. Test Auto Reauth Hook
+    reauth_called = []
+    def fake_reauth():
+        reauth_called.append(True)
+        return True
+
+    orch.client.register_reauth_callback(fake_reauth)
+    assert orch.client._reauth_callback is fake_reauth
+    assert orch.client.api._reauth_callback is fake_reauth

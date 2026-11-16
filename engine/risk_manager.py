@@ -147,10 +147,12 @@ class RiskManager:
             if ltp is None or ltp <= 0:
                 try:
                     quote = self.client.get_quotes(contract.exchange, contract.token)
-                    if isinstance(quote, dict) and quote.get("lp"):
-                        ltp = float(quote["lp"])
-                        self.client.update_ltp(token_key, ltp)
-                        logger.info("Fetched live REST quote for %s: %.2f", contract.tradingsymbol, ltp)
+                    if isinstance(quote, dict):
+                        raw_lp = quote.get("lp") or quote.get("sp1") or quote.get("bp1") or quote.get("c")
+                        if raw_lp is not None and float(raw_lp) > 0:
+                            ltp = float(raw_lp)
+                            self.client.update_ltp(token_key, ltp)
+                            logger.info("Fetched live REST quote for %s: %.2f", contract.tradingsymbol, ltp)
                 except Exception as exc:
                     logger.debug("REST get_quotes failed for %s: %s", contract.tradingsymbol, exc)
 
@@ -667,6 +669,14 @@ class RiskManager:
 
         logger.info("Exported %d trades to %s", len(records), csv_path)
         return csv_path
+
+    def reset_trades_counter(self) -> None:
+        """Reset daily trades count and clear halt flag for live trigger testing."""
+        with self._lock:
+            self.trades_taken_today = 0
+            self.halted = False
+            self.halt_reason = None
+            logger.info("Risk manager trades counter reset to 0; halt cleared.")
 
     def reset_daily(self) -> None:
         with self._lock:

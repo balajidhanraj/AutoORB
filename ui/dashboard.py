@@ -42,6 +42,11 @@ class OrbWindowRequest(BaseModel):
     minutes: int = 15
 
 
+class OrbAnchorRequest(BaseModel):
+    start_time: str = "09:15"
+    minutes: int = 15
+
+
 def create_app(orchestrator: Any) -> FastAPI:
     """Build and return the FastAPI web dashboard application."""
     app = FastAPI(title="Shoonya ORB Algo Terminal", version="1.0.0")
@@ -175,8 +180,34 @@ def create_app(orchestrator: Any) -> FastAPI:
             content={
                 "ok": ok,
                 "message": msg,
+                "orb_start_time": orchestrator.settings.orb_start_time.strftime("%H:%M"),
                 "orb_window_minutes": orchestrator.settings.orb_window_minutes,
                 "orb_end_time": orchestrator.settings.orb_end_time.strftime("%H:%M"),
+                "snapshot": orchestrator.get_status_snapshot(),
+            }
+        )
+
+    @app.post("/api/settings/orb-anchor")
+    def api_set_orb_anchor(payload: OrbAnchorRequest) -> JSONResponse:
+        ok, msg = orchestrator.set_orb_anchor(start_time=payload.start_time, minutes=payload.minutes)
+        return JSONResponse(
+            content={
+                "ok": ok,
+                "message": msg,
+                "orb_start_time": orchestrator.settings.orb_start_time.strftime("%H:%M"),
+                "orb_window_minutes": orchestrator.settings.orb_window_minutes,
+                "orb_end_time": orchestrator.settings.orb_end_time.strftime("%H:%M"),
+                "snapshot": orchestrator.get_status_snapshot(),
+            }
+        )
+
+    @app.post("/api/trades/reset")
+    def api_reset_trades() -> JSONResponse:
+        ok, msg = orchestrator.reset_daily_trades()
+        return JSONResponse(
+            content={
+                "ok": ok,
+                "message": msg,
                 "snapshot": orchestrator.get_status_snapshot(),
             }
         )
@@ -196,6 +227,9 @@ def create_app(orchestrator: Any) -> FastAPI:
         "api_broker_refresh": api_broker_refresh,
         "api_broker_funds": api_broker_funds,
         "api_broker_order": api_broker_order,
+        "api_set_orb_window": api_set_orb_window,
+        "api_set_orb_anchor": api_set_orb_anchor,
+        "api_reset_trades": api_reset_trades,
         "health": health,
     }
     return app

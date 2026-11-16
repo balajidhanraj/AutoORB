@@ -6,7 +6,7 @@ import argparse
 import threading
 import time
 import urllib.request
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, time as dt_time, timedelta
 from typing import Any, Dict, Optional, Tuple
 
 import uvicorn
@@ -56,6 +56,8 @@ class TradingSystemOrchestrator:
 
         self.client.register_tick_listener(self._on_raw_tick)
         self.client.register_reconnect_callback(self._backfill_all_indices)
+        self._reauth_lock = threading.Lock()
+        self.client.register_reauth_callback(self._handle_reauth)
 
         self._lock = threading.RLock()
         self._stop_event = threading.Event()
@@ -313,8 +315,39 @@ class TradingSystemOrchestrator:
         logger.info("EOD Report: trades=%d mtm=%.2f csv=%s", count, mtm, csv_path)
         self.notifier.send_async(msg)
 
-    def set_orb_window(self, minutes: int) -> Tuple[bool, str]:
-        """Set Opening Range duration (5, 15, 30, 45, or 60 min) and re-evaluate ORB."""
+    def _handle_reauth(self) -> bool:
+        """Triggered automatically when a 401 Unauthorized or WebSocket auth rejection occurs."""
+        if not self._reauth_lock.acquire(blocking=False):
+            logger.debug("Shoonya re-auth already in progress; skipping duplicate trigger")
+            return False
+        try:
+            logger.warning("Shoonya session invalid or expired; executing automatic token renewal...")
+            token = self.auth.ensure_authenticated(force_refresh=True)
+            if token:
+                logger.info("Shoonya OAuth session successfully renewed (%s)", self.settings.shoonya_user_id)
+                self.client.update_credentials(self.settings)
+                susertoken = getattr(self.client.api, "susertoken", "") or getattr(self.auth.api, "susertoken", "") or token
+                if hasattr(self.client.api, "injectOAuthHeader"):
+                    self.client.api.injectOAuthHeader(
+                        token,
+                        self.settings.shoonya_user_id,
+                        self.settings.shoonya_account_id,
+                        susertoken=susertoken,
+                    )
+                self.client.reconnect_websocket()
+                self._backfill_all_indices()
+                return True
+            else:
+                logger.error("Automated Shoonya re-login failed to return a valid access token")
+                return False
+        except Exception as exc:
+            logger.error("Exception during automated Shoonya re-authentication: %s", exc)
+            return False
+        finally:
+            self._reauth_lock.release()
+
+    def set_orb_anchor(self, start_time: str, minutes: int) -> Tuple[bool, str]:
+        """Configure custom ORB anchor start time (e.g. '09:15', '13:00', or 'recent') and duration."""
         try:
             mins = int(minutes)
         except (ValueError, TypeError):
@@ -323,17 +356,57 @@ class TradingSystemOrchestrator:
         if mins not in {5, 15, 30, 45, 60}:
             return False, "Invalid ORB window duration. Choose 5, 15, 30, 45, or 60 minutes."
 
+        now_ist = datetime.now(IST)
+        start_t: dt_time
+        norm_start = str(start_time).strip().lower()
+
+        if norm_start in {"recent", "current", "auto", "last"}:
+            # Find the most recently completed window before now_ist
+            current_total_min = now_ist.hour * 60 + now_ist.minute
+            last_end_min = (current_total_min // mins) * mins
+            last_start_min = max(9 * 60 + 15, last_end_min - mins)
+            start_h, start_m = divmod(last_start_min, 60)
+            start_t = dt_time(start_h, start_m, 0)
+        else:
+            try:
+                parts = norm_start.split(":")
+                start_h = int(parts[0])
+                start_m = int(parts[1]) if len(parts) > 1 else 0
+                start_t = dt_time(start_h, start_m, 0)
+            except Exception:
+                return False, f"Invalid start time format: '{start_time}'. Use 'HH:MM' (e.g. '13:00') or 'recent'."
+
         with self._lock:
+            self.settings.orb_start_time = start_t
             self.settings.orb_window_minutes = mins
-            end_dt = datetime(2000, 1, 1, 9, 15) + timedelta(minutes=mins)
+            end_dt = datetime.combine(now_ist.date(), start_t) + timedelta(minutes=mins)
             self.settings.orb_end_time = end_dt.time()
+
+            # If afternoon range pushes past default 14:15 cutoff, extend cutoff safely up to 15:15
+            if self.settings.orb_end_time >= self.settings.entry_cutoff_time and self.settings.orb_end_time < self.settings.auto_squareoff_time:
+                extended = (datetime.combine(now_ist.date(), self.settings.orb_end_time) + timedelta(minutes=60)).time()
+                self.settings.entry_cutoff_time = min(self.settings.auto_squareoff_time, extended)
+                logger.info("Extended entry cutoff time to %s to accommodate %s range", self.settings.entry_cutoff_time, self.settings.orb_end_time)
+
             self.strategy.reset_daily()
-            now_ist = datetime.now(IST)
             if now_ist.weekday() < 5 and now_ist.time() >= self.settings.orb_end_time:
                 self.run_lock_orb(now_ist)
 
+        start_str = self.settings.orb_start_time.strftime("%H:%M")
         end_str = self.settings.orb_end_time.strftime("%H:%M")
-        msg = f"ORB window updated to {mins}m (09:15–{end_str} IST); opening range recalculated."
+        msg = f"ORB window set to {mins}m ({start_str}–{end_str} IST); opening range recalculated."
+        logger.info(msg)
+        return True, msg
+
+    def set_orb_window(self, minutes: int) -> Tuple[bool, str]:
+        """Set Opening Range duration (5, 15, 30, 45, or 60 min) keeping current start time."""
+        current_start = getattr(self.settings, "orb_start_time", dt_time(9, 15, 0)).strftime("%H:%M")
+        return self.set_orb_anchor(start_time=current_start, minutes=minutes)
+
+    def reset_daily_trades(self) -> Tuple[bool, str]:
+        """Reset daily trades count to 0 and clear any risk management halt."""
+        self.risk_manager.reset_trades_counter()
+        msg = f"Daily trades counter reset to 0/{self.settings.max_trades_per_day}; strategy unhalted."
         logger.info(msg)
         return True, msg
 
@@ -492,7 +565,9 @@ class TradingSystemOrchestrator:
             radar_summary = f"No auto-trade today: {st.no_trade_reason}."
         elif not st.is_locked:
             radar_state = "WAITING_ORB_LOCK"
-            radar_summary = f"Collecting 09:15-{self.settings.orb_end_time.strftime('%H:%M')} IST opening candles; ORH/ORL locks at {self.settings.orb_end_time.strftime('%H:%M')}."
+            start_str = self.settings.orb_start_time.strftime('%H:%M')
+            end_str = self.settings.orb_end_time.strftime('%H:%M')
+            radar_summary = f"Collecting {start_str}-{end_str} IST opening candles; ORH/ORL locks at {end_str}."
         elif orb_ready and ce_price_ok:
             radar_state = "IMMINENT_CE_BREAKOUT"
             if ce_rsi_ok and vix_ready and in_window:
@@ -542,11 +617,11 @@ class TradingSystemOrchestrator:
         elif t < self.settings.market_open_time:
             phase = "PRE_MARKET"
         elif t < self.settings.orb_end_time:
-            phase = f"ORB_FORMATION (09:15-{self.settings.orb_end_time.strftime('%H:%M')})"
+            phase = f"ORB_FORMATION ({self.settings.orb_start_time.strftime('%H:%M')}-{self.settings.orb_end_time.strftime('%H:%M')})"
         elif t <= self.settings.entry_cutoff_time:
-            phase = f"AUTO_BREAKOUT_SCANNER ({self.settings.orb_end_time.strftime('%H:%M')}-14:15)"
+            phase = f"AUTO_BREAKOUT_SCANNER ({self.settings.orb_end_time.strftime('%H:%M')}-{self.settings.entry_cutoff_time.strftime('%H:%M')})"
         elif t < self.settings.auto_squareoff_time:
-            phase = "POSITION_MANAGEMENT (14:15-15:15)"
+            phase = f"POSITION_MANAGEMENT ({self.settings.entry_cutoff_time.strftime('%H:%M')}-{self.settings.auto_squareoff_time.strftime('%H:%M')})"
         elif t <= self.settings.market_close_time:
             phase = "POST_SQUARE_OFF (15:15-15:30)"
         else:
@@ -595,7 +670,7 @@ class TradingSystemOrchestrator:
                 "status": _ms_status(all_locked or self._milestone_done.get("orb_lock") == today),
             },
             {
-                "time": f"{self.settings.orb_end_time.strftime('%H:%M')}-14:15",
+                "time": f"{self.settings.orb_end_time.strftime('%H:%M')}-{self.settings.entry_cutoff_time.strftime('%H:%M')}",
                 "label": "Auto Breakout Orders",
                 "status": _ms_status(
                     is_weekday and t > self.settings.entry_cutoff_time,
@@ -619,8 +694,9 @@ class TradingSystemOrchestrator:
             "next_candle_close_sec": next_candle_close_sec,
             "milestones": milestones,
             "auto_mode_note": (
-                f"Auto orders trigger automatically on 5m candle closes (09:30-14:15 IST) in {self.settings.mode} mode "
-                f"when all 5 gates align."
+                f"Auto orders trigger automatically on 5m candle closes "
+                f"({self.settings.orb_end_time.strftime('%H:%M')}-{self.settings.entry_cutoff_time.strftime('%H:%M')} IST) "
+                f"in {self.settings.mode} mode when all 5 gates align."
             ),
         }
 
@@ -673,7 +749,9 @@ class TradingSystemOrchestrator:
             "capital": self.settings.capital,
             "user_id": self.settings.shoonya_user_id,
             "orb_window_minutes": self.settings.orb_window_minutes,
+            "orb_start_time": self.settings.orb_start_time.strftime("%H:%M"),
             "orb_end_time": self.settings.orb_end_time.strftime("%H:%M"),
+            "entry_cutoff_time": self.settings.entry_cutoff_time.strftime("%H:%M"),
             "oauth_status": self.auth.last_login_status,
             "token_date": self.auth.last_token_date,
             "sebi_algo_id": self.settings.sebi_algo_id,

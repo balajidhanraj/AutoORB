@@ -525,17 +525,33 @@ def connect_account_ui(
 
 
 def change_orb_window_ui(window_choice: str) -> Tuple[str, str]:
-    """Change ORB duration window (5m, 15m, 30m, 45m, 60m) dynamically."""
+    """Change ORB anchor & duration dynamically."""
     mapping = {
-        "5 Min (09:15-09:20)": 5,
-        "15 Min (09:15-09:30)": 15,
-        "30 Min (09:15-09:45)": 30,
-        "45 Min (09:15-10:00)": 45,
-        "60 Min (09:15-10:15)": 60,
+        "15m (09:15-09:30 Morning)": ("09:15", 15),
+        "5m (09:15-09:20 Fast)": ("09:15", 5),
+        "30m (09:15-09:45)": ("09:15", 30),
+        "45m (09:15-10:00)": ("09:15", 45),
+        "60m (09:15-10:15)": ("09:15", 60),
+        "15m (10:00-10:15)": ("10:00", 15),
+        "15m (11:00-11:15)": ("11:00", 15),
+        "15m (12:00-12:15)": ("12:00", 15),
+        "15m (12:30-12:45)": ("12:30", 15),
+        "15m (1:00 PM-1:15 PM Afternoon)": ("13:00", 15),
+        "15m (1:15 PM-1:30 PM)": ("13:15", 15),
+        "15m (1:30 PM-1:45 PM)": ("13:30", 15),
+        "15m (2:00 PM-2:15 PM)": ("14:00", 15),
+        "Recent 15-Min (Auto Anchor)": ("recent", 15),
+        "Recent 5-Min (Immediate Test)": ("recent", 5),
     }
-    mins = mapping.get(window_choice, 15)
-    _ok, msg = orchestrator.set_orb_window(mins)
+    start_t, mins = mapping.get(window_choice, ("09:15", 15))
+    _ok, msg = orchestrator.set_orb_anchor(start_t, mins)
     banner = f"**ORB Window**: {msg}"
+    return banner, render_dashboard_html()
+
+
+def reset_trades_ui() -> Tuple[str, str]:
+    _ok, msg = orchestrator.reset_daily_trades()
+    banner = f"**Trades Reset**: {msg}"
     return banner, render_dashboard_html()
 
 
@@ -561,17 +577,28 @@ def build_gradio_demo() -> Any:
             )
             orb_window_selector = gr.Dropdown(
                 choices=[
-                    "5 Min (09:15-09:20)",
-                    "15 Min (09:15-09:30)",
-                    "30 Min (09:15-09:45)",
-                    "45 Min (09:15-10:00)",
-                    "60 Min (09:15-10:15)",
+                    "15m (09:15-09:30 Morning)",
+                    "5m (09:15-09:20 Fast)",
+                    "30m (09:15-09:45)",
+                    "45m (09:15-10:00)",
+                    "60m (09:15-10:15)",
+                    "15m (10:00-10:15)",
+                    "15m (11:00-11:15)",
+                    "15m (12:00-12:15)",
+                    "15m (12:30-12:45)",
+                    "15m (1:00 PM-1:15 PM Afternoon)",
+                    "15m (1:15 PM-1:30 PM)",
+                    "15m (1:30 PM-1:45 PM)",
+                    "15m (2:00 PM-2:15 PM)",
+                    "Recent 15-Min (Auto Anchor)",
+                    "Recent 5-Min (Immediate Test)",
                 ],
-                value=f"{orchestrator.settings.orb_window_minutes} Min (09:15-{orchestrator.settings.orb_end_time.strftime('%H:%M')})",
-                label="ORB Range Window",
+                value="15m (09:15-09:30 Morning)",
+                label="ORB Anchor Window",
             )
             oauth_btn = gr.Button("Run OAuth Login", variant="primary")
-            sync_btn = gr.Button("Sync Broker Funds & Orders")
+            sync_btn = gr.Button("Sync Broker Funds")
+            reset_trd_btn = gr.Button("Reset Trades (0/2)")
             mode_btn = gr.Button("Toggle PAPER / LIVE")
             refresh_btn = gr.Button("Refresh Snapshot")
             kill_btn = gr.Button("PANIC KILL SWITCH", variant="stop")
@@ -633,6 +660,11 @@ def build_gradio_demo() -> Any:
             fn=sync_broker_ui,
             outputs=[status_banner, dashboard_html],
             api_name="sync_broker",
+        )
+        reset_trd_btn.click(
+            fn=reset_trades_ui,
+            outputs=[status_banner, dashboard_html],
+            api_name="reset_trades",
         )
         mode_btn.click(
             fn=toggle_trading_mode,

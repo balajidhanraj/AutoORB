@@ -61,8 +61,9 @@ class ORBStrategy:
     def get_orb_candle_times(self) -> Tuple[time, ...]:
         """Return all 5-minute candle start times covering the configured ORB window."""
         mins = getattr(self.settings, "orb_window_minutes", 15)
+        start_t = getattr(self.settings, "orb_start_time", time(9, 15, 0))
         candle_count = max(1, mins // 5)
-        start_dt = datetime(2000, 1, 1, 9, 15)
+        start_dt = datetime.combine(date(2000, 1, 1), start_t)
         return tuple((start_dt + timedelta(minutes=i * 5)).time() for i in range(candle_count))
 
     def reset_daily(self, session_date: Optional[date] = None) -> None:

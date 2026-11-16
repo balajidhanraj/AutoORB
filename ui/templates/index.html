@@ -536,7 +536,9 @@
     <header class="topbar">
       <div class="brand">
         <h1>Shoonya Automated ORB Terminal</h1>
-        <p><span id="strategy-desc">{{ snapshot.orb_window_minutes or 15 }}-Min ORB (09:15-{{ snapshot.orb_end_time or '09:30' }})</span> + Intraday VWAP + Wilder RSI(14) | SEBI Algo ID: <span id="algo-id">{{ snapshot.sebi_algo_id
+        <p><span id="strategy-desc">{{ snapshot.orb_window_minutes or 15 }}-Min ORB (09:15-{{ snapshot.orb_end_time or
+            '09:30' }})</span> + Intraday VWAP + Wilder RSI(14) | SEBI Algo ID: <span id="algo-id">{{
+            snapshot.sebi_algo_id
             }}</span></p>
       </div>
       <div class="badges">
@@ -550,12 +552,31 @@
         <span id="clock-badge" class="badge">IST: {{ snapshot.ist_time }}</span>
       </div>
       <div class="controls">
-        <select id="orb-select" class="theme-select" onchange="changeOrbWindow(parseInt(this.value, 10))" title="Select Opening Range Window Duration">
-          <option value="5" {{ 'selected' if snapshot.orb_window_minutes == 5 else '' }}>ORB: 5 Min (09:15-09:20)</option>
-          <option value="15" {{ 'selected' if snapshot.orb_window_minutes == 15 or not snapshot.orb_window_minutes else '' }}>ORB: 15 Min (09:15-09:30)</option>
-          <option value="30" {{ 'selected' if snapshot.orb_window_minutes == 30 else '' }}>ORB: 30 Min (09:15-09:45)</option>
-          <option value="45" {{ 'selected' if snapshot.orb_window_minutes == 45 else '' }}>ORB: 45 Min (09:15-10:00)</option>
-          <option value="60" {{ 'selected' if snapshot.orb_window_minutes == 60 else '' }}>ORB: 60 Min (09:15-10:15)</option>
+        <select id="orb-anchor-select" class="theme-select" onchange="applyOrbAnchor(this.value)"
+          title="Select Opening Range Window Anchor & Duration">
+          <optgroup label="Morning Sessions">
+            <option value="09:15|15">15m (09:15–09:30 Morning)</option>
+            <option value="09:15|5">5m (09:15–09:20 Fast)</option>
+            <option value="09:15|30">30m (09:15–09:45)</option>
+            <option value="09:15|45">45m (09:15–10:00)</option>
+            <option value="09:15|60">60m (09:15–10:15)</option>
+          </optgroup>
+          <optgroup label="Mid-Day Sessions">
+            <option value="10:00|15">15m (10:00–10:15)</option>
+            <option value="11:00|15">15m (11:00–11:15)</option>
+            <option value="12:00|15">15m (12:00–12:15)</option>
+            <option value="12:30|15">15m (12:30–12:45)</option>
+          </optgroup>
+          <optgroup label="Afternoon Sessions (Live Testing)">
+            <option value="13:00|15">15m (1:00 PM–1:15 PM Afternoon)</option>
+            <option value="13:15|15">15m (1:15 PM–1:30 PM)</option>
+            <option value="13:30|15">15m (1:30 PM–1:45 PM)</option>
+            <option value="14:00|15">15m (2:00 PM–2:15 PM)</option>
+          </optgroup>
+          <optgroup label="Dynamic Anchors">
+            <option value="recent|15">Recent 15-Min (Auto Anchor to Last Window)</option>
+            <option value="recent|5">Recent 5-Min (Immediate Next Close Test)</option>
+          </optgroup>
         </select>
         <select id="theme-select" class="theme-select" onchange="applyTheme(this.value)" title="Switch UI Theme">
           <option value="midnight">Theme: Midnight Pro</option>
@@ -589,9 +610,9 @@
         <div class="card-sub">NIFTY 130 qty | BNF 60 qty</div>
       </div>
       <div class="card">
-        <div class="card-label">Trades Today</div>
+        <div class="card-label">Trades Today <button onclick="resetTradesCounter()" class="badge info" style="cursor:pointer;padding:1px 6px;margin-left:6px;" title="Reset counter to 0/2 for testing">Reset</button></div>
         <div id="trades-val" class="card-val">{{ snapshot.trades_taken }} / {{ snapshot.max_trades }}</div>
-        <div class="card-sub">Entry cutoff: 14:15 IST</div>
+        <div class="card-sub">Cutoff: <span id="entry-cutoff-val">{{ snapshot.entry_cutoff_time or '14:15' }}</span> IST</div>
       </div>
       <div class="card">
         <div class="card-label">India VIX (Min 12.0)</div>
@@ -802,9 +823,16 @@
     function renderSnapshot(data) {
       document.getElementById("algo-id").textContent = data.sebi_algo_id || "--";
       const descEl = document.getElementById("strategy-desc");
-      if (descEl) descEl.textContent = `${data.orb_window_minutes || 15}-Min ORB (09:15-${data.orb_end_time || '09:30'})`;
-      const orbSel = document.getElementById("orb-select");
-      if (orbSel && document.activeElement !== orbSel && data.orb_window_minutes) orbSel.value = data.orb_window_minutes;
+      if (descEl) descEl.textContent = `${data.orb_window_minutes || 15}-Min ORB (${data.orb_start_time || '09:15'}-${data.orb_end_time || '09:30'})`;
+      const orbSel = document.getElementById("orb-anchor-select");
+      const currentAnchorKey = `${data.orb_start_time || '09:15'}|${data.orb_window_minutes || 15}`;
+      if (orbSel && document.activeElement !== orbSel) {
+        if ([...orbSel.options].some(o => o.value === currentAnchorKey)) {
+          orbSel.value = currentAnchorKey;
+        }
+      }
+      const cutoffEl = document.getElementById("entry-cutoff-val");
+      if (cutoffEl && data.entry_cutoff_time) cutoffEl.textContent = data.entry_cutoff_time;
       document.getElementById("user-badge").textContent = "Client: " + (data.user_id || "--");
       const modeBadge = document.getElementById("mode-badge");
       modeBadge.textContent = "MODE: " + data.mode;
@@ -1029,6 +1057,38 @@
       const data = await res.json();
       if (data.snapshot) renderSnapshot(data.snapshot);
       showNote("order-msg", data.ok, data.message || "Order request completed.");
+    }
+
+    async function applyOrbAnchor(val) {
+      if (!val) return;
+      const parts = val.split("|");
+      const startTime = parts[0];
+      const mins = parseInt(parts[1] || "15", 10);
+      try {
+        const res = await fetch("/api/settings/orb-anchor", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ start_time: startTime, minutes: mins })
+        });
+        const data = await res.json();
+        if (data.snapshot) renderSnapshot(data.snapshot);
+      } catch (err) {
+        console.error("Failed setting ORB anchor:", err);
+      }
+    }
+
+    async function resetTradesCounter() {
+      if (!confirm("Reset today's trades counter to 0/2 and clear halt flags for testing?")) return;
+      try {
+        const res = await fetch("/api/trades/reset", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" }
+        });
+        const data = await res.json();
+        if (data.snapshot) renderSnapshot(data.snapshot);
+      } catch (err) {
+        console.error("Failed resetting trades counter:", err);
+      }
     }
 
     async function changeOrbWindow(minutes) {
