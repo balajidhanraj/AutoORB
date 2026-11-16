@@ -145,8 +145,37 @@ class RiskManager:
 
             ltp = option_ltp if option_ltp is not None else self.client.get_ltp(token_key)
             if ltp is None or ltp <= 0:
-                logger.warning("No option LTP available for %s (%s); skipping entry", contract.tradingsymbol, opt_key)
-                return None
+                try:
+                    quote = self.client.get_quotes(contract.exchange, contract.token)
+                    if isinstance(quote, dict) and quote.get("lp"):
+                        ltp = float(quote["lp"])
+                        self.client.update_ltp(token_key, ltp)
+                        logger.info("Fetched live REST quote for %s: %.2f", contract.tradingsymbol, ltp)
+                except Exception as exc:
+                    logger.debug("REST get_quotes failed for %s: %s", contract.tradingsymbol, exc)
+
+            if ltp is None or ltp <= 0:
+                deadline = time.monotonic() + 1.5
+                while time.monotonic() < deadline:
+                    time.sleep(0.1)
+                    ltp = self.client.get_ltp(token_key)
+                    if ltp is not None and ltp > 0:
+                        break
+
+            if ltp is None or ltp <= 0:
+                if self.settings.mode == "PAPER":
+                    intrinsic = max(
+                        0.0,
+                        signal.spot_close - contract.strike
+                        if contract.option_type == "CE"
+                        else contract.strike - signal.spot_close,
+                    )
+                    ltp = round(max(30.0, intrinsic + 80.0), 1)
+                    self.client.update_ltp(token_key, ltp)
+                    logger.info("Synthesized paper option LTP for %s: %.2f", contract.tradingsymbol, ltp)
+                else:
+                    logger.warning("No option LTP available for %s (%s); skipping entry", contract.tradingsymbol, opt_key)
+                    return None
 
             self.client.update_ltp(token_key, float(ltp))
             qty = contract.lot_size * spec.default_lots
