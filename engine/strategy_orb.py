@@ -48,7 +48,7 @@ class ORBSignal:
 
 
 class ORBStrategy:
-    """Implements the 15-min Opening Range Breakout + VWAP + RSI + VIX rules."""
+    """Implements configurable-duration Opening Range Breakout (09:15-ORB) + VWAP + RSI + VIX rules."""
 
     ORB_CANDLE_TIMES = (time(9, 15, 0), time(9, 20, 0), time(9, 25, 0))
 
@@ -57,6 +57,13 @@ class ORBStrategy:
         self.states: Dict[str, ORBState] = {
             name: ORBState(index_name=name) for name in INDEX_SPECS
         }
+
+    def get_orb_candle_times(self) -> Tuple[time, ...]:
+        """Return all 5-minute candle start times covering the configured ORB window."""
+        mins = getattr(self.settings, "orb_window_minutes", 15)
+        candle_count = max(1, mins // 5)
+        start_dt = datetime(2000, 1, 1, 9, 15)
+        return tuple((start_dt + timedelta(minutes=i * 5)).time() for i in range(candle_count))
 
     def reset_daily(self, session_date: Optional[date] = None) -> None:
         target = session_date or datetime.now(IST).date()
@@ -74,7 +81,7 @@ class ORBStrategy:
         candles: Sequence[Candle],
         session_date: Optional[date] = None,
     ) -> ORBState:
-        """Compute ORH/ORL from 09:15, 09:20, 09:25 5-min candles and enforce <= 0.75% filter."""
+        """Compute ORH/ORL from opening 5-min candles and enforce <= 0.75% filter."""
         state = self.states[index_name]
         target_date = session_date
         if target_date is None and candles:
@@ -84,17 +91,20 @@ class ORBStrategy:
         if target_date is None:
             target_date = datetime.now(IST).date()
 
+        target_candle_times = self.get_orb_candle_times()
+        expected_count = len(target_candle_times)
         orb_candles = []
         for c in candles:
             ts_ist = c.timestamp.astimezone(IST) if c.timestamp.tzinfo else IST.localize(c.timestamp)
-            if ts_ist.date() == target_date and ts_ist.time() in self.ORB_CANDLE_TIMES:
+            if ts_ist.date() == target_date and ts_ist.time() in target_candle_times:
                 orb_candles.append(c)
 
-        if len(orb_candles) < 3:
+        if len(orb_candles) < expected_count:
             logger.warning(
-                "Cannot lock ORB for %s yet: only %d/3 opening candles present",
+                "Cannot lock ORB for %s yet: only %d/%d opening candles present",
                 index_name,
                 len(orb_candles),
+                expected_count,
             )
             return state
 
