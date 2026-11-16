@@ -136,6 +136,7 @@ class ShoonyaAuthenticator:
         today_str = self._today_ist_str()
         candidate_token = ""
 
+        susertoken = ""
         if token_path.exists():
             try:
                 payload = json.loads(token_path.read_text(encoding="utf-8"))
@@ -147,6 +148,7 @@ class ShoonyaAuthenticator:
                     and (not cached_uid or not expected_uid or cached_uid == expected_uid)
                 ):
                     candidate_token = str(payload["access_token"]).strip()
+                    susertoken = str(payload.get("susertoken") or "").strip()
             except Exception as exc:
                 logger.warning("Failed reading token cache %s: %s", token_path, exc)
 
@@ -157,11 +159,19 @@ class ShoonyaAuthenticator:
             return None
 
         try:
-            self.api.injectOAuthHeader(
-                candidate_token,
-                self.settings.shoonya_user_id,
-                self.settings.shoonya_account_id,
-            )
+            if susertoken:
+                self.api.injectOAuthHeader(
+                    candidate_token,
+                    self.settings.shoonya_user_id,
+                    self.settings.shoonya_account_id,
+                    susertoken=susertoken,
+                )
+            else:
+                self.api.injectOAuthHeader(
+                    candidate_token,
+                    self.settings.shoonya_user_id,
+                    self.settings.shoonya_account_id,
+                )
             limits = self.api.get_limits()
             if isinstance(limits, dict) and limits.get("stat") == "Ok":
                 self.last_login_status = "AUTHENTICATED (CACHED)"
@@ -181,6 +191,7 @@ class ShoonyaAuthenticator:
         payload = {
             "date": today_str,
             "access_token": access_token,
+            "susertoken": getattr(self.api, "susertoken", "") or access_token,
             "user_id": self.settings.shoonya_user_id,
             "created_at": datetime.now(IST).isoformat(),
         }
