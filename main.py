@@ -6,7 +6,7 @@ import argparse
 import threading
 import time
 import urllib.request
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import Any, Dict, Optional, Tuple
 
 import uvicorn
@@ -313,6 +313,30 @@ class TradingSystemOrchestrator:
         logger.info("EOD Report: trades=%d mtm=%.2f csv=%s", count, mtm, csv_path)
         self.notifier.send_async(msg)
 
+    def set_orb_window(self, minutes: int) -> Tuple[bool, str]:
+        """Set Opening Range duration (5, 15, 30, 45, or 60 min) and re-evaluate ORB."""
+        try:
+            mins = int(minutes)
+        except (ValueError, TypeError):
+            return False, "Invalid ORB window duration."
+
+        if mins not in {5, 15, 30, 45, 60}:
+            return False, "Invalid ORB window duration. Choose 5, 15, 30, 45, or 60 minutes."
+
+        with self._lock:
+            self.settings.orb_window_minutes = mins
+            end_dt = datetime(2000, 1, 1, 9, 15) + timedelta(minutes=mins)
+            self.settings.orb_end_time = end_dt.time()
+            self.strategy.reset_daily()
+            now_ist = datetime.now(IST)
+            if now_ist.weekday() < 5 and now_ist.time() >= self.settings.orb_end_time:
+                self.run_lock_orb(now_ist)
+
+        end_str = self.settings.orb_end_time.strftime("%H:%M")
+        msg = f"ORB window updated to {mins}m (09:15–{end_str} IST); opening range recalculated."
+        logger.info(msg)
+        return True, msg
+
     def trigger_kill_switch(self, reason: str = "MANUAL_UI_KILL_SWITCH") -> None:
         self.risk_manager.emergency_kill_switch(reason=reason)
 
@@ -468,7 +492,7 @@ class TradingSystemOrchestrator:
             radar_summary = f"No auto-trade today: {st.no_trade_reason}."
         elif not st.is_locked:
             radar_state = "WAITING_ORB_LOCK"
-            radar_summary = "Collecting 09:15-09:30 IST opening candles; ORH/ORL locks at 09:30."
+            radar_summary = f"Collecting 09:15-{self.settings.orb_end_time.strftime('%H:%M')} IST opening candles; ORH/ORL locks at {self.settings.orb_end_time.strftime('%H:%M')}."
         elif orb_ready and ce_price_ok:
             radar_state = "IMMINENT_CE_BREAKOUT"
             if ce_rsi_ok and vix_ready and in_window:
@@ -518,9 +542,9 @@ class TradingSystemOrchestrator:
         elif t < self.settings.market_open_time:
             phase = "PRE_MARKET"
         elif t < self.settings.orb_end_time:
-            phase = "ORB_FORMATION (09:15-09:30)"
+            phase = f"ORB_FORMATION (09:15-{self.settings.orb_end_time.strftime('%H:%M')})"
         elif t <= self.settings.entry_cutoff_time:
-            phase = "AUTO_BREAKOUT_SCANNER (09:30-14:15)"
+            phase = f"AUTO_BREAKOUT_SCANNER ({self.settings.orb_end_time.strftime('%H:%M')}-14:15)"
         elif t < self.settings.auto_squareoff_time:
             phase = "POSITION_MANAGEMENT (14:15-15:15)"
         elif t <= self.settings.market_close_time:
@@ -566,12 +590,12 @@ class TradingSystemOrchestrator:
                 ),
             },
             {
-                "time": "09:30 IST",
-                "label": "15-Min ORB Lock",
+                "time": f"{self.settings.orb_end_time.strftime('%H:%M')} IST",
+                "label": f"{self.settings.orb_window_minutes}-Min ORB Lock",
                 "status": _ms_status(all_locked or self._milestone_done.get("orb_lock") == today),
             },
             {
-                "time": "09:30-14:15",
+                "time": f"{self.settings.orb_end_time.strftime('%H:%M')}-14:15",
                 "label": "Auto Breakout Orders",
                 "status": _ms_status(
                     is_weekday and t > self.settings.entry_cutoff_time,
@@ -648,6 +672,8 @@ class TradingSystemOrchestrator:
             "mode": self.settings.mode,
             "capital": self.settings.capital,
             "user_id": self.settings.shoonya_user_id,
+            "orb_window_minutes": self.settings.orb_window_minutes,
+            "orb_end_time": self.settings.orb_end_time.strftime("%H:%M"),
             "oauth_status": self.auth.last_login_status,
             "token_date": self.auth.last_token_date,
             "sebi_algo_id": self.settings.sebi_algo_id,
