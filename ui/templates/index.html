@@ -536,7 +536,7 @@
     <header class="topbar">
       <div class="brand">
         <h1>Shoonya Automated ORB Terminal</h1>
-        <p>15-Min ORB + Intraday VWAP + Wilder RSI(14) | SEBI Algo ID: <span id="algo-id">{{ snapshot.sebi_algo_id
+        <p><span id="strategy-desc">{{ snapshot.orb_window_minutes or 15 }}-Min ORB (09:15-{{ snapshot.orb_end_time or '09:30' }})</span> + Intraday VWAP + Wilder RSI(14) | SEBI Algo ID: <span id="algo-id">{{ snapshot.sebi_algo_id
             }}</span></p>
       </div>
       <div class="badges">
@@ -550,6 +550,13 @@
         <span id="clock-badge" class="badge">IST: {{ snapshot.ist_time }}</span>
       </div>
       <div class="controls">
+        <select id="orb-select" class="theme-select" onchange="changeOrbWindow(parseInt(this.value, 10))" title="Select Opening Range Window Duration">
+          <option value="5" {{ 'selected' if snapshot.orb_window_minutes == 5 else '' }}>ORB: 5 Min (09:15-09:20)</option>
+          <option value="15" {{ 'selected' if snapshot.orb_window_minutes == 15 or not snapshot.orb_window_minutes else '' }}>ORB: 15 Min (09:15-09:30)</option>
+          <option value="30" {{ 'selected' if snapshot.orb_window_minutes == 30 else '' }}>ORB: 30 Min (09:15-09:45)</option>
+          <option value="45" {{ 'selected' if snapshot.orb_window_minutes == 45 else '' }}>ORB: 45 Min (09:15-10:00)</option>
+          <option value="60" {{ 'selected' if snapshot.orb_window_minutes == 60 else '' }}>ORB: 60 Min (09:15-10:15)</option>
+        </select>
         <select id="theme-select" class="theme-select" onchange="applyTheme(this.value)" title="Switch UI Theme">
           <option value="midnight">Theme: Midnight Pro</option>
           <option value="emerald">Theme: Cyber Emerald</option>
@@ -794,6 +801,10 @@
 
     function renderSnapshot(data) {
       document.getElementById("algo-id").textContent = data.sebi_algo_id || "--";
+      const descEl = document.getElementById("strategy-desc");
+      if (descEl) descEl.textContent = `${data.orb_window_minutes || 15}-Min ORB (09:15-${data.orb_end_time || '09:30'})`;
+      const orbSel = document.getElementById("orb-select");
+      if (orbSel && document.activeElement !== orbSel && data.orb_window_minutes) orbSel.value = data.orb_window_minutes;
       document.getElementById("user-badge").textContent = "Client: " + (data.user_id || "--");
       const modeBadge = document.getElementById("mode-badge");
       modeBadge.textContent = "MODE: " + data.mode;
@@ -1018,6 +1029,20 @@
       const data = await res.json();
       if (data.snapshot) renderSnapshot(data.snapshot);
       showNote("order-msg", data.ok, data.message || "Order request completed.");
+    }
+
+    async function changeOrbWindow(minutes) {
+      try {
+        const res = await fetch("/api/settings/orb-window", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ minutes: minutes })
+        });
+        const data = await res.json();
+        if (data.snapshot) renderSnapshot(data.snapshot);
+      } catch (err) {
+        console.error("Failed setting ORB window:", err);
+      }
     }
 
     try {
