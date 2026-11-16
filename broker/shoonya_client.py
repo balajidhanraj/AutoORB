@@ -159,6 +159,10 @@ class CompatibleNorenApi:
     def searchscrip(self, exchange: str, searchtext: str) -> Dict[str, Any]:
         return self._post("SearchScrip", {"uid": self.username, "exch": exchange, "stext": searchtext})
 
+    def get_quotes(self, exchange: str, token: str) -> Dict[str, Any]:
+        resp = self._post("GetQuotes", {"uid": self.username, "exch": exchange, "token": str(token)})
+        return resp if isinstance(resp, dict) else {}
+
     def get_time_price_series(
         self,
         exchange: str,
@@ -475,6 +479,11 @@ class ShoonyaClient:
 
     def searchscrip(self, exchange: str, searchtext: str) -> Dict[str, Any]:
         return self.api.searchscrip(exchange=exchange, searchtext=searchtext)
+
+    def get_quotes(self, exchange: str, token: str) -> Dict[str, Any]:
+        if hasattr(self.api, "get_quotes"):
+            return self.api.get_quotes(exchange=exchange, token=token)
+        return {}
 
     def get_time_price_series(
         self,
