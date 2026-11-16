@@ -38,6 +38,10 @@ class BrokerOrderRequest(BaseModel):
     product_type: str = "C"
 
 
+class OrbWindowRequest(BaseModel):
+    minutes: int = 15
+
+
 def create_app(orchestrator: Any) -> FastAPI:
     """Build and return the FastAPI web dashboard application."""
     app = FastAPI(title="Shoonya ORB Algo Terminal", version="1.0.0")
@@ -160,6 +164,19 @@ def create_app(orchestrator: Any) -> FastAPI:
                 "ok": ok,
                 "message": msg,
                 "response": resp,
+                "snapshot": orchestrator.get_status_snapshot(),
+            }
+        )
+
+    @app.post("/api/settings/orb-window")
+    def api_set_orb_window(payload: OrbWindowRequest) -> JSONResponse:
+        ok, msg = orchestrator.set_orb_window(payload.minutes)
+        return JSONResponse(
+            content={
+                "ok": ok,
+                "message": msg,
+                "orb_window_minutes": orchestrator.settings.orb_window_minutes,
+                "orb_end_time": orchestrator.settings.orb_end_time.strftime("%H:%M"),
                 "snapshot": orchestrator.get_status_snapshot(),
             }
         )
