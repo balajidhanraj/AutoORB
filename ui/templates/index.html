@@ -19,22 +19,23 @@
       theme: {
         extend: {
           fontFamily: {
-            sans: ['Space Grotesk', 'sans-serif'],
-            mono: ['JetBrains Mono', 'monospace'],
+            sans: ['var(--font-body)', 'Space Grotesk', 'sans-serif'],
+            heading: ['var(--font-heading)', 'Space Grotesk', 'sans-serif'],
+            mono: ['var(--font-mono)', 'JetBrains Mono', 'monospace'],
           },
           colors: {
             terminal: {
-              bg: '#0a0d14',
-              surface: '#0f172a',
-              card: '#131e33',
-              border: '#1e2e4a',
-              subtle: '#18243c',
-              cyan: '#00f5d4',
-              emerald: '#10b981',
-              amber: '#f59e0b',
-              rose: '#f43f5e',
-              blue: '#38bdf8',
-              muted: '#8b9bb4',
+              bg: 'var(--bg)',
+              surface: 'var(--surface)',
+              card: 'var(--surface-alt)',
+              border: 'var(--border)',
+              subtle: 'var(--surface-container-high)',
+              cyan: 'var(--primary)',
+              emerald: 'var(--green)',
+              amber: 'var(--amber)',
+              rose: 'var(--secondary)',
+              blue: 'var(--accent)',
+              muted: 'var(--muted)',
             }
           }
         }
@@ -49,6 +50,155 @@
       #user-guide-modal { position: absolute; left: 0; top: 0; width: 100%; background: #060910 !important; }
       #user-guide-modal > div { max-height: none !important; overflow: visible !important; box-shadow: none !important; }
       #user-guide-modal main { max-height: none !important; overflow: visible !important; }
+    }
+  </style>
+
+  
+  <style id="guide-modal-theme-styles">
+    /* ========================================================
+       THEME & TYPOGRAPHY INHERITANCE FOR STRATEGY & USER GUIDE
+       ======================================================== */
+    #user-guide-modal {
+      font-family: var(--font-body, 'Geist', sans-serif);
+      color: var(--text, #f1f5f9);
+    }
+    #user-guide-modal .guide-card-container {
+      background: var(--surface) !important;
+      border: 1px solid var(--border) !important;
+      color: var(--text) !important;
+      font-family: var(--font-body, 'Geist', sans-serif);
+    }
+    #user-guide-modal h1,
+    #user-guide-modal h2,
+    #user-guide-modal h3,
+    #user-guide-modal h4 {
+      font-family: var(--font-heading, 'Space Grotesk', sans-serif) !important;
+      color: var(--text) !important;
+    }
+    #user-guide-modal .code-chip,
+    #user-guide-modal code,
+    #user-guide-modal pre,
+    #user-guide-modal .font-mono {
+      font-family: var(--font-mono, 'JetBrains Mono', monospace) !important;
+    }
+    #user-guide-modal header {
+      background: var(--surface-alt) !important;
+      border-bottom: 1px solid var(--border) !important;
+    }
+    #user-guide-modal footer {
+      background: var(--surface-alt) !important;
+      border-top: 1px solid var(--border) !important;
+    }
+    #user-guide-modal .guide-glow-ribbon {
+      height: 3px;
+      width: 100%;
+      background: linear-gradient(90deg, var(--green, #10b981), var(--primary, #00f5d4), var(--accent, #38bdf8));
+    }
+    
+    /* Navigation bar - NO HORIZONTAL SCROLLBAR, wraps cleanly */
+    #user-guide-modal .guide-nav-bar {
+      background: var(--surface-alt) !important;
+      border-bottom: 1px solid var(--border) !important;
+      scrollbar-width: none !important;
+      -ms-overflow-style: none !important;
+      overflow-x: visible !important;
+      flex-wrap: wrap !important;
+    }
+    #user-guide-modal .guide-nav-bar::-webkit-scrollbar {
+      display: none !important;
+      height: 0px !important;
+      width: 0px !important;
+    }
+    #user-guide-modal .guide-nav-tab {
+      background: var(--surface-container-high) !important;
+      color: var(--text-dim) !important;
+      border: 1px solid var(--border) !important;
+      font-family: var(--font-mono, 'JetBrains Mono', monospace);
+      font-size: 0.72rem;
+      padding: 6px 12px;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      text-decoration: none;
+      white-space: nowrap;
+    }
+    #user-guide-modal .guide-nav-tab:hover {
+      background: var(--surface) !important;
+      color: var(--text) !important;
+      border-color: var(--border-focus) !important;
+    }
+    #user-guide-modal .guide-nav-tab.active {
+      background: var(--primary-soft) !important;
+      color: var(--primary) !important;
+      border-color: var(--primary) !important;
+      font-weight: 700 !important;
+      box-shadow: 0 0 10px var(--primary-soft);
+    }
+    
+    /* Theme color adaptation overrides */
+    #user-guide-modal .text-slate-100,
+    #user-guide-modal .text-white {
+      color: var(--text) !important;
+    }
+    #user-guide-modal .text-slate-300,
+    #user-guide-modal .text-slate-200 {
+      color: var(--text-dim) !important;
+    }
+    #user-guide-modal .text-slate-400,
+    #user-guide-modal .text-slate-600 {
+      color: var(--muted) !important;
+    }
+    #user-guide-modal .bg-\[\#070b13\],
+    #user-guide-modal .bg-\[\#080d17\],
+    #user-guide-modal .bg-\[\#09101d\],
+    #user-guide-modal .bg-\[\#0a101d\],
+    #user-guide-modal .bg-\[\#0b1220\],
+    #user-guide-modal .bg-terminal-bg {
+      background: var(--surface-alt) !important;
+      border-color: var(--border) !important;
+    }
+    #user-guide-modal .bg-terminal-subtle,
+    #user-guide-modal .bg-slate-800 {
+      background: var(--surface-container-high) !important;
+      border-color: var(--border) !important;
+    }
+    #user-guide-modal table {
+      color: var(--text) !important;
+      border-color: var(--border) !important;
+    }
+    #user-guide-modal th {
+      background: var(--surface-container-high) !important;
+      color: var(--muted) !important;
+      border-bottom: 1px solid var(--border) !important;
+    }
+    #user-guide-modal td {
+      border-bottom: 1px solid var(--border) !important;
+      color: var(--text) !important;
+    }
+    #user-guide-modal .btn-guide-primary {
+      background: var(--primary) !important;
+      color: #060910 !important;
+      border: none !important;
+      font-weight: 700 !important;
+      box-shadow: 0 0 16px var(--primary-soft) !important;
+      transition: all 0.2s ease;
+    }
+    #user-guide-modal .btn-guide-primary:hover {
+      filter: brightness(1.15);
+      box-shadow: 0 0 22px var(--primary) !important;
+    }
+    #user-guide-modal .btn-guide-secondary {
+      background: var(--surface-container-high) !important;
+      color: var(--text) !important;
+      border: 1px solid var(--border) !important;
+      font-weight: 600 !important;
+    }
+    #user-guide-modal .btn-guide-secondary:hover {
+      background: var(--surface-alt) !important;
+      border-color: var(--border-focus) !important;
     }
   </style>
 
@@ -1744,10 +1894,10 @@
   <div id="user-guide-modal" class="modal-backdrop" style="display:none; padding:16px; background:rgba(4,7,14,0.85); backdrop-filter:blur(10px); z-index:1000;"
     onclick="if(event.target===this)closeUserGuideModal()">
     <!-- Main Background Container Backdrop Simulation -->
-  <div class="relative w-full max-w-6xl mx-auto rounded-2xl bg-gradient-to-b from-terminal-card to-[#0b1120] border border-terminal-border shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
+  <div class="guide-card-container relative w-full max-w-6xl mx-auto rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
 
     <!-- Top Glow Ribbon -->
-    <div class="h-1 w-full bg-gradient-to-r from-emerald-500 via-terminal-cyan to-terminal-blue"></div>
+    <div class="guide-glow-ribbon"></div>
 
     <!-- Header Bar -->
     <header class="px-6 py-4 border-b border-terminal-border bg-terminal-surface/90 backdrop-blur-md flex flex-wrap items-center justify-between gap-4">
@@ -1784,26 +1934,26 @@
     </header>
 
     <!-- Navigation Pills Header -->
-    <nav class="px-6 py-3 bg-[#0a101d] border-b border-terminal-border flex items-center gap-2 overflow-x-auto text-xs code-chip">
-      <a href="#blueprint" onclick="event.preventDefault(); scrollGuideSec('blueprint');" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-terminal-cyan/15 text-terminal-cyan border border-terminal-cyan/30 font-semibold whitespace-nowrap transition-colors">
+    <nav class="guide-nav-bar px-6 py-2.5 flex items-center gap-2 text-xs code-chip">
+      <a href="#blueprint" onclick="event.preventDefault(); scrollGuideSec('blueprint');" class="guide-nav-tab active">
         <span class="material-symbols-outlined text-[15px]">account_tree</span>
-        1. Strategy Blueprint
+        <span>1. Strategy</span>
       </a>
-      <a href="#parameters" onclick="event.preventDefault(); scrollGuideSec('parameters');" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-terminal-subtle hover:bg-slate-800 text-slate-300 border border-terminal-border font-medium whitespace-nowrap transition-colors">
+      <a href="#parameters" onclick="event.preventDefault(); scrollGuideSec('parameters');" class="guide-nav-tab">
         <span class="material-symbols-outlined text-[15px]">tune</span>
-        2. Parameters & Risk Guardrails
+        <span>2. Risk &amp; Params</span>
       </a>
-      <a href="#terminal-controls" onclick="event.preventDefault(); scrollGuideSec('terminal-controls');" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-terminal-subtle hover:bg-slate-800 text-slate-300 border border-terminal-border font-medium whitespace-nowrap transition-colors">
+      <a href="#terminal-controls" onclick="event.preventDefault(); scrollGuideSec('terminal-controls');" class="guide-nav-tab">
         <span class="material-symbols-outlined text-[15px]">dashboard</span>
-        3. Terminal Controls & Tabs
+        <span>3. Controls</span>
       </a>
-      <a href="#multi-account" onclick="event.preventDefault(); scrollGuideSec('multi-account');" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-terminal-subtle hover:bg-slate-800 text-slate-300 border border-terminal-border font-medium whitespace-nowrap transition-colors">
+      <a href="#multi-account" onclick="event.preventDefault(); scrollGuideSec('multi-account');" class="guide-nav-tab">
         <span class="material-symbols-outlined text-[15px]">manage_accounts</span>
-        4. Multi-User Account Switching
+        <span>4. Accounts</span>
       </a>
-      <a href="#daily-flow" onclick="event.preventDefault(); scrollGuideSec('daily-flow');" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-terminal-subtle hover:bg-slate-800 text-slate-300 border border-terminal-border font-medium whitespace-nowrap transition-colors">
+      <a href="#daily-flow" onclick="event.preventDefault(); scrollGuideSec('daily-flow');" class="guide-nav-tab">
         <span class="material-symbols-outlined text-[15px]">schedule</span>
-        5. Daily Trading Workflow
+        <span>5. Daily SOP</span>
       </a>
     </nav>
 
@@ -2274,10 +2424,10 @@
         <span>SEBI Compliant Quantitative Framework</span>
       </div>
       <div class="flex items-center gap-3">
-        <button onclick="window.print()" class="px-4 py-2 rounded-lg bg-terminal-subtle hover:bg-slate-800 border border-terminal-border text-xs font-semibold text-slate-300 transition-colors" title="Print Guide">
+        <button onclick="window.print()" class="btn-guide-secondary px-4 py-2 rounded-lg text-xs font-semibold transition-colors" title="Print Guide">
           Print / Export PDF
         </button>
-        <button onclick="closeUserGuideModal()" class="px-5 py-2 rounded-lg bg-terminal-cyan hover:bg-emerald-400 text-slate-950 font-bold text-xs shadow-[0_0_20px_rgba(0,245,212,0.3)] transition-all flex items-center gap-1.5" title="Return to Terminal">
+        <button onclick="closeUserGuideModal()" class="btn-guide-primary px-5 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5" title="Return to Terminal">
           <span>Got It, Return to Terminal</span>
           <span class="material-symbols-outlined text-sm">arrow_forward</span>
         </button>
@@ -3629,6 +3779,15 @@
     function scrollGuideSec(id) {
       const el = document.getElementById(id);
       if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      const navLinks = document.querySelectorAll('#user-guide-modal nav a');
+      navLinks.forEach(link => {
+        if (link.getAttribute('href') === '#' + id) {
+          link.classList.add('active');
+        } else {
+          link.classList.remove('active');
+        }
+      });
+    });
       const navLinks = document.querySelectorAll('#user-guide-modal nav a');
       navLinks.forEach(link => {
         if (link.getAttribute('href') === '#' + id) {
