@@ -95,6 +95,12 @@ def create_app(orchestrator: Any) -> FastAPI:
     def api_status() -> JSONResponse:
         return JSONResponse(content=orchestrator.get_status_snapshot())
 
+    @app.get("/api/logs")
+    def api_logs(limit: int = 150) -> JSONResponse:
+        from utils.logger import get_recent_logs
+        logs = get_recent_logs(limit=limit)
+        return JSONResponse(content={"ok": True, "count": len(logs), "logs": logs})
+
     @app.post("/api/kill-switch")
     def api_kill_switch() -> JSONResponse:
         orchestrator.trigger_kill_switch(reason="MANUAL_UI_KILL_SWITCH")
