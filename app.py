@@ -203,6 +203,13 @@ def _render_radar_card(
     banner_border = p["green"] if is_imm else p["accent"]
     banner_fg = p["green"] if is_imm else p["text"]
 
+    lots = r.get("lots", 1 if name == "CRUDEOILM" else 2)
+    lot_size = r.get("lot_size", 10 if name == "CRUDEOILM" else (65 if name == "NIFTY" else 30))
+    tot_qty = r.get("total_qty", lots * lot_size)
+    est_margin = float(r.get("est_margin", 0.0) or 0.0)
+    atm_prem = float(r.get("atm_premium", 0.0) or 0.0)
+    prd_label = r.get("product_type_label", "NRML" if name == "CRUDEOILM" else "MIS")
+
     return (
         f'<div style="background:{p["surface"]};border:1px solid {p["border"]};border-radius:14px;padding:15px;color:{p["text"]} !important;">'
         f'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">'
@@ -216,6 +223,10 @@ def _render_radar_card(
         f'<div style="font-size:11px;color:{p["muted"]} !important;margin-bottom:6px;">Candidate: '
         f'<strong style="color:{p["text"]} !important;">{html.escape(str(r.get("candidate_ce", "--")))}</strong> | '
         f'<strong style="color:{p["text"]} !important;">{html.escape(str(r.get("candidate_pe", "--")))}</strong></div>'
+        f'<div style="font-size:11px;color:{p["muted"]} !important;margin-bottom:6px;display:flex;justify-content:space-between;flex-wrap:wrap;gap:4px;">'
+        f'<span>Position Size: <strong style="color:{p["text"]} !important;">{lots} lot{"s" if lots>1 else ""} ({tot_qty} qty)</strong></span>'
+        f'<span>Type: <strong style="color:{p["accent"]} !important;">{prd_label}</strong></span>'
+        f'<span>Approx Margin: <strong style="color:{p["green"]} !important;">₹{est_margin:,.2f}</strong> (@ ₹{atm_prem:.2f} ATM)</span></div>'
         f'<div style="font-size:12px;padding:8px 10px;border-radius:8px;background:{banner_bg};'
         f'border:1px solid {banner_border};color:{banner_fg} !important;font-weight:{"600" if is_imm else "400"};">'
         f'{html.escape(str(r.get("radar_summary", "")))}</div></div>'
@@ -536,6 +547,7 @@ def connect_account_ui(
 def change_orb_window_ui(window_choice: str) -> Tuple[str, str]:
     """Change ORB anchor & duration dynamically."""
     mapping = {
+        "30m (09:15-09:45 Master ORB)": ("09:15", 30),
         "15m (09:15-09:30 Morning)": ("09:15", 15),
         "5m (09:15-09:20 Fast)": ("09:15", 5),
         "30m (09:15-09:45)": ("09:15", 30),
@@ -583,7 +595,8 @@ def build_gradio_demo() -> Any:
 
     with gr.Blocks(title="Shoonya Automated ORB Terminal") as blocks:
         status_banner = gr.Markdown(
-            f"Terminal initialized in **{orchestrator.settings.mode}** mode."
+            f"Terminal initialized in **{orchestrator.settings.mode}** mode. "
+            f"⚡ **Master Alpha 15% Strategy Active** (30m ORB • Tuesday 1.5x Booster • Weekly Loss Guard • 20 EMA Bias)"
         )
         with gr.Row():
             theme_selector = gr.Dropdown(
@@ -593,6 +606,7 @@ def build_gradio_demo() -> Any:
             )
             orb_window_selector = gr.Dropdown(
                 choices=[
+                    "30m (09:15-09:45 Master ORB)",
                     "15m (09:15-09:30 Morning)",
                     "5m (09:15-09:20 Fast)",
                     "30m (09:15-09:45)",
@@ -609,13 +623,14 @@ def build_gradio_demo() -> Any:
                     "Recent 15-Min (Auto Anchor)",
                     "Recent 5-Min (Immediate Test)",
                 ],
-                value="15m (09:15-09:30 Morning)",
+                value="30m (09:15-09:45 Master ORB)",
                 label="ORB Anchor Window",
             )
             cutoff_selector = gr.Dropdown(
                 choices=[
                     "11:30",
                     "12:30",
+                    "13:15",
                     "13:30",
                     "14:00",
                     "14:15",

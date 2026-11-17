@@ -8,7 +8,7 @@ from typing import Dict, Optional, Sequence
 
 from config.settings import INDEX_SPECS, IST, AppSettings
 from engine.candle_builder import Candle
-from engine.indicators import calculate_intraday_vwap, calculate_wilder_rsi
+from engine.indicators import calculate_ema, calculate_intraday_vwap, calculate_wilder_rsi
 from utils.logger import get_logger
 
 logger = get_logger("engine.strategy_orb")
@@ -131,9 +131,22 @@ class ORBStrategy:
             state.last_rsi = calculate_wilder_rsi([c.close for c in candles_seq], period=14)
 
         max_range_limit = 2.50 if is_mcx else self.settings.max_orb_range_pct
+        min_range_limit = 0.05 if is_mcx else getattr(self.settings, "min_orb_range_pct", 0.0)
         if range_pct > max_range_limit:
             state.no_trade_reason = (
                 f"Range {range_pct:.2f}% > {max_range_limit:.2f}%"
+            )
+            logger.warning(
+                "%s marked NO-TRADE for %s: ORH=%.2f ORL=%.2f (%s)",
+                index_name,
+                target_date,
+                orh,
+                orl,
+                state.no_trade_reason,
+            )
+        elif min_range_limit > 0 and range_pct < min_range_limit:
+            state.no_trade_reason = (
+                f"Range {range_pct:.2f}% < {min_range_limit:.2f}% (Chop filter)"
             )
             logger.warning(
                 "%s marked NO-TRADE for %s: ORH=%.2f ORL=%.2f (%s)",
@@ -217,7 +230,47 @@ class ORBStrategy:
         rsi_bear = 48.0 if is_mcx else 40.0
 
         close_px = closed_candle.close
-        if close_px > state.orh and close_px > vwap and rsi > rsi_bull:
+        ce_signal = (close_px > state.orh) and (close_px > vwap) and (rsi > rsi_bull)
+        pe_signal = (close_px < state.orl) and (close_px < vwap) and (rsi < rsi_bear)
+
+        if not is_mcx:
+            # 1. Day Open Bias Filter (CE requires Spot > Open; PE requires Spot < Open)
+            if getattr(self.settings, "daily_bias_filter", False) and candles_seq:
+                day_open = candles_seq[0].open
+                if ce_signal and close_px <= day_open:
+                    logger.info("%s CE skipped: Spot %.2f <= Day Open %.2f", index_name, close_px, day_open)
+                    ce_signal = False
+                if pe_signal and close_px >= day_open:
+                    logger.info("%s PE skipped: Spot %.2f >= Day Open %.2f", index_name, close_px, day_open)
+                    pe_signal = False
+
+            # 2. 20 EMA Filter (CE requires Spot > 20 EMA; PE requires Spot < 20 EMA)
+            if getattr(self.settings, "use_ema_filter", False):
+                ema20 = calculate_ema([c.close for c in candles_seq], period=20)
+                if ema20 is not None:
+                    if ce_signal and close_px <= ema20:
+                        logger.info("%s CE skipped: Spot %.2f <= 20 EMA %.2f", index_name, close_px, ema20)
+                        ce_signal = False
+                    if pe_signal and close_px >= ema20:
+                        logger.info("%s PE skipped: Spot %.2f >= 20 EMA %.2f", index_name, close_px, ema20)
+                        pe_signal = False
+
+            # 3. Decisive Candle Body Ratio Filter
+            min_body_ratio = getattr(self.settings, "min_candle_body_ratio", 0.0)
+            if min_body_ratio > 0 and (ce_signal or pe_signal):
+                c_range = closed_candle.high - closed_candle.low
+                c_body = abs(closed_candle.close - closed_candle.open)
+                if c_range > 0 and (c_body / c_range) < min_body_ratio:
+                    logger.info(
+                        "%s signal skipped: Candle body ratio %.2f < %.2f",
+                        index_name,
+                        c_body / c_range,
+                        min_body_ratio,
+                    )
+                    ce_signal = False
+                    pe_signal = False
+
+        if ce_signal:
             state.last_signal = f"CE @ {close_px:.2f} (RSI {rsi:.1f})"
             return ORBSignal(
                 index_name=index_name,
@@ -231,7 +284,7 @@ class ORBStrategy:
                 india_vix=vix_val,
             )
 
-        if close_px < state.orl and close_px < vwap and rsi < rsi_bear:
+        if pe_signal:
             state.last_signal = f"PE @ {close_px:.2f} (RSI {rsi:.1f})"
             return ORBSignal(
                 index_name=index_name,

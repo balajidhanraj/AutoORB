@@ -72,3 +72,16 @@ def calculate_wilder_rsi(closes: Sequence[float], period: int = 14) -> float:
     rs = avg_gain / avg_loss
     rsi = 100.0 - (100.0 / (1.0 + rs))
     return round(rsi, 2)
+
+
+def calculate_ema(closes: Sequence[float], period: int = 20) -> Optional[float]:
+    """Calculate Exponential Moving Average (EMA)."""
+    if period <= 0:
+        raise ValueError("EMA period must be positive")
+    if len(closes) < period:
+        return None
+    k = 2.0 / (period + 1)
+    ema = float(closes[0])
+    for px in closes[1:]:
+        ema = (float(px) * k) + (ema * (1.0 - k))
+    return round(ema, 2)

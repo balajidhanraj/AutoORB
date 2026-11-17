@@ -63,10 +63,10 @@ INDEX_SPECS: Dict[str, IndexSpec] = {
         default_lots=2,
         strike_step=50,
         expiry_type="WEEKLY_TUESDAY",
-        sl_pts=20.0,
+        sl_pts=25.0,
         sl_buffer_pts=3.0,
-        breakeven_trigger_pts=25.0,
-        target1_pts=30.0,
+        breakeven_trigger_pts=20.0,
+        target1_pts=40.0,
         trail_step_pts=15.0,
     ),
     "BANKNIFTY": IndexSpec(
@@ -80,8 +80,8 @@ INDEX_SPECS: Dict[str, IndexSpec] = {
         expiry_type="MONTHLY_LAST_TUESDAY",
         sl_pts=45.0,
         sl_buffer_pts=5.0,
-        breakeven_trigger_pts=55.0,
-        target1_pts=65.0,
+        breakeven_trigger_pts=45.0,
+        target1_pts=80.0,
         trail_step_pts=30.0,
         product_type="I",
     ),
@@ -101,7 +101,7 @@ INDEX_SPECS: Dict[str, IndexSpec] = {
         trail_step_pts=10.0,
         target_delta_min=0.40,
         target_delta_max=0.75,
-        product_type="I",
+        product_type="M",
     ),
 }
 
@@ -133,7 +133,13 @@ class AppSettings(BaseModel):
     max_trades_per_day: int = Field(default=2)
 
     min_india_vix: float = Field(default=12.0)
-    max_orb_range_pct: float = Field(default=0.75)
+    min_orb_range_pct: float = Field(default=0.0)
+    max_orb_range_pct: float = Field(default=0.85)
+    daily_bias_filter: bool = Field(default=True)
+    use_ema_filter: bool = Field(default=True)
+    min_candle_body_ratio: float = Field(default=0.40)
+    tuesday_expiry_boost: bool = Field(default=True)
+    max_weekly_losses: int = Field(default=2)
     entry_slippage_buffer: float = Field(default=2.5)
     paper_slippage_pts: float = Field(default=1.0)
     entry_modify_timeout_sec: float = Field(default=10.0)
@@ -209,7 +215,13 @@ def load_settings(env_path: str | Path | None = None) -> AppSettings:
         max_daily_loss=float(os.getenv("MAX_DAILY_LOSS", "5000") or 5000),
         max_trades_per_day=int(os.getenv("MAX_TRADES_PER_DAY", "2") or 2),
         min_india_vix=float(os.getenv("MIN_INDIA_VIX", "12.0") or 12.0),
-        max_orb_range_pct=float(os.getenv("MAX_ORB_RANGE_PCT", "0.75") or 0.75),
+        min_orb_range_pct=float(os.getenv("MIN_ORB_RANGE_PCT", "0.0") or 0.0),
+        max_orb_range_pct=float(os.getenv("MAX_ORB_RANGE_PCT", "0.85") or 0.85),
+        daily_bias_filter=_parse_bool(os.getenv("DAILY_BIAS_FILTER"), default=True),
+        use_ema_filter=_parse_bool(os.getenv("USE_EMA_FILTER"), default=True),
+        min_candle_body_ratio=float(os.getenv("MIN_CANDLE_BODY_RATIO", "0.40") or 0.40),
+        tuesday_expiry_boost=_parse_bool(os.getenv("TUESDAY_EXPIRY_BOOST"), default=True),
+        max_weekly_losses=int(os.getenv("MAX_WEEKLY_LOSSES", "2") or 2),
         telegram_bot_token=os.getenv("TELEGRAM_BOT_TOKEN", "").strip(),
         telegram_chat_id=os.getenv("TELEGRAM_CHAT_ID", "").strip(),
         ui_host=os.getenv("UI_HOST", "0.0.0.0").strip(),

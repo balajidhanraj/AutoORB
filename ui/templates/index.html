@@ -764,6 +764,7 @@
           style="background:#059669;color:#fff;font-weight:600;"
           title="Trigger auto-order pipeline into Shoonya Broker Terminal and app">⚡ Auto-Order Now</button>
         <a class="btn" href="/api/trades/csv">CSV</a>
+        <a class="btn" href="/backtest" target="_blank" style="background:#4338ca;color:#fff;font-weight:600;" title="Open 6-Month Backtest Analytics Dashboard">📊 Backtest</a>
         <button class="btn-kill" onclick="triggerKillSwitch()">KILL SWITCH</button>
       </div>
     </header>
@@ -984,6 +985,15 @@
       ].map(([lbl, ok]) => `<span class="gate-chip ${ok ? 'pass' : ''}">${ok ? '✓' : '○'} ${lbl}</span>`).join("");
 
       const isImm = r.radar_state === "IMMINENT_CE_BREAKOUT" || r.radar_state === "IMMINENT_PE_BREAKOUT";
+      const currentLots = r.lots || (name === 'CRUDEOILM' ? 1 : 2);
+      const currentProd = r.product_type || (name === 'CRUDEOILM' ? 'M' : 'I');
+      const lotSize = r.lot_size || (name === 'NIFTY' ? 65 : (name === 'BANKNIFTY' ? 30 : 10));
+      const activeEl = document.activeElement;
+      const userSelectedVal = (activeEl && activeEl.id === `lots-select-${name}`) ? activeEl.value : null;
+      const selVal = userSelectedVal ? parseInt(userSelectedVal) : currentLots;
+      const userSelectedProd = (activeEl && activeEl.id === `prod-select-${name}`) ? activeEl.value : null;
+      const selProd = userSelectedProd ? userSelectedProd : (currentProd === 'M' ? 'NRML' : 'MIS');
+
       el.innerHTML = `
         <div class="section-title"><span>${esc(name)} Spot &amp; Auto-Order Radar</span>${statusBadge}</div>
         <div class="kv-grid">
@@ -999,12 +1009,39 @@
         </div>
         <div class="progress-wrap"><div class="progress-fill" style="width:${r.readiness_pct ?? 0}%"></div></div>
         <div class="gates-row">${gates}</div>
+        <div style="margin:6px 0;padding:6px 8px;background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:6px;display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:6px;font-size:0.75rem;">
+          <div style="display:flex;align-items:center;gap:8px;">
+            <div style="display:flex;align-items:center;gap:4px;">
+              <span style="color:var(--muted);font-weight:600;">Lots:</span>
+              <select id="lots-select-${name}" onchange="updateIndexLots('${esc(name)}', this.value)" style="background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:2px 6px;font-size:0.75rem;cursor:pointer;">
+                ${[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(n => `<option value="${n}" ${n === selVal ? 'selected' : ''}>${n} lot${n > 1 ? 's' : ''} (${n * lotSize} qty)</option>`).join('')}
+              </select>
+            </div>
+            <div style="display:flex;align-items:center;gap:4px;">
+              <span style="color:var(--muted);font-weight:600;">Type:</span>
+              <select id="prod-select-${name}" onchange="updateIndexProductType('${esc(name)}', this.value)" style="background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:2px 6px;font-size:0.75rem;cursor:pointer;">
+                <option value="MIS" ${selProd === 'MIS' ? 'selected' : ''}>MIS</option>
+                <option value="NRML" ${selProd === 'NRML' ? 'selected' : ''}>NRML</option>
+              </select>
+            </div>
+          </div>
+          <div style="text-align:right;">
+            <span style="color:var(--muted);">Approx Margin: </span>
+            <strong style="color:var(--pos, #10b981);">₹${fmt(r.est_margin || 0)}</strong>
+            <small style="color:var(--muted);font-size:0.7rem;display:block;">(@ ₹${fmt(r.atm_premium || 0)} ATM)</small>
+          </div>
+        </div>
         <div style="font-size:0.74rem;color:var(--muted);display:flex;justify-content:space-between;align-items:center;">
           <span>Candidate: <strong>${esc(r.candidate_ce || '--')}</strong></span>
           <button onclick="triggerAutoBreakoutOrder('${esc(name)}')" style="padding:2px 8px;font-size:0.7rem;font-weight:600;border-radius:4px;background:#2563eb;color:#fff;border:none;cursor:pointer;" title="Execute strategy entry order immediately for ${esc(name)}">⚡ Trigger Order</button>
         </div>
         <div class="radar-banner ${isImm ? 'imminent' : ''}">${esc(r.radar_summary || ('Waiting for ' + endT + ' ORB lock.'))}</div>
       `;
+      if (activeEl && activeEl.id === `lots-select-${name}`) {
+        document.getElementById(`lots-select-${name}`)?.focus();
+      } else if (activeEl && activeEl.id === `prod-select-${name}`) {
+        document.getElementById(`prod-select-${name}`)?.focus();
+      }
     }
 
     function renderSnapshot(data) {
@@ -1332,18 +1369,35 @@
       }
     }
 
-    async function applyEntryCutoff(val) {
+    async function updateIndexLots(indexName, val) {
       if (!val) return;
       try {
-        const res = await fetch("/api/settings/entry-cutoff", {
+        const res = await fetch("/api/settings/lots", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ cutoff_time: val })
+          body: JSON.stringify({ index_name: indexName, lots: parseInt(val) })
         });
         const data = await res.json();
         if (data.snapshot) renderSnapshot(data.snapshot);
+        showNote("funds-msg", data.ok, data.message || `Updated lots for ${indexName}`);
       } catch (err) {
-        console.error("Failed setting entry cutoff:", err);
+        showNote("funds-msg", false, `Failed to update lots for ${indexName}: ` + err);
+      }
+    }
+
+    async function updateIndexProductType(indexName, val) {
+      if (!val) return;
+      try {
+        const res = await fetch("/api/settings/product-type", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ index_name: indexName, product_type: val })
+        });
+        const data = await res.json();
+        if (data.snapshot) renderSnapshot(data.snapshot);
+        showNote("funds-msg", data.ok, data.message || `Updated order type for ${indexName}`);
+      } catch (err) {
+        showNote("funds-msg", false, `Failed to update order type for ${indexName}: ` + err);
       }
     }
 

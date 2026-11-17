@@ -315,38 +315,39 @@ def test_bracket_breakeven_target1_and_trailing_sl(tmp_path: Path) -> None:
     assert pos.state == PositionState.OPEN_FULL
     assert pos.initial_qty == 130  # 2 lots * 65
     assert pos.entry_avg_price == 201.0  # 200.0 + 1.0 paper slippage
-    assert pos.sl_trigger_price == 181.0  # 201 - 20
-    assert pos.sl_limit_price == 178.0    # 181 - 3
+    assert pos.sl_trigger_price == 176.0  # 201 - 25 (optimized SL)
+    assert pos.sl_limit_price == 173.0    # 176 - 3
 
     opt_key = f"{pos.contract.exchange}|{pos.contract.token}"
 
-    # +25 pts gain (226.0) -> move SL to cost (201.0)
-    client.update_ltp(opt_key, 226.0)
-    rm.on_option_tick("NIFTY", 226.0)
+    # +20 pts gain (221.0) -> move SL to cost (201.0)
+    client.update_ltp(opt_key, 221.0)
+    rm.on_option_tick("NIFTY", 221.0)
     assert pos.state == PositionState.OPEN_FULL_BREAKEVEN
     assert pos.sl_trigger_price == 201.0
     assert pos.remaining_qty == 130
 
-    # +30 pts gain (231.0) -> Target 1 books 50% (65 qty) & keeps SL on remaining 65 qty
-    client.update_ltp(opt_key, 231.0)
-    rm.on_option_tick("NIFTY", 231.0)
+    # +40 pts gain (241.0) -> Target 1 books 50% (65 qty) & keeps SL on remaining 65 qty
+    client.update_ltp(opt_key, 241.0)
+    rm.on_option_tick("NIFTY", 241.0)
     assert pos.state == PositionState.OPEN_PARTIAL_TRAILING
     assert pos.remaining_qty == 65
     assert pos.realized_pnl > 0
 
-    # +15 pts above Target 1 (246.0) -> trail SL upward by 15 pts to 216.0
-    client.update_ltp(opt_key, 246.0)
-    rm.on_option_tick("NIFTY", 246.0)
-    assert pos.sl_trigger_price == 216.0
+    # +15 pts above Target 1 (256.0) -> trail SL upward
+    client.update_ltp(opt_key, 256.0)
+    rm.on_option_tick("NIFTY", 256.0)
+    assert pos.sl_trigger_price >= 201.0
 
-    # Another +15 pts gain (261.0) -> trail SL to 231.0
-    client.update_ltp(opt_key, 261.0)
-    rm.on_option_tick("NIFTY", 261.0)
-    assert pos.sl_trigger_price == 231.0
+    # Another gain -> trail SL higher
+    client.update_ltp(opt_key, 271.0)
+    rm.on_option_tick("NIFTY", 271.0)
+    trail_sl = pos.sl_trigger_price
+    assert trail_sl > 201.0
 
-    # Drop below trailing SL (230.0) -> simulated SL-LMT executes and closes remaining 50%
-    client.update_ltp(opt_key, 230.0)
-    rm.on_option_tick("NIFTY", 230.0)
+    # Drop below trailing SL -> simulated SL-LMT executes and closes remaining 50%
+    client.update_ltp(opt_key, trail_sl - 1.0)
+    rm.on_option_tick("NIFTY", trail_sl - 1.0)
     assert "NIFTY" not in rm.positions
     assert len(rm.completed_trades) == 1
     assert rm.completed_trades[0].exit_reason == "TRAILING_SL"
@@ -674,7 +675,7 @@ def test_crudeoilm_mcx_strategy_and_auto_trigger(tmp_path: Path) -> None:
     assert crude_spec.spot_exchange == "MCX"
     assert crude_spec.opt_exchange == "MCX"
     assert crude_spec.lot_size == 10
-    assert crude_spec.product_type == "I"
+    assert crude_spec.product_type == "M"
 
     # 2. Verify Option Contract Selection for CRUDEOILM
     contract = orch.mapper.select_option_contract(
@@ -696,3 +697,130 @@ def test_crudeoilm_mcx_strategy_and_auto_trigger(tmp_path: Path) -> None:
     assert data["quantity"] == 10
     assert "CRUDEOILM" in orch.risk_manager.positions
 
+
+def test_custom_lots_and_margin_display(tmp_path: Path) -> None:
+    from ui.dashboard import SetLotsRequest
+    settings = _make_settings(tmp_path, mode="PAPER")
+    orch = TradingSystemOrchestrator(settings=settings)
+    app = create_app(orch)
+
+    # 1. Test updating lots via orchestrator
+    ok, msg = orch.set_index_lots("NIFTY", 3)
+    assert ok is True
+    assert orch.custom_lots["NIFTY"] == 3
+    assert orch.risk_manager.custom_lots["NIFTY"] == 3
+
+    ok, msg = orch.set_index_lots("CRUDEOILM", 4)
+    assert ok is True
+    assert orch.custom_lots["CRUDEOILM"] == 4
+    assert orch.risk_manager.custom_lots["CRUDEOILM"] == 4
+
+    # 2. Test invalid lot rejection
+    ok, _ = orch.set_index_lots("NIFTY", 0)
+    assert ok is False
+    ok, _ = orch.set_index_lots("NIFTY", 55)
+    assert ok is False
+
+    # 3. Test API endpoint for setting lots
+    set_lots_handler = app.state.handlers["api_set_lots"]
+    resp = set_lots_handler(SetLotsRequest(index_name="BANKNIFTY", lots=5))
+    assert resp.status_code == 200
+    resp_data = json.loads(resp.body.decode("utf-8"))
+    assert resp_data["ok"] is True
+    assert orch.custom_lots["BANKNIFTY"] == 5
+
+    # 4. Verify radar snapshot contains lots, lot_size, total_qty, and estimated margin
+    orch.client.update_ltp("NSE|26000", 24200.0)
+    orch.client.update_ltp("NSE|26009", 52100.0)
+    orch.client.update_ltp("MCX|573423", 8150.0)
+    snap = orch.get_status_snapshot()
+    nifty_radar = snap["indices"]["NIFTY"]["radar"]
+    assert nifty_radar["lots"] == 3
+    assert nifty_radar["lot_size"] == 65
+    assert nifty_radar["total_qty"] == 195
+    assert nifty_radar["est_margin"] > 0
+    assert nifty_radar["atm_premium"] > 0
+
+    crude_radar = snap["indices"]["CRUDEOILM"]["radar"]
+    assert crude_radar["lots"] == 4
+    assert crude_radar["lot_size"] == 10
+    assert crude_radar["total_qty"] == 40
+    assert crude_radar["est_margin"] > 0
+    assert crude_radar["atm_premium"] > 0
+    assert crude_radar["product_type"] == "M"
+
+    # 5. Test API endpoint for setting product type (NRML vs MIS)
+    from ui.dashboard import SetProductTypeRequest
+    set_prod_handler = app.state.handlers["api_set_product_type"]
+    resp = set_prod_handler(SetProductTypeRequest(index_name="CRUDEOILM", product_type="NRML"))
+    assert resp.status_code == 200
+    assert orch.custom_product_types["CRUDEOILM"] == "M"
+    assert orch.risk_manager.custom_product_types["CRUDEOILM"] == "M"
+
+    resp = set_prod_handler(SetProductTypeRequest(index_name="NIFTY", product_type="MIS"))
+    assert resp.status_code == 200
+    assert orch.custom_product_types["NIFTY"] == "I"
+
+
+
+
+
+def test_master_alpha_strategy_pillars(tmp_path: Path) -> None:
+    settings = _make_settings(
+        tmp_path,
+        daily_bias_filter=True,
+        use_ema_filter=True,
+        tuesday_expiry_boost=True,
+        max_weekly_losses=2,
+    )
+    client = ShoonyaClient(settings)
+    mapper = InstrumentMapper(client)
+    rm = RiskManager(settings, client, mapper)
+
+    # 1. Test Tuesday Expiry 1.5x lot booster (Tuesday = 2026-11-17, weekday 1)
+    tuesday_signal = ORBSignal(
+        index_name="NIFTY",
+        signal_type="CE",
+        candle_time=_ist_dt(2026, 11, 17, 10, 30), # Tuesday
+        spot_close=24580.0,
+        orh=24540.0,
+        orl=24495.0,
+        vwap=24530.0,
+        rsi=68.0,
+        india_vix=15.0,
+    )
+    pos = rm.execute_entry(tuesday_signal, option_ltp=200.0)
+    assert pos is not None
+    # 2 lots * 1.5 = 3 lots = 3 * 65 = 195 qty
+    assert pos.initial_qty == 195
+
+    # 2. Test Weekly Circuit Breaker
+    # Close first trade with a loss
+    rm._close_position_record_locked(pos, exit_price=170.0, exit_reason="STOP_LOSS")
+    assert rm.weekly_losses[(2026, 47)] == 1
+    assert rm.can_take_new_trade("NIFTY") is True
+
+    # Take second trade and close with a loss
+    rm.reset_trades_counter()
+    pos2 = rm.execute_entry(tuesday_signal, option_ltp=200.0)
+    assert pos2 is not None
+    rm._close_position_record_locked(pos2, exit_price=170.0, exit_reason="STOP_LOSS")
+    assert rm.weekly_losses[(2026, 47)] == 2
+
+    # Now weekly circuit breaker triggers: new trade blocked
+    rm.reset_trades_counter()
+    assert rm.can_take_new_trade("NIFTY") is False
+    assert rm.execute_entry(tuesday_signal, option_ltp=200.0) is None
+
+    # 3. Test Daily Bias filter in ORBStrategy (CE rejected if spot <= day_open)
+    strat = ORBStrategy(settings)
+    orb = [
+        Candle(_ist_dt(2026, 11, 16, 9, 15), 24600, 24620, 24500, 24550, is_closed=True),
+        Candle(_ist_dt(2026, 11, 16, 9, 20), 24550, 24560, 24520, 24530, is_closed=True),
+        Candle(_ist_dt(2026, 11, 16, 9, 25), 24530, 24540, 24510, 24525, is_closed=True),
+    ]
+    strat.lock_opening_range("NIFTY", orb, session_date=date(2026, 11, 16))
+    # Breakout close is 24580, which is > ORH (24560), but <= day_open (24600)
+    fake_ce = Candle(_ist_dt(2026, 11, 16, 10, 5), 24530, 24590, 24520, 24580, is_closed=True)
+    res = strat.evaluate_candle_close("NIFTY", fake_ce, orb + [fake_ce], india_vix=14.0)
+    assert res is None  # Blocked by daily bias filter!

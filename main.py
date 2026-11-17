@@ -64,6 +64,13 @@ class TradingSystemOrchestrator:
         self._loop_thread: Optional[threading.Thread] = None
         self._last_reconcile_monotonic: float = 0.0
 
+        self.custom_lots: Dict[str, int] = {
+            name: spec.default_lots for name, spec in INDEX_SPECS.items()
+        }
+        self.custom_product_types: Dict[str, str] = {
+            name: spec.product_type for name, spec in INDEX_SPECS.items()
+        }
+
         # Track daily schedule milestones by IST date
         self._milestone_done: Dict[str, date] = {}
         self.public_ip: str = "detecting..."
@@ -441,6 +448,51 @@ class TradingSystemOrchestrator:
         logger.info(msg)
         return True, msg
 
+    def set_index_lots(self, index_name: str, lots: int) -> Tuple[bool, str]:
+        """Configure user-selected trade lots per instrument (1 to 50 lots)."""
+        idx = index_name.strip().upper()
+        if idx not in INDEX_SPECS:
+            return False, f"Unknown instrument '{index_name}'. Valid: {list(INDEX_SPECS.keys())}"
+        try:
+            val = int(lots)
+        except (ValueError, TypeError):
+            return False, "Lot count must be an integer."
+        if val < 1 or val > 50:
+            return False, "Lot count must be between 1 and 50."
+
+        with self._lock:
+            self.custom_lots[idx] = val
+            self.risk_manager.set_index_lots(idx, val)
+
+        spec = INDEX_SPECS[idx]
+        tot_qty = spec.lot_size * val
+        msg = f"Updated {idx} to {val} lot(s) ({tot_qty} quantity)."
+        logger.info(msg)
+        return True, msg
+
+    def set_index_product_type(self, index_name: str, product_type: str) -> Tuple[bool, str]:
+        """Configure order product type (NRML or MIS) per instrument."""
+        idx = index_name.strip().upper()
+        if idx not in INDEX_SPECS:
+            return False, f"Unknown instrument '{index_name}'."
+        norm = product_type.strip().upper()
+        if norm in {"M", "NRML", "NORMAL"}:
+            val = "M"
+            lbl = "NRML (Normal)"
+        elif norm in {"I", "MIS", "INTRADAY"}:
+            val = "I"
+            lbl = "MIS (Intraday)"
+        else:
+            return False, f"Invalid product type '{product_type}'. Choose NRML or MIS."
+
+        with self._lock:
+            self.custom_product_types[idx] = val
+            self.risk_manager.set_index_product_type(idx, val)
+
+        msg = f"Updated {idx} order product type to {lbl}."
+        logger.info(msg)
+        return True, msg
+
     def trigger_auto_order(
         self,
         index_name: str = "BANKNIFTY",
@@ -502,11 +554,12 @@ class TradingSystemOrchestrator:
             india_vix=vix,
         )
 
+        active_lots = self.custom_lots.get(idx, spec.default_lots)
         logger.info(
-            "Triggering automated strategy entry: %s %s spot=%.2f VWAP=%.2f RSI=%.1f (MODE=%s)",
-            idx, sig_type, spot_ltp, vwap, rsi, self.settings.mode
+            "Triggering automated strategy entry: %s %s spot=%.2f VWAP=%.2f RSI=%.1f lots=%d (MODE=%s)",
+            idx, sig_type, spot_ltp, vwap, rsi, active_lots, self.settings.mode
         )
-        pos = self.risk_manager.execute_entry(signal)
+        pos = self.risk_manager.execute_entry(signal, lots=active_lots)
         if pos is None:
             return False, "Strategy entry execution skipped or rejected by risk manager.", {}
 
@@ -680,12 +733,28 @@ class TradingSystemOrchestrator:
         dist_to_orh = round(st.orh - spot_ltp, 2) if (spot_ltp is not None and st.orh is not None) else None
         dist_to_orl = round(spot_ltp - st.orl, 2) if (spot_ltp is not None and st.orl is not None) else None
 
+        lots = self.custom_lots.get(index_name, spec.default_lots)
+        product_type = self.custom_product_types.get(index_name, spec.product_type)
+        product_type_label = "NRML" if product_type == "M" else "MIS"
+        total_qty = spec.lot_size * lots
+        atm_premium = 120.0 if index_name == "NIFTY" else (260.0 if index_name == "BANKNIFTY" else 110.0)
+
         candidate_ce = "--"
         candidate_pe = "--"
         if spot_ltp is not None and spot_ltp > 0:
             strike = round_to_strike(spot_ltp, spec.strike_step)
-            candidate_ce = f"{index_name} {strike} CE ({spec.default_quantity} qty)"
-            candidate_pe = f"{index_name} {strike} PE ({spec.default_quantity} qty)"
+            candidate_ce = f"{index_name} {strike} CE ({total_qty} qty / {lots} lot [{product_type_label}])"
+            candidate_pe = f"{index_name} {strike} PE ({total_qty} qty / {lots} lot [{product_type_label}])"
+            try:
+                c = self.mapper.select_option_contract(index_name, spot_ltp, "CE", vix=vix or 15.0)
+                token_key = f"{c.exchange}|{c.token}"
+                cached_ltp = self.client.get_ltp(token_key)
+                if cached_ltp is not None and cached_ltp > 0:
+                    atm_premium = float(cached_ltp)
+            except Exception:
+                pass
+
+        est_margin = round(total_qty * atm_premium, 2)
 
         ce_score = sum([system_ready, vix_ready, orb_ready, ce_price_ok, ce_rsi_ok])
         pe_score = sum([system_ready, vix_ready, orb_ready, pe_price_ok, pe_rsi_ok])
@@ -741,6 +810,13 @@ class TradingSystemOrchestrator:
             "readiness_pct": readiness_pct,
             "radar_state": radar_state,
             "radar_summary": radar_summary,
+            "lots": lots,
+            "product_type": product_type,
+            "product_type_label": product_type_label,
+            "lot_size": spec.lot_size,
+            "total_qty": total_qty,
+            "atm_premium": round(atm_premium, 2),
+            "est_margin": est_margin,
         }
 
     def _build_schedule_status(self, now_ist: datetime) -> Dict[str, Any]:

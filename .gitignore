@@ -11,6 +11,8 @@ data/*.json
 logs/
 *.log
 data/trades_*.csv
+data/historical/
+data/backtest/
 
 # Python artifacts
 __pycache__/

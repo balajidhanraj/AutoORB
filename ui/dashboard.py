@@ -60,6 +60,16 @@ class PositionExitRequest(BaseModel):
     index_name: str = "CRUDEOILM"
 
 
+class SetLotsRequest(BaseModel):
+    index_name: str = "NIFTY"
+    lots: int = 2
+
+
+class SetProductTypeRequest(BaseModel):
+    index_name: str = "CRUDEOILM"
+    product_type: str = "NRML"
+
+
 def create_app(orchestrator: Any) -> FastAPI:
     """Build and return the FastAPI web dashboard application."""
     app = FastAPI(title="Shoonya ORB Algo Terminal", version="1.0.0")
@@ -73,6 +83,13 @@ def create_app(orchestrator: Any) -> FastAPI:
             name="index.html",
             context={"snapshot": snapshot},
         )
+
+    @app.get("/backtest", response_class=HTMLResponse)
+    def backtest_view() -> HTMLResponse:
+        dash_path = Path(__file__).resolve().parent.parent / "data" / "backtest" / "backtest_dashboard.html"
+        if dash_path.exists():
+            return HTMLResponse(content=dash_path.read_text(encoding="utf-8"))
+        return HTMLResponse(content="<h1>Backtest dashboard file not found.</h1>")
 
     @app.get("/api/status")
     def api_status() -> JSONResponse:
@@ -263,6 +280,28 @@ def create_app(orchestrator: Any) -> FastAPI:
             }
         )
 
+    @app.post("/api/settings/lots")
+    def api_set_lots(payload: SetLotsRequest) -> JSONResponse:
+        ok, msg = orchestrator.set_index_lots(payload.index_name, payload.lots)
+        return JSONResponse(
+            content={
+                "ok": ok,
+                "message": msg,
+                "snapshot": orchestrator.get_status_snapshot(),
+            }
+        )
+
+    @app.post("/api/settings/product-type")
+    def api_set_product_type(payload: SetProductTypeRequest) -> JSONResponse:
+        ok, msg = orchestrator.set_index_product_type(payload.index_name, payload.product_type)
+        return JSONResponse(
+            content={
+                "ok": ok,
+                "message": msg,
+                "snapshot": orchestrator.get_status_snapshot(),
+            }
+        )
+
     @app.get("/health")
     def health() -> JSONResponse:
         return JSONResponse(content={"status": "ok", "mode": orchestrator.settings.mode})
@@ -281,6 +320,8 @@ def create_app(orchestrator: Any) -> FastAPI:
         "api_set_orb_window": api_set_orb_window,
         "api_set_orb_anchor": api_set_orb_anchor,
         "api_set_entry_cutoff": api_set_entry_cutoff,
+        "api_set_lots": api_set_lots,
+        "api_set_product_type": api_set_product_type,
         "api_auto_trigger": api_auto_trigger,
         "api_exit_position": api_exit_position,
         "api_reset_trades": api_reset_trades,

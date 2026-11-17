@@ -61,6 +61,7 @@ class ActivePosition:
     realized_pnl: float = 0.0
     unrealized_pnl: float = 0.0
     trail_steps_applied: int = 0
+    product_type: str = "I"
 
 
 @dataclass
@@ -106,8 +107,18 @@ class RiskManager:
         self.realized_pnl_today: float = 0.0
         self.halted: bool = False
         self.halt_reason: Optional[str] = None
+        self.custom_lots: Dict[str, int] = {}
+        self.custom_product_types: Dict[str, str] = {}
+        self.weekly_losses: Dict[Tuple[int, int], int] = {}
 
-    def can_take_new_trade(self, index_name: str) -> bool:
+    def set_index_lots(self, index_name: str, lots: int) -> None:
+        self.custom_lots[index_name] = max(1, int(lots))
+
+    def set_index_product_type(self, index_name: str, product_type: str) -> None:
+        norm = product_type.strip().upper()
+        self.custom_product_types[index_name] = "M" if norm in {"M", "NRML", "NORMAL"} else "I"
+
+    def can_take_new_trade(self, index_name: str, check_time: Optional[datetime] = None) -> bool:
         with self._lock:
             if self.halted:
                 return False
@@ -115,6 +126,17 @@ class RiskManager:
                 return False
             if index_name in self.positions:
                 return False
+            max_w_losses = getattr(self.settings, "max_weekly_losses", 0)
+            if max_w_losses > 0:
+                now_dt = check_time or datetime.now(IST)
+                cal_week = (now_dt.year, now_dt.isocalendar()[1])
+                w_losses = self.weekly_losses.get(cal_week, 0)
+                if w_losses >= max_w_losses:
+                    logger.warning(
+                        "Trade rejected for %s: Weekly Circuit Breaker active (%d losses in week %s >= %d)",
+                        index_name, w_losses, cal_week, max_w_losses
+                    )
+                    return False
             return True
 
     def total_mtm(self) -> float:
@@ -123,15 +145,30 @@ class RiskManager:
             partial_realized = sum(p.realized_pnl for p in self.positions.values())
             return round(self.realized_pnl_today + partial_realized + unrealized, 2)
 
-    def execute_entry(self, signal: ORBSignal, option_ltp: Optional[float] = None) -> Optional[ActivePosition]:
+    def execute_entry(
+        self,
+        signal: ORBSignal,
+        option_ltp: Optional[float] = None,
+        lots: Optional[int] = None,
+    ) -> Optional[ActivePosition]:
         """Select option strike, subscribe WebSocket, and place entry LMT order."""
         with self._lock:
-            if not self.can_take_new_trade(signal.index_name):
+            if not self.can_take_new_trade(signal.index_name, check_time=signal.candle_time):
                 logger.info("Trade rejected for %s (halted=%s, count=%d/%d)",
                             signal.index_name, self.halted, self.trades_taken_today, self.settings.max_trades_per_day)
                 return None
 
             spec: IndexSpec = INDEX_SPECS[signal.index_name]
+            base_lots = lots or self.custom_lots.get(signal.index_name) or spec.default_lots
+            # Dynamic Tuesday Expiry Sizing Booster (1.5x on high-gamma Tuesday for NSE Index options)
+            if (
+                getattr(self.settings, "tuesday_expiry_boost", False)
+                and signal.index_name in {"NIFTY", "BANKNIFTY"}
+                and signal.candle_time.weekday() == 1
+            ):
+                active_lots = int(round(base_lots * 1.5))
+            else:
+                active_lots = base_lots
             contract = self.mapper.select_option_contract(
                 index_name=signal.index_name,
                 spot_price=signal.spot_close,
@@ -213,10 +250,10 @@ class RiskManager:
                     return None
 
             self.client.update_ltp(token_key, float(ltp))
-            qty = contract.lot_size * spec.default_lots
+            qty = contract.lot_size * active_lots
             limit_px = round(float(ltp) + self.settings.entry_slippage_buffer, 1)
 
-            prd_type = getattr(spec, "product_type", "I")
+            prd_type = self.custom_product_types.get(signal.index_name) or getattr(spec, "product_type", "I")
             resp = self.client.place_order(
                 buy_or_sell="B",
                 exchange=contract.exchange,
@@ -247,6 +284,7 @@ class RiskManager:
                 entry_submitted_monotonic=time.monotonic(),
                 last_ltp=float(ltp),
                 highest_ltp=float(ltp),
+                product_type=prd_type,
             )
             self.positions[signal.index_name] = pos
             logger.info(
@@ -292,7 +330,7 @@ class RiskManager:
         spec = INDEX_SPECS[pos.index_name]
         trig_px = round(max(0.1, pos.entry_avg_price - spec.sl_pts), 1)
         limit_px = round(max(0.05, trig_px - spec.sl_buffer_pts), 1)
-        prd_type = getattr(INDEX_SPECS.get(pos.index_name), "product_type", "I") if pos.index_name in INDEX_SPECS else "I"
+        prd_type = getattr(pos, "product_type", getattr(INDEX_SPECS.get(pos.index_name), "product_type", "I"))
         resp = self.client.place_order(
             buy_or_sell="S",
             exchange=pos.contract.exchange,
@@ -443,7 +481,7 @@ class RiskManager:
 
         # Step B: Book 50% Target 1 via marketable LMT sell order
         exit_lmt = round(max(0.05, ltp - 1.0), 1)
-        prd_type = getattr(INDEX_SPECS.get(pos.index_name), "product_type", "I") if pos.index_name in INDEX_SPECS else "I"
+        prd_type = getattr(pos, "product_type", getattr(INDEX_SPECS.get(pos.index_name), "product_type", "I"))
         resp = self.client.place_order(
             buy_or_sell="S",
             exchange=pos.contract.exchange,
@@ -547,6 +585,18 @@ class RiskManager:
         self.completed_trades.append(record)
         self.positions.pop(pos.index_name, None)
 
+        # Track weekly losses for Weekly Circuit Breaker
+        if net_pnl < 0:
+            cal_week = (now_ist.year, now_ist.isocalendar()[1])
+            self.weekly_losses[cal_week] = self.weekly_losses.get(cal_week, 0) + 1
+            max_w = getattr(self.settings, "max_weekly_losses", 0)
+            if max_w > 0 and self.weekly_losses[cal_week] >= max_w:
+                logger.warning(
+                    "WEEKLY CIRCUIT BREAKER REACHED: %d losses in week %s. Halting new entries for the rest of this week.",
+                    self.weekly_losses[cal_week],
+                    cal_week,
+                )
+
         msg = (
             f"[{self.settings.mode}] CLOSED {pos.contract.tradingsymbol} ({exit_reason}) "
             f"| Gross: ₹{gross_pnl:+.2f} | Net: ₹{net_pnl:+.2f}"
@@ -642,7 +692,7 @@ class RiskManager:
             token_key = f"{pos.contract.exchange}|{pos.contract.token}"
             ltp = self.client.get_ltp(token_key) or pos.last_ltp or pos.entry_avg_price
             aggr_limit = round(max(0.05, float(ltp) - 5.0), 1)
-            prd_type = getattr(INDEX_SPECS.get(pos.index_name), "product_type", "I") if pos.index_name in INDEX_SPECS else "I"
+            prd_type = getattr(pos, "product_type", getattr(INDEX_SPECS.get(pos.index_name), "product_type", "I"))
             resp = self.client.place_order(
                 buy_or_sell="S",
                 exchange=pos.contract.exchange,
