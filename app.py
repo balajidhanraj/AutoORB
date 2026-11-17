@@ -203,12 +203,15 @@ def _render_radar_card(
     banner_border = p["green"] if is_imm else p["accent"]
     banner_fg = p["green"] if is_imm else p["text"]
 
-    lots = r.get("lots", 1 if name == "CRUDEOILM" else 2)
-    lot_size = r.get("lot_size", 10 if name == "CRUDEOILM" else (65 if name == "NIFTY" else 30))
+    lots = r.get("lots", 2)
+    lot_size = r.get("lot_size", 65 if name == "NIFTY" else 30)
     tot_qty = r.get("total_qty", lots * lot_size)
     est_margin = float(r.get("est_margin", 0.0) or 0.0)
     atm_prem = float(r.get("atm_premium", 0.0) or 0.0)
     prd_label = r.get("product_type_label", "NRML")
+    alloc_pct = r.get("alloc_pct", 50)
+    alloc_fund = float(r.get("alloc_fund", 0.0) or 0.0)
+    dynamic_lots = r.get("dynamic_lots", lots)
 
     return (
         f'<div style="background:{p["surface"]};border:1px solid {p["border"]};border-radius:14px;padding:15px;color:{p["text"]} !important;">'
@@ -225,6 +228,7 @@ def _render_radar_card(
         f'<strong style="color:{p["text"]} !important;">{html.escape(str(r.get("candidate_pe", "--")))}</strong></div>'
         f'<div style="font-size:11px;color:{p["muted"]} !important;margin-bottom:6px;display:flex;justify-content:space-between;flex-wrap:wrap;gap:4px;">'
         f'<span>Position Size: <strong style="color:{p["text"]} !important;">{lots} lot{"s" if lots>1 else ""} ({tot_qty} qty)</strong></span>'
+        f'<span>Alloc: <strong style="color:{p["accent"]} !important;">{alloc_pct}% (₹{alloc_fund:,.0f})</strong></span>'
         f'<span>Type: <strong style="color:{p["accent"]} !important;">{prd_label}</strong></span>'
         f'<span>Approx Margin: <strong style="color:{p["green"]} !important;">₹{est_margin:,.2f}</strong> (@ ₹{atm_prem:.2f} ATM)</span></div>'
         f'<div style="font-size:12px;padding:8px 10px;border-radius:8px;background:{banner_bg};'
@@ -321,11 +325,18 @@ def render_dashboard_html(theme_name: Optional[str] = None) -> str:
         ]
     )
 
+    wg = snap.get("weekly_guard") or {}
+    wg_losses = wg.get("losses", 0)
+    wg_max = wg.get("max_losses", 2)
+    wg_halted = wg.get("is_halted", False)
+    wg_sub = str(wg.get("status_text") or "0/2 Losses (ARMED)")
+
     kpis = [
         ("Live Total MTM", f"₹{mtm:.2f}", p["green"] if mtm >= 0 else p["red"], f"Max Loss: -₹{snap.get('max_daily_loss', 5000):.0f}"),
         ("Broker Cash", f"₹{_fmt_num(brk.get('cash', 0.0))}", p["text"], f"Net Avail: ₹{_fmt_num(brk.get('net_available', 0.0))}"),
-        ("Strategy Capital", f"₹{_fmt_num(snap.get('capital', 0.0))}", p["text"], "NIFTY 130 | BNF 60"),
-        ("Trades Today", f"{snap.get('trades_taken', 0)} / {snap.get('max_trades', 2)}", p["text"], "Entry cutoff: 14:15"),
+        ("Strategy Capital", f"₹{_fmt_num(snap.get('capital', 0.0))}", p["text"], "Alloc: 50% (75% Tue)"),
+        ("Trades Today", f"{snap.get('trades_taken', 0)} / {snap.get('max_trades', 2)}", p["text"], "Entry: 10:00-13:15"),
+        ("Weekly Loss Guard", f"{wg_losses} / {wg_max}", p["red"] if wg_halted else (p["amber"] if wg_losses == 1 else p["green"]), wg_sub),
         ("India VIX", _fmt_num(vix), p["text"], f"Contracts: {snap.get('cached_contracts', 0)}"),
         ("Next 5m Eval", countdown, p["red"] if halted else p["green"], str(snap.get("halt_reason") or "HALTED") if halted else "Engine: ACTIVE"),
     ]
@@ -339,12 +350,11 @@ def render_dashboard_html(theme_name: Optional[str] = None) -> str:
 
     indices = snap.get("indices", {})
     orb_start = str(snap.get("orb_start_time") or "09:15")
-    orb_end = str(snap.get("orb_end_time") or "09:30")
+    orb_end = str(snap.get("orb_end_time") or "09:45")
     col3_html = (
-        f'<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px;margin-bottom:14px;">'
+        f'<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:14px;margin-bottom:14px;">'
         f'{_render_radar_card("NIFTY", indices.get("NIFTY", {}), p, orb_start=orb_start, orb_end=orb_end)}'
         f'{_render_radar_card("BANKNIFTY", indices.get("BANKNIFTY", {}), p, orb_start=orb_start, orb_end=orb_end)}'
-        f'{_render_radar_card("CRUDEOILM", indices.get("CRUDEOILM", {}), p, orb_start=orb_start, orb_end=orb_end)}'
         f"{_render_broker_and_schedule_col(snap, p)}"
         f"</div>"
     )

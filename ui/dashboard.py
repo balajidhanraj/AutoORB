@@ -57,7 +57,7 @@ class AutoTriggerRequest(BaseModel):
 
 
 class PositionExitRequest(BaseModel):
-    index_name: str = "CRUDEOILM"
+    index_name: str = "NIFTY"
 
 
 class SetLotsRequest(BaseModel):
@@ -66,7 +66,7 @@ class SetLotsRequest(BaseModel):
 
 
 class SetProductTypeRequest(BaseModel):
-    index_name: str = "CRUDEOILM"
+    index_name: str = "NIFTY"
     product_type: str = "NRML"
 
 

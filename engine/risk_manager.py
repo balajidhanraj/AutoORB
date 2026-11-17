@@ -118,6 +118,74 @@ class RiskManager:
         norm = product_type.strip().upper()
         self.custom_product_types[index_name] = "M" if norm in {"M", "NRML", "NORMAL"} else "I"
 
+    def get_available_fund(self) -> float:
+        """Return available fund for sizing: live broker terminal net/cash in LIVE mode, or local capital + realized PnL in PAPER mode."""
+        if self.settings.mode == "LIVE":
+            try:
+                snap = self.client.get_live_broker_snapshot(force=False)
+                if isinstance(snap, dict):
+                    net_avail = float(snap.get("net_available") or 0.0)
+                    if net_avail > 0:
+                        return net_avail
+                    cash = float(snap.get("cash") or 0.0)
+                    if cash > 0:
+                        return cash
+            except Exception as exc:
+                logger.warning("Error fetching broker snapshot for available funds: %s", exc)
+        # In PAPER mode or fallback
+        return max(0.0, float(self.settings.capital) + float(self.realized_pnl_today))
+
+    def calculate_dynamic_lots(
+        self,
+        index_name: str,
+        option_ltp: float,
+        trade_time: Optional[datetime] = None,
+    ) -> int:
+        """Dynamic position sizing based on available funds and day-of-week allocation:
+        - Tuesday (expiry alpha): 75% of available funds
+        - Mon / Wed / Thu / Fri: 50% of available funds
+        - Lots = max(1, int(allocated_fund // (option_ltp * lot_size)))
+        """
+        spec = INDEX_SPECS.get(index_name)
+        if not spec:
+            return 1
+        now_dt = trade_time or datetime.now(IST)
+        is_tuesday = (now_dt.weekday() == 1)
+        alloc_pct = 0.75 if is_tuesday else 0.50
+        fund = self.get_available_fund()
+        alloc_fund = fund * alloc_pct
+        lot_size = spec.lot_size
+        cost_per_lot = float(option_ltp) * float(lot_size)
+        if cost_per_lot <= 0:
+            return spec.default_lots
+        calculated = int(alloc_fund // cost_per_lot)
+        return max(1, calculated)
+
+    def get_weekly_guard_status(self, check_time: Optional[datetime] = None) -> Dict[str, Any]:
+        """Return current calendar week loss count and circuit breaker status."""
+        now_dt = check_time or datetime.now(IST)
+        cal_week = (now_dt.year, now_dt.isocalendar()[1])
+        w_losses = self.weekly_losses.get(cal_week, 0)
+        max_w = getattr(self.settings, "max_weekly_losses", 2)
+        is_halted = (max_w > 0 and w_losses >= max_w)
+        if is_halted:
+            status_text = f"{w_losses}/{max_w} Losses (HALTED until Monday)"
+            state = "HALTED"
+        elif w_losses == 1:
+            status_text = f"1/{max_w} Losses (CAUTION)"
+            state = "CAUTION"
+        else:
+            status_text = f"{w_losses}/{max_w} Losses (ARMED)"
+            state = "ARMED"
+        return {
+            "cal_week": f"{cal_week[0]}-W{cal_week[1]:02d}",
+            "losses": w_losses,
+            "max_losses": max_w,
+            "is_halted": is_halted,
+            "status_text": status_text,
+            "state": state,
+        }
+
     def can_take_new_trade(self, index_name: str, check_time: Optional[datetime] = None) -> bool:
         with self._lock:
             if self.halted:
@@ -159,16 +227,6 @@ class RiskManager:
                 return None
 
             spec: IndexSpec = INDEX_SPECS[signal.index_name]
-            base_lots = lots or self.custom_lots.get(signal.index_name) or spec.default_lots
-            # Dynamic Tuesday Expiry Sizing Booster (1.5x on high-gamma Tuesday for NSE Index options)
-            if (
-                getattr(self.settings, "tuesday_expiry_boost", False)
-                and signal.index_name in {"NIFTY", "BANKNIFTY"}
-                and signal.candle_time.weekday() == 1
-            ):
-                active_lots = int(round(base_lots * 1.5))
-            else:
-                active_lots = base_lots
             contract = self.mapper.select_option_contract(
                 index_name=signal.index_name,
                 spot_price=signal.spot_close,
@@ -250,6 +308,16 @@ class RiskManager:
                     return None
 
             self.client.update_ltp(token_key, float(ltp))
+            if lots is not None:
+                active_lots = max(1, int(lots))
+            elif signal.index_name in self.custom_lots:
+                active_lots = max(1, int(self.custom_lots[signal.index_name]))
+            else:
+                active_lots = self.calculate_dynamic_lots(
+                    signal.index_name,
+                    option_ltp=float(ltp),
+                    trade_time=signal.candle_time,
+                )
             qty = contract.lot_size * active_lots
             limit_px = round(float(ltp) + self.settings.entry_slippage_buffer, 1)
 

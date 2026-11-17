@@ -138,6 +138,11 @@
     }
 
     .badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      white-space: nowrap !important;
+      flex-shrink: 0 !important;
       padding: 4px 10px;
       border-radius: 999px;
       font-size: 0.74rem;
@@ -145,6 +150,7 @@
       background: var(--surface-alt);
       border: 1px solid var(--border);
       color: var(--text);
+      line-height: 1.2;
     }
 
     .badge.paper {
@@ -215,7 +221,7 @@
 
     .kpi-strip {
       display: grid;
-      grid-template-columns: repeat(6, minmax(0, 1fr));
+      grid-template-columns: repeat(7, minmax(0, 1fr));
       gap: 12px;
       margin-bottom: 14px;
     }
@@ -268,7 +274,7 @@
 
     .grid-radars {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(310px, 1fr));
+      grid-template-columns: repeat(3, minmax(0, 1fr));
       gap: 14px;
       margin-bottom: 14px;
       align-items: stretch;
@@ -288,15 +294,20 @@
       gap: 14px;
     }
 
-    @media (max-width: 1380px) {
-      .grid-radars {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
+    @media (max-width: 1400px) {
+      .kpi-strip {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
       }
     }
 
-    @media (max-width: 1220px) {
+    @media (max-width: 1180px) {
+      .grid-radars {
+        grid-template-columns: repeat(1, minmax(0, 1fr));
+      }
       .kpi-strip {
         grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+    }
       }
 
       .grid-3 {
@@ -327,6 +338,8 @@
       }
 
       .badge {
+        white-space: nowrap !important;
+        flex-shrink: 0 !important;
         padding: 3px 8px;
         font-size: 0.68rem;
       }
@@ -449,7 +462,14 @@
       display: flex;
       justify-content: space-between;
       align-items: center;
-      gap: 8px;
+      gap: 10px;
+      min-width: 0;
+    }
+
+    .section-title span:first-child {
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
 
     .kv-grid {
@@ -757,12 +777,12 @@
         </select>
         <button class="btn-primary" onclick="triggerOAuth()">Run OAuth Login</button>
         <button onclick="toggleMode()">Toggle PAPER/LIVE</button>
-        <button class="btn-primary" onclick="triggerAutoBreakoutOrder('CRUDEOILM')"
-          style="background:#d97706;color:#fff;font-weight:600;" title="Trigger automated order for MCX Crude Mini">⚡
-          Crude Mini Order</button>
+        <button class="btn-primary" onclick="triggerAutoBreakoutOrder('NIFTY')"
+          style="background:#2563eb;color:#fff;font-weight:600;"
+          title="Trigger auto-order pipeline into Shoonya for NIFTY">⚡ Auto NIFTY</button>
         <button class="btn-primary" onclick="triggerAutoBreakoutOrder('BANKNIFTY')"
           style="background:#059669;color:#fff;font-weight:600;"
-          title="Trigger auto-order pipeline into Shoonya Broker Terminal and app">⚡ Auto-Order Now</button>
+          title="Trigger auto-order pipeline into Shoonya for BANKNIFTY">⚡ Auto BANKNIFTY</button>
         <a class="btn" href="/api/trades/csv">CSV</a>
         <a class="btn" href="/backtest" target="_blank" style="background:#4338ca;color:#fff;font-weight:600;" title="Open 6-Month Backtest Analytics Dashboard">📊 Backtest</a>
         <button class="btn-kill" onclick="triggerKillSwitch()">KILL SWITCH</button>
@@ -784,15 +804,19 @@
       <div class="card">
         <div class="card-label">Strategy Capital</div>
         <div id="kpi-capital" class="card-val">₹{{ "%.2f"|format(snapshot.capital) }}</div>
-        <div class="card-sub">NIFTY 130 | BNF 60 | CRUDE 10 qty</div>
+        <div class="card-sub">Alloc: 50% (75% Tue Expiry)</div>
       </div>
       <div class="card">
         <div class="card-label">Trades Today <button onclick="resetTradesCounter()" class="badge info"
             style="cursor:pointer;padding:1px 6px;margin-left:6px;"
             title="Reset counter to 0/2 for testing">Reset</button></div>
         <div id="trades-val" class="card-val">{{ snapshot.trades_taken }} / {{ snapshot.max_trades }}</div>
-        <div class="card-sub">Cutoff: <span id="entry-cutoff-val">{{ snapshot.entry_cutoff_time or '14:15' }}</span> IST
-        </div>
+        <div class="card-sub">Scan: 10:00-13:15 IST</div>
+      </div>
+      <div class="card">
+        <div class="card-label">Weekly Loss Guard</div>
+        <div id="kpi-weekly-guard" class="card-val pos">0 / 2</div>
+        <div id="kpi-weekly-guard-sub" class="card-sub">0/2 Losses (ARMED)</div>
       </div>
       <div class="card">
         <div class="card-label">India VIX (Min 12.0)</div>
@@ -809,7 +833,6 @@
     <section class="grid-radars">
       <div class="card" id="nifty-radar-card">Loading NIFTY Radar...</div>
       <div class="card" id="bnf-radar-card">Loading BANKNIFTY Radar...</div>
-      <div class="card" id="crude-radar-card">Loading CRUDEOILM Radar...</div>
       <div class="card">
         <div class="section-title">
           <span>Shoonya Broker, Funds &amp; Auto-Schedule</span>
@@ -969,25 +992,27 @@
       const el = document.getElementById(containerId);
       if (!el || !st) return;
       const startT = orbStart || "09:15";
-      const endT = orbEnd || "09:30";
+      const endT = orbEnd || "09:45";
       const r = st.radar || {};
       const statusBadge = st.no_trade_reason
         ? `<span class="badge halted">${esc(st.no_trade_reason)}</span>`
         : (st.is_locked ? `<span class="badge live">ORB LOCKED</span>` : `<span class="badge">WAITING ${endT}</span>`);
 
-      const isMCX = (name === "CRUDEOILM");
       const gates = [
         ["Sys/Slot", r.system_ready],
-        [isMCX ? "MCX Active" : "VIX >= 12", isMCX ? r.in_window : r.vix_ready],
-        [isMCX ? "Range <= 2.5%" : "ORB <= 0.75%", r.orb_ready],
+        ["VIX >= 12", r.vix_ready],
+        ["Range 0.20-0.85%", r.orb_ready],
         ["Break+VWAP", r.ce_price_ok || r.pe_price_ok],
-        [isMCX ? "RSI >52/<48" : "RSI >60/<40", r.ce_rsi_ok || r.pe_rsi_ok],
+        ["RSI >60/<40", r.ce_rsi_ok || r.pe_rsi_ok],
       ].map(([lbl, ok]) => `<span class="gate-chip ${ok ? 'pass' : ''}">${ok ? '✓' : '○'} ${lbl}</span>`).join("");
 
       const isImm = r.radar_state === "IMMINENT_CE_BREAKOUT" || r.radar_state === "IMMINENT_PE_BREAKOUT";
-      const currentLots = r.lots || (name === 'CRUDEOILM' ? 1 : 2);
+      const currentLots = r.lots || 2;
+      const dynamicLots = r.dynamic_lots || 2;
       const currentProd = r.product_type || 'M';
-      const lotSize = r.lot_size || (name === 'NIFTY' ? 65 : (name === 'BANKNIFTY' ? 30 : 10));
+      const lotSize = r.lot_size || (name === 'NIFTY' ? 65 : 30);
+      const allocPct = r.alloc_pct || 50;
+      const allocFund = r.alloc_fund || 0;
       const activeEl = document.activeElement;
       const userSelectedVal = (activeEl && activeEl.id === `lots-select-${name}`) ? activeEl.value : null;
       const selVal = userSelectedVal ? parseInt(userSelectedVal) : currentLots;
@@ -1009,21 +1034,22 @@
         </div>
         <div class="progress-wrap"><div class="progress-fill" style="width:${r.readiness_pct ?? 0}%"></div></div>
         <div class="gates-row">${gates}</div>
-        <div style="margin:6px 0;padding:6px 8px;background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:6px;display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:6px;font-size:0.75rem;">
-          <div style="display:flex;align-items:center;gap:8px;">
+        <div style="margin:6px 0;padding:8px 10px;background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:8px;display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px;font-size:0.75rem;">
+          <div style="display:flex;align-items:center;flex-wrap:wrap;gap:8px;">
             <div style="display:flex;align-items:center;gap:4px;">
               <span style="color:var(--muted);font-weight:600;">Lots:</span>
-              <select id="lots-select-${name}" onchange="updateIndexLots('${esc(name)}', this.value)" style="background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:2px 6px;font-size:0.75rem;cursor:pointer;">
-                ${[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(n => `<option value="${n}" ${n === selVal ? 'selected' : ''}>${n} lot${n > 1 ? 's' : ''} (${n * lotSize} qty)</option>`).join('')}
+              <select id="lots-select-${name}" onchange="updateIndexLots('${esc(name)}', this.value)" style="background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:3px 6px;font-size:0.75rem;cursor:pointer;">
+                ${[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(n => `<option value="${n}" ${n === selVal ? 'selected' : ''}>${n} lot${n > 1 ? 's' : ''} (${n * lotSize} qty)${n === dynamicLots ? ' [Dynamic]' : ''}</option>`).join('')}
               </select>
             </div>
             <div style="display:flex;align-items:center;gap:4px;">
               <span style="color:var(--muted);font-weight:600;">Type:</span>
-              <select id="prod-select-${name}" onchange="updateIndexProductType('${esc(name)}', this.value)" style="background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:2px 6px;font-size:0.75rem;cursor:pointer;">
-                <option value="MIS" ${selProd === 'MIS' ? 'selected' : ''}>MIS</option>
+              <select id="prod-select-${name}" onchange="updateIndexProductType('${esc(name)}', this.value)" style="background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:3px 6px;font-size:0.75rem;cursor:pointer;">
                 <option value="NRML" ${selProd === 'NRML' ? 'selected' : ''}>NRML</option>
+                <option value="MIS" ${selProd === 'MIS' ? 'selected' : ''}>MIS</option>
               </select>
             </div>
+            <span style="font-size:0.72rem;color:var(--accent);background:var(--accent-soft);padding:2px 6px;border-radius:4px;">Alloc: ${allocPct}% (₹${fmt(allocFund)})</span>
           </div>
           <div style="text-align:right;">
             <span style="color:var(--muted);">Approx Margin: </span>
@@ -1033,7 +1059,7 @@
         </div>
         <div style="font-size:0.74rem;color:var(--muted);display:flex;justify-content:space-between;align-items:center;">
           <span>Candidate: <strong>${esc(r.candidate_ce || '--')}</strong></span>
-          <button onclick="triggerAutoBreakoutOrder('${esc(name)}')" style="padding:2px 8px;font-size:0.7rem;font-weight:600;border-radius:4px;background:#2563eb;color:#fff;border:none;cursor:pointer;" title="Execute strategy entry order immediately for ${esc(name)}">⚡ Trigger Order</button>
+          <button onclick="triggerAutoBreakoutOrder('${esc(name)}')" style="padding:3px 10px;font-size:0.72rem;font-weight:600;border-radius:4px;background:#2563eb;color:#fff;border:none;cursor:pointer;" title="Execute strategy entry order immediately for ${esc(name)}">⚡ Trigger Order</button>
         </div>
         <div class="radar-banner ${isImm ? 'imminent' : ''}">${esc(r.radar_summary || ('Waiting for ' + endT + ' ORB lock.'))}</div>
       `;
@@ -1047,9 +1073,9 @@
     function renderSnapshot(data) {
       document.getElementById("algo-id").textContent = data.sebi_algo_id || "--";
       const descEl = document.getElementById("strategy-desc");
-      if (descEl) descEl.textContent = `${data.orb_window_minutes || 15}-Min ORB (${data.orb_start_time || '09:15'}-${data.orb_end_time || '09:30'})`;
+      if (descEl) descEl.textContent = `${data.orb_window_minutes || 30}-Min ORB (${data.orb_start_time || '09:15'}-${data.orb_end_time || '09:45'}) | Institutional: ${data.entry_start_time || '10:00'}-${data.entry_cutoff_time || '13:15'}`;
       const orbSel = document.getElementById("orb-anchor-select");
-      const currentAnchorKey = `${data.orb_start_time || '09:15'}|${data.orb_window_minutes || 15}`;
+      const currentAnchorKey = `${data.orb_start_time || '09:15'}|${data.orb_window_minutes || 30}`;
       if (orbSel && document.activeElement !== orbSel) {
         if ([...orbSel.options].some(o => o.value === currentAnchorKey)) {
           orbSel.value = currentAnchorKey;
@@ -1085,6 +1111,18 @@
         : "Run OAuth / Connect Account";
       document.getElementById("kpi-capital").textContent = "₹" + fmt(data.capital || 0);
       document.getElementById("trades-val").textContent = `${data.trades_taken} / ${data.max_trades}`;
+
+      const wg = data.weekly_guard || {};
+      const wgVal = document.getElementById("kpi-weekly-guard");
+      const wgSub = document.getElementById("kpi-weekly-guard-sub");
+      if (wgVal) {
+        wgVal.textContent = `${wg.losses ?? 0} / ${wg.max_losses ?? 2}`;
+        wgVal.className = "card-val " + (wg.is_halted ? "neg" : (wg.losses === 1 ? "amber" : "pos"));
+      }
+      if (wgSub) {
+        wgSub.textContent = wg.status_text || "0/2 Losses (ARMED)";
+      }
+
       document.getElementById("vix-val").textContent = data.india_vix !== null ? fmt(data.india_vix, 2) : "--";
       document.getElementById("kpi-contracts").textContent = data.cached_contracts ?? 0;
 
@@ -1096,7 +1134,6 @@
 
       renderRadarCard("nifty-radar-card", "NIFTY", (data.indices || {}).NIFTY, data.orb_start_time, data.orb_end_time);
       renderRadarCard("bnf-radar-card", "BANKNIFTY", (data.indices || {}).BANKNIFTY, data.orb_start_time, data.orb_end_time);
-      renderRadarCard("crude-radar-card", "CRUDEOILM", (data.indices || {}).CRUDEOILM, data.orb_start_time, data.orb_end_time);
 
       const brkBadge = document.getElementById("broker-conn-badge");
       brkBadge.textContent = brk.connected ? `CONNECTED (${brk.user_id || data.user_id || "--"})` : "NOT CONNECTED";

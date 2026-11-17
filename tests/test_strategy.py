@@ -232,15 +232,18 @@ def test_orb_wide_range_rejection(tmp_path: Path) -> None:
         Candle(_ist_dt(2026, 11, 16, 9, 15), 24500, 24550, 24480, 24540, is_closed=True),
         Candle(_ist_dt(2026, 11, 16, 9, 20), 24540, 24720, 24530, 24700, is_closed=True),
         Candle(_ist_dt(2026, 11, 16, 9, 25), 24700, 24710, 24500, 24680, is_closed=True),
+        Candle(_ist_dt(2026, 11, 16, 9, 30), 24680, 24700, 24650, 24690, is_closed=True),
+        Candle(_ist_dt(2026, 11, 16, 9, 35), 24690, 24710, 24670, 24705, is_closed=True),
+        Candle(_ist_dt(2026, 11, 16, 9, 40), 24705, 24715, 24685, 24700, is_closed=True),
     ]
-    # Range = (24720 - 24480) / 24480 * 100 = 0.98% > 0.75%
+    # Range = (24720 - 24480) / 24480 * 100 = 0.98% > 0.85%
     state = strategy.lock_opening_range("NIFTY", orb_candles)
     assert state.is_locked is True
     assert state.orh == 24720.0
     assert state.orl == 24480.0
     assert state.no_trade_reason is not None
 
-    breakout_bar = Candle(_ist_dt(2026, 11, 16, 9, 30), 24680, 24800, 24680, 24790, is_closed=True)
+    breakout_bar = Candle(_ist_dt(2026, 11, 16, 10, 5), 24680, 24800, 24680, 24790, is_closed=True)
     assert strategy.evaluate_candle_close("NIFTY", breakout_bar, orb_candles + [breakout_bar], india_vix=15.0) is None
 
 
@@ -251,17 +254,20 @@ def test_ce_and_pe_breakouts_with_vix_and_time_filters(tmp_path: Path) -> None:
     orb = [
         Candle(_ist_dt(2026, 11, 16, 9, 15), 24500, 24520, 24495, 24515, is_closed=True),
         Candle(_ist_dt(2026, 11, 16, 9, 20), 24515, 24530, 24505, 24525, is_closed=True),
-        Candle(_ist_dt(2026, 11, 16, 9, 25), 24525, 24540, 24510, 24535, is_closed=True),
+        Candle(_ist_dt(2026, 11, 16, 9, 25), 24525, 24560, 24510, 24555, is_closed=True),
+        Candle(_ist_dt(2026, 11, 16, 9, 30), 24555, 24560, 24520, 24545, is_closed=True),
+        Candle(_ist_dt(2026, 11, 16, 9, 35), 24545, 24555, 24515, 24535, is_closed=True),
+        Candle(_ist_dt(2026, 11, 16, 9, 40), 24535, 24550, 24515, 24530, is_closed=True),
     ]
     strategy.lock_opening_range("NIFTY", orb, session_date=date(2026, 11, 16))
-    breakout_ce = Candle(_ist_dt(2026, 11, 16, 9, 30), 24535, 24585, 24535, 24580, is_closed=True)
+    breakout_ce = Candle(_ist_dt(2026, 11, 16, 10, 5), 24535, 24595, 24535, 24590, is_closed=True)
     all_bars = warmup + orb + [breakout_ce]
 
     # VIX < 12 blocks signal
     assert strategy.evaluate_candle_close("NIFTY", breakout_ce, all_bars, india_vix=11.5) is None
-    # After 14:15 cutoff blocks signal
+    # After 13:15 cutoff blocks signal
     assert strategy.evaluate_candle_close(
-        "NIFTY", breakout_ce, all_bars, india_vix=14.0, current_time_ist=_ist_dt(2026, 11, 16, 14, 16)
+        "NIFTY", breakout_ce, all_bars, india_vix=14.0, current_time_ist=_ist_dt(2026, 11, 16, 13, 20)
     ) is None
 
     sig_ce = strategy.evaluate_candle_close("NIFTY", breakout_ce, all_bars, india_vix=14.0)
@@ -274,12 +280,15 @@ def test_ce_and_pe_breakouts_with_vix_and_time_filters(tmp_path: Path) -> None:
     strategy_pe = ORBStrategy(_make_settings(tmp_path))
     warmup_down = _build_warmup_candles(51600.0, count=18, step=-4.0)
     orb_bnf = [
-        Candle(_ist_dt(2026, 11, 16, 9, 15), 51520, 51540, 51480, 51500, is_closed=True),
+        Candle(_ist_dt(2026, 11, 16, 9, 15), 51520, 51570, 51480, 51500, is_closed=True),
         Candle(_ist_dt(2026, 11, 16, 9, 20), 51500, 51510, 51470, 51485, is_closed=True),
         Candle(_ist_dt(2026, 11, 16, 9, 25), 51485, 51500, 51460, 51475, is_closed=True),
+        Candle(_ist_dt(2026, 11, 16, 9, 30), 51475, 51490, 51450, 51465, is_closed=True),
+        Candle(_ist_dt(2026, 11, 16, 9, 35), 51465, 51480, 51445, 51460, is_closed=True),
+        Candle(_ist_dt(2026, 11, 16, 9, 40), 51460, 51470, 51440, 51455, is_closed=True),
     ]
     strategy_pe.lock_opening_range("BANKNIFTY", orb_bnf, session_date=date(2026, 11, 16))
-    breakout_pe = Candle(_ist_dt(2026, 11, 16, 9, 30), 51475, 51475, 51380, 51390, is_closed=True)
+    breakout_pe = Candle(_ist_dt(2026, 11, 16, 10, 5), 51475, 51475, 51380, 51390, is_closed=True)
     sig_pe = strategy_pe.evaluate_candle_close(
         "BANKNIFTY", breakout_pe, warmup_down + orb_bnf + [breakout_pe], india_vix=15.0
     )
@@ -302,7 +311,7 @@ def test_bracket_breakeven_target1_and_trailing_sl(tmp_path: Path) -> None:
     signal = ORBSignal(
         index_name="NIFTY",
         signal_type="CE",
-        candle_time=_ist_dt(2026, 11, 16, 9, 30),
+        candle_time=_ist_dt(2026, 11, 16, 10, 5),
         spot_close=24580.0,
         orh=24540.0,
         orl=24495.0,
@@ -310,7 +319,7 @@ def test_bracket_breakeven_target1_and_trailing_sl(tmp_path: Path) -> None:
         rsi=68.0,
         india_vix=15.0,
     )
-    pos = rm.execute_entry(signal, option_ltp=200.0)
+    pos = rm.execute_entry(signal, option_ltp=200.0, lots=2)
     assert pos is not None
     assert pos.state == PositionState.OPEN_FULL
     assert pos.initial_qty == 130  # 2 lots * 65
@@ -664,38 +673,34 @@ def test_afternoon_orb_anchor_and_reauth_resilience(tmp_path: Path) -> None:
     assert orch.client.api._reauth_callback is fake_reauth
 
 
-def test_crudeoilm_mcx_strategy_and_auto_trigger(tmp_path: Path) -> None:
+def test_indices_specs_only_nifty_and_banknifty(tmp_path: Path) -> None:
     from config.settings import INDEX_SPECS
     settings = _make_settings(tmp_path, mode="PAPER")
     orch = TradingSystemOrchestrator(settings=settings)
 
-    # 1. Verify MCX CRUDEOILM spec
-    assert "CRUDEOILM" in INDEX_SPECS
-    crude_spec = INDEX_SPECS["CRUDEOILM"]
-    assert crude_spec.spot_exchange == "MCX"
-    assert crude_spec.opt_exchange == "MCX"
-    assert crude_spec.lot_size == 10
-    assert crude_spec.product_type == "M"
+    # 1. Verify CRUDEOILM is removed, only NIFTY and BANKNIFTY remain
+    assert "CRUDEOILM" not in INDEX_SPECS
+    assert set(INDEX_SPECS.keys()) == {"NIFTY", "BANKNIFTY"}
+    assert INDEX_SPECS["NIFTY"].lot_size == 65
+    assert INDEX_SPECS["BANKNIFTY"].lot_size == 30
 
-    # 2. Verify Option Contract Selection for CRUDEOILM
+    # 2. Verify Option Contract Selection for NIFTY
     contract = orch.mapper.select_option_contract(
-        index_name="CRUDEOILM",
-        spot_price=8165.0,
+        index_name="NIFTY",
+        spot_price=24580.0,
         option_type="CE",
-        ref_date=date(2026, 11, 16),
+        ref_date=date(2026, 11, 17),
     )
-    assert contract.index_name == "CRUDEOILM"
-    assert contract.exchange == "MCX"
-    assert contract.lot_size == 10
-    assert contract.strike in {8150, 8100}
+    assert contract.index_name == "NIFTY"
+    assert contract.exchange == "NFO"
+    assert contract.lot_size == 65
 
-    # 3. Verify Auto Order Trigger for CRUDEOILM
-    orch.client.update_ltp("MCX|573423", 8165.0)
-    ok, msg, data = orch.trigger_auto_order("CRUDEOILM", signal_type="CE")
+    # 3. Verify Auto Order Trigger for BANKNIFTY
+    orch.client.update_ltp("NSE|26009", 52100.0)
+    ok, msg, data = orch.trigger_auto_order("BANKNIFTY", signal_type="CE")
     assert ok is True
-    assert "CRUDEOILM" in msg
-    assert data["quantity"] == 10
-    assert "CRUDEOILM" in orch.risk_manager.positions
+    assert "BANKNIFTY" in msg
+    assert "BANKNIFTY" in orch.risk_manager.positions
 
 
 def test_custom_lots_and_margin_display(tmp_path: Path) -> None:
@@ -710,10 +715,10 @@ def test_custom_lots_and_margin_display(tmp_path: Path) -> None:
     assert orch.custom_lots["NIFTY"] == 3
     assert orch.risk_manager.custom_lots["NIFTY"] == 3
 
-    ok, msg = orch.set_index_lots("CRUDEOILM", 4)
+    ok, msg = orch.set_index_lots("BANKNIFTY", 4)
     assert ok is True
-    assert orch.custom_lots["CRUDEOILM"] == 4
-    assert orch.risk_manager.custom_lots["CRUDEOILM"] == 4
+    assert orch.custom_lots["BANKNIFTY"] == 4
+    assert orch.risk_manager.custom_lots["BANKNIFTY"] == 4
 
     # 2. Test invalid lot rejection
     ok, _ = orch.set_index_lots("NIFTY", 0)
@@ -732,7 +737,6 @@ def test_custom_lots_and_margin_display(tmp_path: Path) -> None:
     # 4. Verify radar snapshot contains lots, lot_size, total_qty, and estimated margin
     orch.client.update_ltp("NSE|26000", 24200.0)
     orch.client.update_ltp("NSE|26009", 52100.0)
-    orch.client.update_ltp("MCX|573423", 8150.0)
     snap = orch.get_status_snapshot()
     nifty_radar = snap["indices"]["NIFTY"]["radar"]
     assert nifty_radar["lots"] == 3
@@ -745,28 +749,17 @@ def test_custom_lots_and_margin_display(tmp_path: Path) -> None:
     assert snap["indices"]["BANKNIFTY"]["radar"]["product_type"] == "M"
     assert snap["indices"]["BANKNIFTY"]["radar"]["product_type_label"] == "NRML"
 
-    crude_radar = snap["indices"]["CRUDEOILM"]["radar"]
-    assert crude_radar["lots"] == 4
-    assert crude_radar["lot_size"] == 10
-    assert crude_radar["total_qty"] == 40
-    assert crude_radar["est_margin"] > 0
-    assert crude_radar["atm_premium"] > 0
-    assert crude_radar["product_type"] == "M"
-
     # 5. Test API endpoint for setting product type (NRML vs MIS)
     from ui.dashboard import SetProductTypeRequest
     set_prod_handler = app.state.handlers["api_set_product_type"]
-    resp = set_prod_handler(SetProductTypeRequest(index_name="CRUDEOILM", product_type="NRML"))
+    resp = set_prod_handler(SetProductTypeRequest(index_name="BANKNIFTY", product_type="MIS"))
     assert resp.status_code == 200
-    assert orch.custom_product_types["CRUDEOILM"] == "M"
-    assert orch.risk_manager.custom_product_types["CRUDEOILM"] == "M"
+    assert orch.custom_product_types["BANKNIFTY"] == "I"
+    assert orch.risk_manager.custom_product_types["BANKNIFTY"] == "I"
 
-    resp = set_prod_handler(SetProductTypeRequest(index_name="NIFTY", product_type="MIS"))
+    resp = set_prod_handler(SetProductTypeRequest(index_name="NIFTY", product_type="NRML"))
     assert resp.status_code == 200
-    assert orch.custom_product_types["NIFTY"] == "I"
-
-
-
+    assert orch.custom_product_types["NIFTY"] == "M"
 
 
 def test_master_alpha_strategy_pillars(tmp_path: Path) -> None:
@@ -781,7 +774,9 @@ def test_master_alpha_strategy_pillars(tmp_path: Path) -> None:
     mapper = InstrumentMapper(client)
     rm = RiskManager(settings, client, mapper)
 
-    # 1. Test Tuesday Expiry 1.5x lot booster (Tuesday = 2026-11-17, weekday 1)
+    # 1. Test Dynamic Position Sizing based on available funds:
+    # Tuesday: 75% allocation -> 150,000 / (200 * 65) = 11 lots (715 qty)
+    # Mon-Fri: 50% allocation -> 100,000 / (200 * 65) = 7 lots (455 qty)
     tuesday_signal = ORBSignal(
         index_name="NIFTY",
         signal_type="CE",
@@ -793,15 +788,22 @@ def test_master_alpha_strategy_pillars(tmp_path: Path) -> None:
         rsi=68.0,
         india_vix=15.0,
     )
+    tue_lots = rm.calculate_dynamic_lots("NIFTY", 200.0, tuesday_signal.candle_time)
+    assert tue_lots == 11
+    mon_lots = rm.calculate_dynamic_lots("NIFTY", 200.0, _ist_dt(2026, 11, 16, 10, 30))
+    assert mon_lots == 7
+
     pos = rm.execute_entry(tuesday_signal, option_ltp=200.0)
     assert pos is not None
-    # 2 lots * 1.5 = 3 lots = 3 * 65 = 195 qty
-    assert pos.initial_qty == 195
+    assert pos.initial_qty == 715
 
     # 2. Test Weekly Circuit Breaker
     # Close first trade with a loss
     rm._close_position_record_locked(pos, exit_price=170.0, exit_reason="STOP_LOSS")
     assert rm.weekly_losses[(2026, 47)] == 1
+    guard1 = rm.get_weekly_guard_status(tuesday_signal.candle_time)
+    assert guard1["losses"] == 1
+    assert guard1["state"] == "CAUTION"
     assert rm.can_take_new_trade("NIFTY") is True
 
     # Take second trade and close with a loss
@@ -810,6 +812,10 @@ def test_master_alpha_strategy_pillars(tmp_path: Path) -> None:
     assert pos2 is not None
     rm._close_position_record_locked(pos2, exit_price=170.0, exit_reason="STOP_LOSS")
     assert rm.weekly_losses[(2026, 47)] == 2
+    guard2 = rm.get_weekly_guard_status(tuesday_signal.candle_time)
+    assert guard2["losses"] == 2
+    assert guard2["is_halted"] is True
+    assert guard2["state"] == "HALTED"
 
     # Now weekly circuit breaker triggers: new trade blocked
     rm.reset_trades_counter()
@@ -822,9 +828,12 @@ def test_master_alpha_strategy_pillars(tmp_path: Path) -> None:
         Candle(_ist_dt(2026, 11, 16, 9, 15), 24600, 24620, 24500, 24550, is_closed=True),
         Candle(_ist_dt(2026, 11, 16, 9, 20), 24550, 24560, 24520, 24530, is_closed=True),
         Candle(_ist_dt(2026, 11, 16, 9, 25), 24530, 24540, 24510, 24525, is_closed=True),
+        Candle(_ist_dt(2026, 11, 16, 9, 30), 24525, 24545, 24515, 24530, is_closed=True),
+        Candle(_ist_dt(2026, 11, 16, 9, 35), 24530, 24550, 24520, 24535, is_closed=True),
+        Candle(_ist_dt(2026, 11, 16, 9, 40), 24535, 24555, 24525, 24540, is_closed=True),
     ]
     strat.lock_opening_range("NIFTY", orb, session_date=date(2026, 11, 16))
-    # Breakout close is 24580, which is > ORH (24560), but <= day_open (24600)
+    # Breakout close is 24580, which is > ORH (24555), but <= day_open (24600)
     fake_ce = Candle(_ist_dt(2026, 11, 16, 10, 5), 24530, 24590, 24520, 24580, is_closed=True)
     res = strat.evaluate_candle_close("NIFTY", fake_ce, orb + [fake_ce], india_vix=14.0)
     assert res is None  # Blocked by daily bias filter!

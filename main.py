@@ -697,22 +697,19 @@ class TradingSystemOrchestrator:
         """Compute live 5-gate auto-order readiness metrics for an index."""
         spec = INDEX_SPECS[index_name]
         st = self.strategy.get_state(index_name)
-        is_mcx = (index_name == "CRUDEOILM")
 
         system_ready = (
             not self.risk_manager.halted
             and self.risk_manager.trades_taken_today < self.settings.max_trades_per_day
             and index_name not in self.risk_manager.positions
         )
-        vix_ready = True if is_mcx else (vix is not None and vix >= self.settings.min_india_vix)
+        vix_ready = (vix is not None and vix >= self.settings.min_india_vix)
         orb_ready = bool(st.is_locked and not st.no_trade_reason)
+        entry_start = getattr(self.settings, "entry_start_time", dt_time(10, 0, 0))
+        entry_end = getattr(self.settings, "entry_cutoff_time", dt_time(13, 15, 0))
         in_window = (
             now_ist.weekday() < 5
-            and (
-                (dt_time(9, 15, 0) <= now_ist.time() <= dt_time(23, 15, 0))
-                if is_mcx
-                else (self.settings.orb_end_time <= now_ist.time() <= self.settings.entry_cutoff_time)
-            )
+            and (entry_start <= now_ist.time() <= entry_end)
         )
 
         ce_price_ok = bool(
@@ -727,24 +724,21 @@ class TradingSystemOrchestrator:
             and spot_ltp < st.orl
             and (st.last_vwap is None or spot_ltp < st.last_vwap)
         )
-        ce_rsi_ok = bool(st.last_rsi is not None and (st.last_rsi > (52.0 if is_mcx else 60.0)))
-        pe_rsi_ok = bool(st.last_rsi is not None and (st.last_rsi < (48.0 if is_mcx else 40.0)))
+        ce_rsi_ok = bool(st.last_rsi is not None and (st.last_rsi > 60.0))
+        pe_rsi_ok = bool(st.last_rsi is not None and (st.last_rsi < 40.0))
 
         dist_to_orh = round(st.orh - spot_ltp, 2) if (spot_ltp is not None and st.orh is not None) else None
         dist_to_orl = round(spot_ltp - st.orl, 2) if (spot_ltp is not None and st.orl is not None) else None
 
-        lots = self.custom_lots.get(index_name, spec.default_lots)
-        product_type = self.custom_product_types.get(index_name, spec.product_type)
-        product_type_label = "NRML" if product_type == "M" else "MIS"
-        total_qty = spec.lot_size * lots
-        atm_premium = 120.0 if index_name == "NIFTY" else (260.0 if index_name == "BANKNIFTY" else 110.0)
+        # Dynamic Position Sizing based on available funds:
+        # Tuesday: 75% allocation; Mon/Wed/Thu/Fri: 50% allocation
+        avail_fund = self.risk_manager.get_available_fund()
+        is_tuesday = (now_ist.weekday() == 1)
+        alloc_pct = 75 if is_tuesday else 50
+        alloc_fund = round(avail_fund * (alloc_pct / 100.0), 2)
 
-        candidate_ce = "--"
-        candidate_pe = "--"
+        atm_premium = 120.0 if index_name == "NIFTY" else 260.0
         if spot_ltp is not None and spot_ltp > 0:
-            strike = round_to_strike(spot_ltp, spec.strike_step)
-            candidate_ce = f"{index_name} {strike} CE ({total_qty} qty / {lots} lot [{product_type_label}])"
-            candidate_pe = f"{index_name} {strike} PE ({total_qty} qty / {lots} lot [{product_type_label}])"
             try:
                 c = self.mapper.select_option_contract(index_name, spot_ltp, "CE", vix=vix or 15.0)
                 token_key = f"{c.exchange}|{c.token}"
@@ -754,7 +748,25 @@ class TradingSystemOrchestrator:
             except Exception:
                 pass
 
+        dynamic_lots = self.risk_manager.calculate_dynamic_lots(index_name, atm_premium, now_ist)
+        if index_name in self.custom_lots:
+            lots = self.custom_lots[index_name]
+            is_custom = True
+        else:
+            lots = dynamic_lots
+            is_custom = False
+
+        product_type = self.custom_product_types.get(index_name, spec.product_type)
+        product_type_label = "NRML" if product_type == "M" else "MIS"
+        total_qty = spec.lot_size * lots
         est_margin = round(total_qty * atm_premium, 2)
+
+        candidate_ce = "--"
+        candidate_pe = "--"
+        if spot_ltp is not None and spot_ltp > 0:
+            strike = round_to_strike(spot_ltp, spec.strike_step)
+            candidate_ce = f"{index_name} {strike} CE ({total_qty} qty / {lots} lot [{product_type_label}])"
+            candidate_pe = f"{index_name} {strike} PE ({total_qty} qty / {lots} lot [{product_type_label}])"
 
         ce_score = sum([system_ready, vix_ready, orb_ready, ce_price_ok, ce_rsi_ok])
         pe_score = sum([system_ready, vix_ready, orb_ready, pe_price_ok, pe_rsi_ok])
@@ -811,6 +823,11 @@ class TradingSystemOrchestrator:
             "radar_state": radar_state,
             "radar_summary": radar_summary,
             "lots": lots,
+            "dynamic_lots": dynamic_lots,
+            "is_custom_lots": is_custom,
+            "avail_fund": round(avail_fund, 2),
+            "alloc_pct": alloc_pct,
+            "alloc_fund": alloc_fund,
             "product_type": product_type,
             "product_type_label": product_type_label,
             "lot_size": spec.lot_size,
@@ -824,6 +841,8 @@ class TradingSystemOrchestrator:
         today = now_ist.date()
         t = now_ist.time()
         is_weekday = now_ist.weekday() < 5
+        entry_start = getattr(self.settings, "entry_start_time", dt_time(10, 0, 0))
+        entry_cutoff = getattr(self.settings, "entry_cutoff_time", dt_time(13, 15, 0))
 
         if not is_weekday:
             phase = "WEEKEND_STANDBY"
@@ -831,20 +850,19 @@ class TradingSystemOrchestrator:
             phase = "PRE_MARKET"
         elif t < self.settings.orb_end_time:
             phase = f"ORB_FORMATION ({self.settings.orb_start_time.strftime('%H:%M')}-{self.settings.orb_end_time.strftime('%H:%M')})"
-        elif t <= self.settings.entry_cutoff_time:
-            phase = f"AUTO_BREAKOUT_SCANNER ({self.settings.orb_end_time.strftime('%H:%M')}-{self.settings.entry_cutoff_time.strftime('%H:%M')})"
+        elif t < entry_start:
+            phase = f"ORB_LOCKED_COOLOFF ({self.settings.orb_end_time.strftime('%H:%M')}-{entry_start.strftime('%H:%M')})"
+        elif t <= entry_cutoff:
+            phase = f"INSTITUTIONAL_SCANNER ({entry_start.strftime('%H:%M')}-{entry_cutoff.strftime('%H:%M')})"
         elif t < self.settings.auto_squareoff_time:
-            phase = f"POSITION_MANAGEMENT ({self.settings.entry_cutoff_time.strftime('%H:%M')}-{self.settings.auto_squareoff_time.strftime('%H:%M')})"
+            phase = f"POSITION_MANAGEMENT ({entry_cutoff.strftime('%H:%M')}-{self.settings.auto_squareoff_time.strftime('%H:%M')})"
         elif t <= self.settings.market_close_time:
             phase = "POST_SQUARE_OFF (15:15-15:30)"
-        elif t <= dt_time(23, 30, 0) and any(getattr(s, "spot_exchange", "") == "MCX" for s in INDEX_SPECS.values()):
-            phase = f"MCX_COMMODITY_SESSION (09:00-23:30 IST)"
         else:
             phase = "MARKET_CLOSED"
 
         next_candle_close_sec: Optional[int] = None
-        has_mcx = any(getattr(s, "spot_exchange", "") == "MCX" for s in INDEX_SPECS.values())
-        is_trading_hour = (self.settings.market_open_time <= t < self.settings.market_close_time) or (has_mcx and t <= dt_time(23, 30, 0))
+        is_trading_hour = (self.settings.market_open_time <= t < self.settings.market_close_time)
         if is_weekday and is_trading_hour:
             sec_into_5m = (now_ist.minute % 5) * 60 + now_ist.second
             next_candle_close_sec = max(1, 300 - sec_into_5m)
@@ -887,12 +905,12 @@ class TradingSystemOrchestrator:
                 "status": _ms_status(all_locked or self._milestone_done.get("orb_lock") == today),
             },
             {
-                "time": f"{self.settings.orb_end_time.strftime('%H:%M')}-{self.settings.entry_cutoff_time.strftime('%H:%M')}",
-                "label": "Auto Breakout Orders",
+                "time": f"{entry_start.strftime('%H:%M')}-{entry_cutoff.strftime('%H:%M')}",
+                "label": "Institutional Breakout Scan",
                 "status": _ms_status(
-                    is_weekday and t > self.settings.entry_cutoff_time,
+                    is_weekday and t > entry_cutoff,
                     active_cond=is_weekday
-                    and self.settings.orb_end_time <= t <= self.settings.entry_cutoff_time,
+                    and entry_start <= t <= entry_cutoff,
                 ),
             },
             {
@@ -912,7 +930,7 @@ class TradingSystemOrchestrator:
             "milestones": milestones,
             "auto_mode_note": (
                 f"Auto orders trigger automatically on 5m candle closes "
-                f"({self.settings.orb_end_time.strftime('%H:%M')}-{self.settings.entry_cutoff_time.strftime('%H:%M')} IST) "
+                f"({entry_start.strftime('%H:%M')}-{entry_cutoff.strftime('%H:%M')} IST) "
                 f"in {self.settings.mode} mode when all 5 gates align."
             ),
         }
@@ -968,6 +986,7 @@ class TradingSystemOrchestrator:
             "orb_window_minutes": self.settings.orb_window_minutes,
             "orb_start_time": self.settings.orb_start_time.strftime("%H:%M"),
             "orb_end_time": self.settings.orb_end_time.strftime("%H:%M"),
+            "entry_start_time": getattr(self.settings, "entry_start_time", dt_time(10, 0, 0)).strftime("%H:%M"),
             "entry_cutoff_time": self.settings.entry_cutoff_time.strftime("%H:%M"),
             "oauth_status": self.auth.last_login_status,
             "token_date": self.auth.last_token_date,
@@ -976,6 +995,8 @@ class TradingSystemOrchestrator:
             "ws_connected": self.client.ws_connected,
             "public_ip": self.public_ip,
             "india_vix": vix,
+            "avail_fund": round(self.risk_manager.get_available_fund(), 2),
+            "weekly_guard": self.risk_manager.get_weekly_guard_status(now_ist),
             "mtm_pnl": self.risk_manager.total_mtm(),
             "realized_pnl": self.risk_manager.realized_pnl_today,
             "trades_taken": self.risk_manager.trades_taken_today,

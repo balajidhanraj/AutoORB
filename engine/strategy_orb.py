@@ -100,18 +100,14 @@ class ORBStrategy:
             if ts_ist.date() == target_date and ts_ist.time() in target_candle_times:
                 orb_candles.append(c)
 
-        is_mcx = (index_name == "CRUDEOILM")
         if len(orb_candles) < expected_count:
-            if is_mcx and candles:
-                orb_candles = list(candles[:expected_count]) if len(candles) >= expected_count else list(candles)
-            else:
-                logger.warning(
-                    "Cannot lock ORB for %s yet: only %d/%d opening candles present",
-                    index_name,
-                    len(orb_candles),
-                    expected_count,
-                )
-                return state
+            logger.warning(
+                "Cannot lock ORB for %s yet: only %d/%d opening candles present",
+                index_name,
+                len(orb_candles),
+                expected_count,
+            )
+            return state
 
         orh = max(c.high for c in orb_candles)
         orl = min(c.low for c in orb_candles)
@@ -130,8 +126,8 @@ class ORBStrategy:
             state.last_vwap = calculate_intraday_vwap(candles_seq, session_date=target_date)
             state.last_rsi = calculate_wilder_rsi([c.close for c in candles_seq], period=14)
 
-        max_range_limit = 2.50 if is_mcx else self.settings.max_orb_range_pct
-        min_range_limit = 0.05 if is_mcx else getattr(self.settings, "min_orb_range_pct", 0.0)
+        max_range_limit = self.settings.max_orb_range_pct
+        min_range_limit = getattr(self.settings, "min_orb_range_pct", 0.20)
         if range_pct > max_range_limit:
             state.no_trade_reason = (
                 f"Range {range_pct:.2f}% > {max_range_limit:.2f}%"
@@ -206,69 +202,65 @@ class ORBStrategy:
         if state.no_trade_reason is not None:
             return None
 
-        is_mcx = (index_name == "CRUDEOILM")
-        # Entry Window: MCX Commodity trades 09:00 to 23:15 IST; NSE equity trades 09:30 to cutoff
-        if is_mcx:
-            if not (time(9, 15, 0) <= eval_time <= time(23, 15, 0)):
-                return None
-            vix_val = 15.0  # India VIX applies to NSE; MCX commodity uses default benchmark
-        else:
-            if not (time(9, 30, 1) <= eval_time <= self.settings.entry_cutoff_time):
-                return None
-            # Volatility Filter: Skip if India VIX < 12.0
-            vix_val = float(india_vix) if india_vix is not None else 15.0
-            if vix_val < self.settings.min_india_vix:
-                logger.info(
-                    "%s signal skipped: India VIX %.2f < %.2f",
-                    index_name,
-                    vix_val,
-                    self.settings.min_india_vix,
-                )
-                return None
+        # Institutional Entry Window: 10:00 to 13:15 IST
+        entry_start = getattr(self.settings, "entry_start_time", time(10, 0, 0))
+        entry_end = getattr(self.settings, "entry_cutoff_time", time(13, 15, 0))
+        if not (entry_start <= eval_time <= entry_end):
+            return None
 
-        rsi_bull = 52.0 if is_mcx else 60.0
-        rsi_bear = 48.0 if is_mcx else 40.0
+        # Volatility Filter: Skip if India VIX < 12.0
+        vix_val = float(india_vix) if india_vix is not None else 15.0
+        if vix_val < self.settings.min_india_vix:
+            logger.info(
+                "%s signal skipped: India VIX %.2f < %.2f",
+                index_name,
+                vix_val,
+                self.settings.min_india_vix,
+            )
+            return None
+
+        rsi_bull = 60.0
+        rsi_bear = 40.0
 
         close_px = closed_candle.close
         ce_signal = (close_px > state.orh) and (close_px > vwap) and (rsi > rsi_bull)
         pe_signal = (close_px < state.orl) and (close_px < vwap) and (rsi < rsi_bear)
 
-        if not is_mcx:
-            # 1. Day Open Bias Filter (CE requires Spot > Open; PE requires Spot < Open)
-            if getattr(self.settings, "daily_bias_filter", False) and candles_seq:
-                day_open = candles_seq[0].open
-                if ce_signal and close_px <= day_open:
-                    logger.info("%s CE skipped: Spot %.2f <= Day Open %.2f", index_name, close_px, day_open)
+        # 1. Day Open Bias Filter (CE requires Spot > Open; PE requires Spot < Open)
+        if getattr(self.settings, "daily_bias_filter", False) and candles_seq:
+            day_open = candles_seq[0].open
+            if ce_signal and close_px <= day_open:
+                logger.info("%s CE skipped: Spot %.2f <= Day Open %.2f", index_name, close_px, day_open)
+                ce_signal = False
+            if pe_signal and close_px >= day_open:
+                logger.info("%s PE skipped: Spot %.2f >= Day Open %.2f", index_name, close_px, day_open)
+                pe_signal = False
+
+        # 2. 20 EMA Filter (CE requires Spot > 20 EMA; PE requires Spot < 20 EMA)
+        if getattr(self.settings, "use_ema_filter", False):
+            ema20 = calculate_ema([c.close for c in candles_seq], period=20)
+            if ema20 is not None:
+                if ce_signal and close_px <= ema20:
+                    logger.info("%s CE skipped: Spot %.2f <= 20 EMA %.2f", index_name, close_px, ema20)
                     ce_signal = False
-                if pe_signal and close_px >= day_open:
-                    logger.info("%s PE skipped: Spot %.2f >= Day Open %.2f", index_name, close_px, day_open)
+                if pe_signal and close_px >= ema20:
+                    logger.info("%s PE skipped: Spot %.2f >= 20 EMA %.2f", index_name, close_px, ema20)
                     pe_signal = False
 
-            # 2. 20 EMA Filter (CE requires Spot > 20 EMA; PE requires Spot < 20 EMA)
-            if getattr(self.settings, "use_ema_filter", False):
-                ema20 = calculate_ema([c.close for c in candles_seq], period=20)
-                if ema20 is not None:
-                    if ce_signal and close_px <= ema20:
-                        logger.info("%s CE skipped: Spot %.2f <= 20 EMA %.2f", index_name, close_px, ema20)
-                        ce_signal = False
-                    if pe_signal and close_px >= ema20:
-                        logger.info("%s PE skipped: Spot %.2f >= 20 EMA %.2f", index_name, close_px, ema20)
-                        pe_signal = False
-
-            # 3. Decisive Candle Body Ratio Filter
-            min_body_ratio = getattr(self.settings, "min_candle_body_ratio", 0.0)
-            if min_body_ratio > 0 and (ce_signal or pe_signal):
-                c_range = closed_candle.high - closed_candle.low
-                c_body = abs(closed_candle.close - closed_candle.open)
-                if c_range > 0 and (c_body / c_range) < min_body_ratio:
-                    logger.info(
-                        "%s signal skipped: Candle body ratio %.2f < %.2f",
-                        index_name,
-                        c_body / c_range,
-                        min_body_ratio,
-                    )
-                    ce_signal = False
-                    pe_signal = False
+        # 3. Decisive Candle Body Ratio Filter
+        min_body_ratio = getattr(self.settings, "min_candle_body_ratio", 0.0)
+        if min_body_ratio > 0 and (ce_signal or pe_signal):
+            c_range = closed_candle.high - closed_candle.low
+            c_body = abs(closed_candle.close - closed_candle.open)
+            if c_range > 0 and (c_body / c_range) < min_body_ratio:
+                logger.info(
+                    "%s signal skipped: Candle body ratio %.2f < %.2f",
+                    index_name,
+                    c_body / c_range,
+                    min_body_ratio,
+                )
+                ce_signal = False
+                pe_signal = False
 
         if ce_signal:
             state.last_signal = f"CE @ {close_px:.2f} (RSI {rsi:.1f})"

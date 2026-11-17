@@ -86,24 +86,6 @@ INDEX_SPECS: Dict[str, IndexSpec] = {
         trail_step_pts=30.0,
         product_type="M",
     ),
-    "CRUDEOILM": IndexSpec(
-        name="CRUDEOILM",
-        spot_exchange="MCX",
-        spot_token="573423",
-        opt_exchange="MCX",
-        lot_size=10,
-        default_lots=1,
-        strike_step=50,
-        expiry_type="MCX_EXPIRY",
-        sl_pts=15.0,
-        sl_buffer_pts=2.0,
-        breakeven_trigger_pts=20.0,
-        target1_pts=25.0,
-        trail_step_pts=10.0,
-        target_delta_min=0.40,
-        target_delta_max=0.75,
-        product_type="M",
-    ),
 }
 
 INDIA_VIX_EXCHANGE = "NSE"
@@ -114,7 +96,7 @@ INDIA_VIX_KEY = f"{INDIA_VIX_EXCHANGE}|{INDIA_VIX_TOKEN}"
 class AppSettings(BaseModel):
     """Runtime settings loaded from environment variables and .env."""
 
-    mode: str = Field(default="PAPER")
+    mode: str = Field(default="LIVE")
     shoonya_host: str = Field(default="https://api.shoonya.com/NorenWClientAPI/")
     shoonya_ws_host: str = Field(default="wss://api.shoonya.com/NorenWSAPI/")
     shoonya_user_id: str = Field(default="")
@@ -134,7 +116,7 @@ class AppSettings(BaseModel):
     max_trades_per_day: int = Field(default=2)
 
     min_india_vix: float = Field(default=12.0)
-    min_orb_range_pct: float = Field(default=0.0)
+    min_orb_range_pct: float = Field(default=0.20)
     max_orb_range_pct: float = Field(default=0.85)
     daily_bias_filter: bool = Field(default=True)
     use_ema_filter: bool = Field(default=True)
@@ -160,14 +142,15 @@ class AppSettings(BaseModel):
     log_dir: str = Field(default="logs")
 
     # Market session timings (IST)
-    orb_window_minutes: int = Field(default=15)
+    orb_window_minutes: int = Field(default=30)
     orb_start_time: time = Field(default=time(9, 15, 0))
     auth_time: time = Field(default=time(8, 40, 0))
     instrument_cache_time: time = Field(default=time(8, 55, 0))
     ws_connect_time: time = Field(default=time(9, 14, 0))
     market_open_time: time = Field(default=time(9, 15, 0))
-    orb_end_time: time = Field(default=time(9, 30, 0))
-    entry_cutoff_time: time = Field(default=time(14, 15, 0))
+    orb_end_time: time = Field(default=time(9, 45, 0))
+    entry_start_time: time = Field(default=time(10, 0, 0))
+    entry_cutoff_time: time = Field(default=time(13, 15, 0))
     auto_squareoff_time: time = Field(default=time(15, 15, 0))
     market_close_time: time = Field(default=time(15, 30, 0))
     eod_report_time: time = Field(default=time(15, 35, 0))
@@ -198,7 +181,7 @@ def load_settings(env_path: str | Path | None = None) -> AppSettings:
     account_id = os.getenv("SHOONYA_ACCOUNT_ID", "").strip() or user_id
 
     settings = AppSettings(
-        mode=os.getenv("MODE", "PAPER"),
+        mode=os.getenv("MODE", "LIVE"),
         shoonya_host=os.getenv("SHOONYA_HOST", "https://api.shoonya.com/NorenWClientAPI/").strip(),
         shoonya_ws_host=os.getenv("SHOONYA_WS_HOST", "wss://api.shoonya.com/NorenWSAPI/").strip(),
         shoonya_user_id=user_id,
@@ -216,7 +199,7 @@ def load_settings(env_path: str | Path | None = None) -> AppSettings:
         max_daily_loss=float(os.getenv("MAX_DAILY_LOSS", "5000") or 5000),
         max_trades_per_day=int(os.getenv("MAX_TRADES_PER_DAY", "2") or 2),
         min_india_vix=float(os.getenv("MIN_INDIA_VIX", "12.0") or 12.0),
-        min_orb_range_pct=float(os.getenv("MIN_ORB_RANGE_PCT", "0.0") or 0.0),
+        min_orb_range_pct=float(os.getenv("MIN_ORB_RANGE_PCT", "0.20") or 0.20),
         max_orb_range_pct=float(os.getenv("MAX_ORB_RANGE_PCT", "0.85") or 0.85),
         daily_bias_filter=_parse_bool(os.getenv("DAILY_BIAS_FILTER"), default=True),
         use_ema_filter=_parse_bool(os.getenv("USE_EMA_FILTER"), default=True),
