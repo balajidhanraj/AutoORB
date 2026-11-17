@@ -3787,15 +3787,6 @@
           link.classList.remove('active');
         }
       });
-    });
-      const navLinks = document.querySelectorAll('#user-guide-modal nav a');
-      navLinks.forEach(link => {
-        if (link.getAttribute('href') === '#' + id) {
-          link.className = 'flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-terminal-cyan/15 text-terminal-cyan border border-terminal-cyan/30 font-semibold whitespace-nowrap transition-colors';
-        } else {
-          link.className = 'flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-terminal-subtle hover:bg-slate-800 text-slate-300 border border-terminal-border font-medium whitespace-nowrap transition-colors';
-        }
-      });
     }
 
     function resetThemeDefaults() {

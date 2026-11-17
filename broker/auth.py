@@ -142,8 +142,18 @@ class ShoonyaAuthenticator:
                 payload = json.loads(token_path.read_text(encoding="utf-8"))
                 cached_uid = str(payload.get("user_id") or "").strip().upper()
                 expected_uid = self.settings.shoonya_user_id.strip().upper()
+                created_dt_str = str(payload.get("created_at") or "")
+                is_recent = False
+                if created_dt_str:
+                    try:
+                        created_dt = datetime.fromisoformat(created_dt_str)
+                        age_hours = (datetime.now(IST) - created_dt).total_seconds() / 3600.0
+                        if 0 <= age_hours < 18:
+                            is_recent = True
+                    except Exception:
+                        pass
                 if (
-                    payload.get("date") == today_str
+                    (payload.get("date") == today_str or is_recent)
                     and payload.get("access_token")
                     and (not cached_uid or not expected_uid or cached_uid == expected_uid)
                 ):
