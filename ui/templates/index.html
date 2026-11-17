@@ -5,85 +5,44 @@
   <meta charset="UTF-8" />
   <meta name="viewport"
     content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <meta name="theme-color" content="#070b14" />
-  <title>Shoonya Automated ORB Terminal</title>
+  <meta name="theme-color" content="#090d14" />
+  <title>Shoonya Automated ORB Terminal | Obsidian Velocity</title>
+
+  <!-- Typography & Icons from Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap"
+    rel="stylesheet" />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap"
+    rel="stylesheet" />
+
   <style>
-    :root,
-    body[data-theme="midnight"] {
-      --bg: #070b14;
-      --surface: #0f172a;
-      --surface-alt: #1e293b;
-      --border: #334155;
+    :root {
+      --bg: #090d14;
+      --surface: #10141e;
+      --surface-alt: #161c2a;
+      --surface-container-high: #1c2436;
+      --border: rgba(255, 255, 255, 0.08);
+      --border-focus: rgba(0, 245, 212, 0.4);
       --text: #f1f5f9;
-      --muted: #94a3b8;
+      --text-dim: #cbd5e1;
+      --muted: #8492a6;
+      --primary: #00f5d4;
+      --primary-soft: rgba(0, 245, 212, 0.12);
+      --secondary: #ff3366;
+      --secondary-soft: rgba(255, 51, 102, 0.15);
+      --amber: #ffb703;
+      --amber-soft: rgba(255, 183, 3, 0.15);
       --green: #10b981;
+      --green-soft: rgba(16, 185, 129, 0.15);
       --red: #ef4444;
-      --amber: #f59e0b;
-      --accent: #3b82f6;
-      --accent-soft: rgba(59, 130, 246, 0.16);
-      --log-bg: #04070e;
-    }
-
-    body[data-theme="emerald"] {
-      --bg: #040d0a;
-      --surface: #091914;
-      --surface-alt: #112a21;
-      --border: #1e4d3c;
-      --text: #ecfdf5;
-      --muted: #6ee7b7;
-      --green: #34d399;
-      --red: #fb7185;
-      --amber: #fbbf24;
-      --accent: #10b981;
-      --accent-soft: rgba(16, 185, 129, 0.18);
-      --log-bg: #020806;
-    }
-
-    body[data-theme="gold"] {
-      --bg: #0c0a09;
-      --surface: #181411;
-      --surface-alt: #27201a;
-      --border: #44372b;
-      --text: #fafaf9;
-      --muted: #d6c3a5;
-      --green: #22c55e;
-      --red: #ef4444;
-      --amber: #f59e0b;
-      --accent: #eab308;
-      --accent-soft: rgba(234, 179, 8, 0.16);
-      --log-bg: #070504;
-    }
-
-    body[data-theme="light"] {
-      --bg: #f1f5f9;
-      --surface: #ffffff;
-      --surface-alt: #f8fafc;
-      --border: #cbd5e1;
-      --text: #0f172a;
-      --muted: #475569;
-      --green: #059669;
-      --red: #dc2626;
-      --amber: #d97706;
-      --accent: #2563eb;
-      --accent-soft: rgba(37, 99, 235, 0.12);
-      --log-bg: #0f172a;
-    }
-
-    body[data-theme="nordic"] {
-      --bg: #0f141d;
-      --surface: #17202e;
-      --surface-alt: #222e42;
-      --border: #384a66;
-      --text: #e2e8f0;
-      --muted: #93c5fd;
-      --green: #2dd4bf;
-      --red: #f87171;
-      --amber: #fbbf24;
-      --accent: #38bdf8;
-      --accent-soft: rgba(56, 189, 248, 0.16);
-      --log-bg: #090d14;
+      --accent: #00f5d4;
+      --radius-sm: 6px;
+      --radius-md: 10px;
+      --radius-lg: 14px;
+      --radius-pill: 9999px;
     }
 
     * {
@@ -93,48 +52,79 @@
     }
 
     body {
-      font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       background: var(--bg);
       color: var(--text);
-      padding: 16px;
-      line-height: 1.45;
-      transition: background 0.2s, color 0.2s;
+      font-family: 'Geist', -apple-system, BlinkMacSystemFont, sans-serif;
+      font-size: 14px;
+      line-height: 1.5;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow-x: hidden;
+      -webkit-font-smoothing: antialiased;
     }
 
-    .container {
-      max-width: 1580px;
-      margin: 0 auto;
-    }
-
+    /* Fixed Top Navigation Bar */
     .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 40;
+      background: rgba(16, 20, 30, 0.92);
+      backdrop-filter: blur(16px);
+      border-bottom: 1px solid var(--border);
+      padding: 0 18px;
+    }
+
+    .topbar-main {
+      height: 56px;
       display: flex;
-      flex-wrap: wrap;
+      align-items: center;
       justify-content: space-between;
-      align-items: center;
       gap: 12px;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 14px;
-      padding: 14px 18px;
-      margin-bottom: 14px;
     }
 
-    .brand h1 {
-      font-size: 1.18rem;
-      font-weight: 700;
-      letter-spacing: -0.01em;
-    }
-
-    .brand p {
-      font-size: 0.8rem;
-      color: var(--muted);
-    }
-
-    .badges {
+    .brand {
       display: flex;
-      flex-wrap: wrap;
-      gap: 6px;
       align-items: center;
+      gap: 10px;
+      flex-shrink: 0;
+    }
+
+    .brand-icon {
+      width: 34px;
+      height: 34px;
+      border-radius: var(--radius-sm);
+      background: var(--primary);
+      color: #04100c;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      box-shadow: 0 0 16px rgba(0, 245, 212, 0.35);
+    }
+
+    .brand-title {
+      font-family: 'Space Grotesk', sans-serif;
+      font-weight: 700;
+      font-size: 1.05rem;
+      letter-spacing: -0.02em;
+      color: var(--text);
+      line-height: 1.1;
+    }
+
+    .brand-sub {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.65rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .telemetry-pills {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
     }
 
     .badge {
@@ -144,106 +134,184 @@
       white-space: nowrap !important;
       flex-shrink: 0 !important;
       padding: 4px 10px;
-      border-radius: 999px;
-      font-size: 0.74rem;
+      border-radius: var(--radius-pill);
+      font-size: 0.72rem;
+      font-family: 'JetBrains Mono', monospace;
       font-weight: 600;
       background: var(--surface-alt);
       border: 1px solid var(--border);
       color: var(--text);
       line-height: 1.2;
-    }
-
-    .badge.paper {
-      color: var(--amber);
-      border-color: var(--amber);
+      transition: all 0.15s ease;
     }
 
     .badge.live {
       color: var(--green);
-      border-color: var(--green);
+      border-color: rgba(16, 185, 129, 0.4);
+      background: var(--green-soft);
+    }
+
+    .badge.paper {
+      color: var(--amber);
+      border-color: rgba(255, 183, 3, 0.4);
+      background: var(--amber-soft);
     }
 
     .badge.halted {
-      color: var(--red);
-      border-color: var(--red);
+      color: var(--secondary);
+      border-color: rgba(255, 51, 102, 0.4);
+      background: var(--secondary-soft);
     }
 
     .badge.info {
-      color: var(--accent);
-      border-color: var(--accent);
-      background: var(--accent-soft);
+      color: var(--primary);
+      border-color: rgba(0, 245, 212, 0.4);
+      background: var(--primary-soft);
     }
 
-    .controls {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      align-items: center;
-    }
-
-    button,
-    .btn,
-    select.theme-select {
+    .badge.clickable {
       cursor: pointer;
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 7px 12px;
-      font-size: 0.8rem;
-      font-weight: 600;
-      color: var(--text);
-      background: var(--surface-alt);
-      text-decoration: none;
-      transition: opacity 0.15s;
     }
 
-    button:hover,
-    .btn:hover {
-      opacity: 0.88;
+    .badge.clickable:hover {
+      border-color: var(--primary);
+      transform: translateY(-1px);
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+
+    button, .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      padding: 7px 14px;
+      border-radius: var(--radius-sm);
+      font-size: 0.78rem;
+      font-weight: 600;
+      font-family: 'Space Grotesk', sans-serif;
+      border: 1px solid var(--border);
+      background: var(--surface-alt);
+      color: var(--text);
+      cursor: pointer;
+      text-decoration: none;
+      transition: all 0.15s ease;
+      white-space: nowrap;
+    }
+
+    button:hover, .btn:hover {
+      background: var(--surface-container-high);
+      border-color: rgba(255, 255, 255, 0.2);
     }
 
     .btn-primary {
-      background: var(--accent);
-      border-color: var(--accent);
-      color: #fff;
+      background: var(--primary);
+      color: #04100c;
+      border-color: var(--primary);
+      box-shadow: 0 0 14px rgba(0, 245, 212, 0.3);
+    }
+
+    .btn-primary:hover {
+      background: #26fedc;
+      border-color: #26fedc;
+      box-shadow: 0 0 20px rgba(0, 245, 212, 0.45);
     }
 
     .btn-kill {
-      background: #991b1b;
-      border-color: var(--red);
+      background: var(--secondary);
       color: #fff;
+      border-color: var(--secondary);
+      box-shadow: 0 0 14px rgba(255, 51, 102, 0.4);
     }
 
-    .btn-green {
-      background: #065f46;
-      border-color: var(--green);
-      color: #fff;
+    .btn-kill:hover {
+      background: #e11d48;
+      box-shadow: 0 0 20px rgba(255, 51, 102, 0.6);
     }
 
+    /* Sub-Navigation Tabs */
+    .nav-tabs {
+      height: 42px;
+      display: flex;
+      align-items: stretch;
+      gap: 4px;
+      border-top: 1px solid var(--border);
+    }
+
+    .nav-tab-btn {
+      background: none;
+      border: none;
+      border-radius: 0;
+      border-bottom: 2px solid transparent;
+      color: var(--muted);
+      font-size: 0.82rem;
+      padding: 0 16px;
+      cursor: pointer;
+      font-family: 'Geist', sans-serif;
+      font-weight: 500;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.15s ease;
+    }
+
+    .nav-tab-btn:hover {
+      color: var(--text);
+      background: rgba(255, 255, 255, 0.03);
+    }
+
+    .nav-tab-btn.active {
+      color: var(--primary);
+      border-bottom-color: var(--primary);
+      font-weight: 700;
+      background: var(--primary-soft);
+    }
+
+    /* Main Container */
+    main {
+      flex: 1;
+      width: 100%;
+      max-width: 1680px;
+      margin: 0 auto;
+      padding: 16px 18px 40px;
+    }
+
+    /* Top Telemetry KPI Ribbon */
     .kpi-strip {
       display: grid;
       grid-template-columns: repeat(7, minmax(0, 1fr));
-      gap: 12px;
-      margin-bottom: 14px;
+      gap: 10px;
+      margin-bottom: 16px;
     }
 
     .card {
       background: var(--surface);
       border: 1px solid var(--border);
-      border-radius: 14px;
-      padding: 15px;
+      border-radius: var(--radius-lg);
+      padding: 14px;
+      position: relative;
+      overflow: hidden;
     }
 
     .card-label {
-      font-size: 0.7rem;
+      font-size: 0.68rem;
+      font-family: 'JetBrains Mono', monospace;
       color: var(--muted);
       text-transform: uppercase;
-      letter-spacing: 0.05em;
+      letter-spacing: 0.06em;
+      margin-bottom: 2px;
     }
 
     .card-val {
       font-size: 1.28rem;
       font-weight: 700;
-      margin-top: 3px;
+      font-family: 'JetBrains Mono', monospace;
+      letter-spacing: -0.02em;
     }
 
     .card-sub {
@@ -252,213 +320,23 @@
       margin-top: 2px;
     }
 
-    .pos {
-      color: var(--green);
-    }
+    .pos { color: var(--green); }
+    .neg { color: var(--secondary); }
+    .warn { color: var(--amber); }
 
-    .neg {
-      color: var(--red);
-    }
-
-    .warn {
-      color: var(--amber);
-    }
-
-    .grid-3 {
-      display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: 14px;
-      margin-bottom: 14px;
-      align-items: stretch;
-    }
-
+    /* 3-Column Cockpit Layout (Radar Tab) */
     .grid-radars {
       display: grid;
       grid-template-columns: repeat(3, minmax(0, 1fr));
       gap: 14px;
-      margin-bottom: 14px;
       align-items: stretch;
-    }
-
-    .grid-2 {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 14px;
-      margin-bottom: 14px;
-      align-items: stretch;
-    }
-
-    .stack {
-      display: flex;
-      flex-direction: column;
-      gap: 14px;
-    }
-
-    @media (max-width: 1400px) {
-      .kpi-strip {
-        grid-template-columns: repeat(4, minmax(0, 1fr));
-      }
-    }
-
-    @media (max-width: 1180px) {
-      .grid-radars {
-        grid-template-columns: repeat(1, minmax(0, 1fr));
-      }
-      .kpi-strip {
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-      }
-    }
-      }
-
-      .grid-3 {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-      }
-    }
-
-    @media (max-width: 820px) {
-      body {
-        padding: 8px 6px;
-      }
-
-      .container {
-        padding: 0;
-      }
-
-      .topbar {
-        padding: 10px 12px;
-        gap: 10px;
-      }
-
-      .brand h1 {
-        font-size: 1.05rem;
-      }
-
-      .badges {
-        gap: 4px;
-      }
-
-      .badge {
-        white-space: nowrap !important;
-        flex-shrink: 0 !important;
-        padding: 3px 8px;
-        font-size: 0.68rem;
-      }
-
-      .controls {
-        width: 100%;
-        display: grid;
-        grid-template-columns: repeat(2, 1fr);
-        gap: 6px;
-      }
-
-      .controls select,
-      .controls button,
-      .controls .btn {
-        width: 100%;
-        min-height: 40px;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 0.76rem;
-        padding: 6px 4px;
-        text-align: center;
-        box-sizing: border-box;
-      }
-
-      .kpi-strip {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 8px;
-        margin-bottom: 10px;
-      }
-
-      .card {
-        padding: 12px;
-        border-radius: 12px;
-      }
-
-      .card-val {
-        font-size: 1.15rem;
-      }
-
-      .grid-radars,
-      .grid-3,
-      .grid-2 {
-        grid-template-columns: 1fr;
-        gap: 10px;
-      }
-
-      .table-wrap {
-        overflow-x: auto;
-        -webkit-overflow-scrolling: touch;
-        border-radius: 8px;
-        border: 1px solid var(--border);
-      }
-
-      table {
-        min-width: 520px;
-      }
-
-      table th,
-      table td {
-        padding: 6px 8px;
-        font-size: 0.74rem;
-      }
-
-      .form-grid {
-        grid-template-columns: repeat(2, 1fr) !important;
-        gap: 8px;
-      }
-
-      .row-actions {
-        flex-wrap: wrap;
-        gap: 6px;
-      }
-
-      .row-actions button,
-      .row-actions .btn,
-      .row-actions input,
-      .row-actions select {
-        flex: 1 1 calc(50% - 6px);
-        min-height: 38px;
-      }
-    }
-
-    @media (max-width: 480px) {
-      .kv-grid {
-        grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
-        gap: 5px !important;
-      }
-
-      .kv {
-        padding: 6px 4px !important;
-      }
-
-      .kv small {
-        font-size: 0.62rem !important;
-      }
-
-      .kv strong {
-        font-size: 0.82rem !important;
-      }
-
-      .gates-row {
-        gap: 3px !important;
-      }
-
-      .gate-chip {
-        font-size: 0.62rem !important;
-        padding: 2px 5px !important;
-      }
-
-      .card-sub {
-        font-size: 0.68rem;
-      }
     }
 
     .section-title {
-      font-size: 0.94rem;
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 0.95rem;
       font-weight: 700;
-      margin-bottom: 10px;
+      margin-bottom: 12px;
       display: flex;
       justify-content: space-between;
       align-items: center;
@@ -481,48 +359,52 @@
 
     .kv {
       background: var(--surface-alt);
-      padding: 9px;
-      border-radius: 8px;
+      padding: 8px 10px;
+      border-radius: var(--radius-sm);
       border: 1px solid var(--border);
     }
 
     .kv small {
       display: block;
       color: var(--muted);
-      font-size: 0.69rem;
+      font-size: 0.66rem;
+      font-family: 'JetBrains Mono', monospace;
+      text-transform: uppercase;
     }
 
     .kv strong {
-      font-size: 0.94rem;
+      font-size: 0.92rem;
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 600;
     }
 
     .progress-wrap {
       background: var(--surface-alt);
-      border: 1px solid var(--border);
-      border-radius: 999px;
-      height: 8px;
+      border-radius: var(--radius-pill);
+      height: 7px;
       overflow: hidden;
-      margin: 8px 0;
+      border: 1px solid var(--border);
+      margin: 6px 0 10px;
     }
 
     .progress-fill {
       height: 100%;
-      background: var(--accent);
-      transition: width 0.3s;
+      background: linear-gradient(90deg, #00f5d4, #10b981);
+      transition: width 0.3s ease;
     }
 
     .gates-row {
       display: flex;
       flex-wrap: wrap;
       gap: 5px;
-      margin-bottom: 8px;
+      margin-bottom: 10px;
     }
 
     .gate-chip {
-      font-size: 0.7rem;
-      font-weight: 600;
-      padding: 3px 8px;
-      border-radius: 6px;
+      font-size: 0.68rem;
+      font-family: 'JetBrains Mono', monospace;
+      padding: 3px 7px;
+      border-radius: var(--radius-sm);
       border: 1px solid var(--border);
       background: var(--surface-alt);
       color: var(--muted);
@@ -530,25 +412,250 @@
 
     .gate-chip.pass {
       color: var(--green);
-      border-color: var(--green);
-    }
-
-    .radar-banner {
-      font-size: 0.78rem;
-      padding: 8px 10px;
-      border-radius: 8px;
-      background: var(--accent-soft);
-      border: 1px solid var(--accent);
-      margin-top: 6px;
-    }
-
-    .radar-banner.imminent {
-      background: rgba(16, 185, 129, 0.16);
-      border-color: var(--green);
-      color: var(--green);
+      border-color: rgba(16, 185, 129, 0.4);
+      background: var(--green-soft);
       font-weight: 600;
     }
 
+    .radar-banner {
+      margin-top: 10px;
+      padding: 9px 12px;
+      border-radius: var(--radius-sm);
+      font-size: 0.75rem;
+      background: var(--surface-alt);
+      border: 1px solid var(--border);
+      color: var(--text-dim);
+    }
+
+    .radar-banner.imminent {
+      background: var(--green-soft);
+      border-color: var(--green);
+      color: var(--green);
+      font-weight: 700;
+    }
+
+    /* Tables */
+    .table-wrap {
+      overflow-x: auto;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      background: var(--surface);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.8rem;
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    th {
+      background: var(--surface-alt);
+      color: var(--muted);
+      text-transform: uppercase;
+      font-size: 0.68rem;
+      letter-spacing: 0.05em;
+      padding: 9px 12px;
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+    }
+
+    td {
+      padding: 9px 12px;
+      border-bottom: 1px solid var(--border);
+      color: var(--text);
+    }
+
+    tr:hover td {
+      background: rgba(255, 255, 255, 0.02);
+    }
+
+    .empty-msg {
+      padding: 30px;
+      text-align: center;
+      color: var(--muted);
+      font-size: 0.85rem;
+    }
+
+    /* Modals */
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      z-index: 999;
+      background: rgba(4, 7, 13, 0.78);
+      backdrop-filter: blur(10px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+      animation: fadeIn 0.15s ease-out;
+    }
+
+    .modal-card {
+      background: #111622;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: var(--radius-lg);
+      width: 100%;
+      max-width: 520px;
+      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.6), 0 0 25px rgba(0, 245, 212, 0.15);
+      padding: 22px;
+      position: relative;
+      overflow: hidden;
+      animation: zoomIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .modal-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 16px;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 12px;
+    }
+
+    .modal-close-btn {
+      background: none;
+      border: none;
+      color: var(--muted);
+      font-size: 24px;
+      line-height: 1;
+      padding: 2px 6px;
+      cursor: pointer;
+    }
+
+    .modal-close-btn:hover {
+      color: var(--text);
+    }
+
+    .modal-side-tabs {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px;
+      background: var(--surface-alt);
+      padding: 4px;
+      border-radius: var(--radius-sm);
+      margin-bottom: 14px;
+    }
+
+    .modal-side-btn {
+      padding: 8px;
+      font-family: 'Space Grotesk', sans-serif;
+      font-weight: 700;
+      font-size: 0.84rem;
+      border: none;
+      border-radius: var(--radius-sm);
+      background: transparent;
+      color: var(--muted);
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .modal-side-btn.buy.active {
+      background: var(--primary);
+      color: #04100c;
+      box-shadow: 0 0 14px rgba(0, 245, 212, 0.35);
+    }
+
+    .modal-side-btn.sell.active {
+      background: var(--secondary);
+      color: #fff;
+      box-shadow: 0 0 14px rgba(255, 51, 102, 0.35);
+    }
+
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      margin-bottom: 12px;
+    }
+
+    .form-group label {
+      font-size: 0.68rem;
+      font-family: 'JetBrains Mono', monospace;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .form-input, .form-select {
+      background: var(--surface-alt);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 8px 10px;
+      color: var(--text);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.82rem;
+      outline: none;
+      width: 100%;
+    }
+
+    .form-input:focus, .form-select:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 8px rgba(0, 245, 212, 0.2);
+    }
+
+    /* Floating Toast Notifications */
+    #toast-container {
+      position: fixed;
+      top: 18px;
+      right: 18px;
+      z-index: 9999;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      pointer-events: none;
+    }
+
+    @keyframes toastSlideIn {
+      from { transform: translateX(110%); opacity: 0; }
+      to { transform: translateX(0); opacity: 1; }
+    }
+
+    @keyframes toastSlideOut {
+      from { transform: translateX(0); opacity: 1; }
+      to { transform: translateX(110%); opacity: 0; }
+    }
+
+    @keyframes toastProgress {
+      from { width: 100%; }
+      to { width: 0%; }
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
+    @keyframes zoomIn {
+      from { transform: scale(0.94); opacity: 0; }
+      to { transform: scale(1); opacity: 1; }
+    }
+
+    /* Log Stream Terminal */
+    .log-terminal {
+      background: #05080f;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 12px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.74rem;
+      line-height: 1.45;
+      max-height: 480px;
+      overflow-y: auto;
+      color: #94a3b8;
+    }
+
+    .log-entry {
+      padding: 2px 0;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .log-entry.error { color: #f87171; }
+    .log-entry.warn { color: #fbbf24; }
+    .log-entry.info { color: #cbd5e1; }
+
+    /* Timeline */
     .timeline {
       display: flex;
       flex-direction: column;
@@ -560,246 +667,130 @@
       display: flex;
       justify-content: space-between;
       align-items: center;
-      padding: 6px 10px;
-      border-radius: 8px;
       background: var(--surface-alt);
+      padding: 6px 10px;
+      border-radius: var(--radius-sm);
+      font-size: 0.74rem;
       border: 1px solid var(--border);
-      font-size: 0.77rem;
     }
 
     .ms-status {
+      font-family: 'JetBrains Mono', monospace;
       font-weight: 700;
-      font-size: 0.7rem;
+      font-size: 0.68rem;
     }
 
-    .table-wrap {
-      overflow-x: auto;
+    /* Responsive adjustments */
+    @media (max-width: 1400px) {
+      .kpi-strip {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+      }
+      .grid-radars {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
     }
 
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 0.8rem;
-    }
-
-    th,
-    td {
-      text-align: left;
-      padding: 8px 6px;
-      border-bottom: 1px solid var(--border);
-    }
-
-    th {
-      color: var(--muted);
-      font-weight: 600;
-      font-size: 0.72rem;
-      text-transform: uppercase;
-    }
-
-    .empty {
-      color: var(--muted);
-      font-style: italic;
-      padding: 10px 0;
-      font-size: 0.82rem;
-    }
-
-    .form-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-      gap: 8px;
-      align-items: end;
-    }
-
-    .field label {
-      display: block;
-      font-size: 0.69rem;
-      color: var(--muted);
-      margin-bottom: 3px;
-      text-transform: uppercase;
-    }
-
-    .field input,
-    .field select {
-      width: 100%;
-      padding: 7px 9px;
-      border-radius: 8px;
-      border: 1px solid var(--border);
-      background: var(--surface-alt);
-      color: var(--text);
-      font-size: 0.8rem;
-    }
-
-    .row-actions {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      align-items: center;
-      margin-top: 10px;
-    }
-
-    .status-note {
-      margin-top: 8px;
-      font-size: 0.78rem;
-      padding: 7px 10px;
-      border-radius: 8px;
-      background: var(--surface-alt);
-      border: 1px solid var(--border);
-      display: none;
-    }
-
-    .status-note.show {
-      display: block;
-    }
-
-    .status-note.ok {
-      border-color: var(--green);
-      color: var(--green);
-    }
-
-    .status-note.err {
-      border-color: var(--red);
-      color: var(--red);
-    }
-
-    .logs-box {
-      background: var(--log-bg);
-      color: #d1d5db;
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      padding: 10px;
-      height: 360px;
-      overflow-y: auto;
-      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-      font-size: 0.75rem;
-    }
-
-    .log-line {
-      margin-bottom: 4px;
-      white-space: pre-wrap;
-      word-break: break-word;
-    }
-
-    .log-WARN,
-    .log-WARNING {
-      color: #f59e0b;
-    }
-
-    .log-ERROR,
-    .log-CRITICAL {
-      color: #ef4444;
-    }
-
-    details summary {
-      cursor: pointer;
-      font-weight: 700;
-      font-size: 0.9rem;
-      list-style: none;
+    @media (max-width: 1024px) {
+      .grid-radars {
+        grid-template-columns: 1fr;
+      }
+      .kpi-strip {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+      .topbar-main {
+        flex-direction: column;
+        height: auto;
+        padding: 10px 0;
+        gap: 8px;
+      }
+      .telemetry-pills {
+        justify-content: center;
+      }
     }
   </style>
 </head>
 
-<body data-theme="midnight">
-  <div class="container">
-    <header class="topbar">
-      <div class="brand">
-        <h1>Shoonya Automated ORB Terminal</h1>
-        <p><span id="strategy-desc">{{ snapshot.orb_window_minutes or 15 }}-Min ORB (09:15-{{ snapshot.orb_end_time or
-            '09:30' }})</span> + Intraday VWAP + Wilder RSI(14) | SEBI Algo ID: <span id="algo-id">{{
-            snapshot.sebi_algo_id
-            }}</span></p>
-      </div>
-      <div class="badges">
-        <span id="user-badge" class="badge info">Client: {{ snapshot.user_id or '--' }}</span>
-        <span id="mode-badge" class="badge {{ 'live' if snapshot.mode == 'LIVE' else 'paper' }}">MODE: {{ snapshot.mode
-          }}</span>
-        <span id="oauth-badge" class="badge">OAuth: {{ snapshot.oauth_status }}</span>
-        <span id="ws-badge" class="badge">WS: {{ 'ONLINE' if snapshot.ws_connected else 'OFFLINE' }}</span>
-        <span id="ip-badge" class="badge">IP: {{ snapshot.public_ip }}</span>
-        <span id="phase-badge" class="badge info">{{ snapshot.schedule.phase if snapshot.schedule else '--' }}</span>
-        <span id="clock-badge" class="badge">IST: {{ snapshot.ist_time }}</span>
-      </div>
-      <div class="controls">
-        <select id="orb-anchor-select" class="theme-select" onchange="applyOrbAnchor(this.value)"
-          title="Select Opening Range Window Anchor & Duration">
-          <optgroup label="Morning Sessions">
-            <option value="09:15|15">15m (09:15–09:30 Morning)</option>
-            <option value="09:15|5">5m (09:15–09:20 Fast)</option>
-            <option value="09:15|30">30m (09:15–09:45)</option>
-            <option value="09:15|45">45m (09:15–10:00)</option>
-            <option value="09:15|60">60m (09:15–10:15)</option>
-          </optgroup>
-          <optgroup label="Mid-Day Sessions">
-            <option value="10:00|15">15m (10:00–10:15)</option>
-            <option value="11:00|15">15m (11:00–11:15)</option>
-            <option value="12:00|15">15m (12:00–12:15)</option>
-            <option value="12:30|15">15m (12:30–12:45)</option>
-          </optgroup>
-          <optgroup label="Afternoon Sessions (Live Testing)">
-            <option value="13:00|15">15m (1:00 PM–1:15 PM Afternoon)</option>
-            <option value="13:15|15">15m (1:15 PM–1:30 PM)</option>
-            <option value="13:30|15">15m (1:30 PM–1:45 PM)</option>
-            <option value="14:00|15">15m (2:00 PM–2:15 PM)</option>
-          </optgroup>
-          <optgroup label="Dynamic Anchors">
-            <option value="recent|15">Recent 15-Min (Auto Anchor to Last Window)</option>
-            <option value="recent|5">Recent 5-Min (Immediate Next Close Test)</option>
-          </optgroup>
-        </select>
-        <select id="cutoff-select" class="theme-select" onchange="applyEntryCutoff(this.value)"
-          title="Select Auto Breakout Scanner Cutoff Window (09:30 to 15:15 IST)">
-          <option value="11:30" {{ 'selected' if snapshot.entry_cutoff_time=='11:30' else '' }}>Cutoff: 11:30 AM
-          </option>
-          <option value="12:30" {{ 'selected' if snapshot.entry_cutoff_time=='12:30' else '' }}>Cutoff: 12:30 PM
-          </option>
-          <option value="13:30" {{ 'selected' if snapshot.entry_cutoff_time=='13:30' else '' }}>Cutoff: 1:30 PM (13:30)
-          </option>
-          <option value="14:00" {{ 'selected' if snapshot.entry_cutoff_time=='14:00' else '' }}>Cutoff: 2:00 PM (14:00)
-          </option>
-          <option value="14:15" {{ 'selected' if snapshot.entry_cutoff_time=='14:15' or not snapshot.entry_cutoff_time
-            else '' }}>Cutoff: 2:15 PM (14:15 Default)</option>
-          <option value="14:30" {{ 'selected' if snapshot.entry_cutoff_time=='14:30' else '' }}>Cutoff: 2:30 PM (14:30)
-          </option>
-          <option value="14:45" {{ 'selected' if snapshot.entry_cutoff_time=='14:45' else '' }}>Cutoff: 2:45 PM (14:45)
-          </option>
-          <option value="15:00" {{ 'selected' if snapshot.entry_cutoff_time=='15:00' else '' }}>Cutoff: 3:00 PM (15:00)
-          </option>
-          <option value="15:10" {{ 'selected' if snapshot.entry_cutoff_time=='15:10' else '' }}>Cutoff: 3:10 PM (15:10)
-          </option>
-          <option value="15:15" {{ 'selected' if snapshot.entry_cutoff_time=='15:15' else '' }}>Cutoff: 3:15 PM (15:15
-            Max)</option>
-        </select>
-        <select id="theme-select" class="theme-select" onchange="applyTheme(this.value)" title="Switch UI Theme">
-          <option value="midnight">Theme: Midnight Pro</option>
-          <option value="emerald">Theme: Cyber Emerald</option>
-          <option value="gold">Theme: Obsidian Gold</option>
-          <option value="light">Theme: Arctic Light</option>
-          <option value="nordic">Theme: Nordic Frost</option>
-        </select>
-        <button class="btn-primary" onclick="triggerOAuth()">Run OAuth Login</button>
-        <button onclick="toggleMode()">Toggle PAPER/LIVE</button>
-        <button class="btn-primary" onclick="triggerAutoBreakoutOrder('NIFTY')"
-          style="background:#2563eb;color:#fff;font-weight:600;"
-          title="Trigger auto-order pipeline into Shoonya for NIFTY">⚡ Auto NIFTY</button>
-        <button class="btn-primary" onclick="triggerAutoBreakoutOrder('BANKNIFTY')"
-          style="background:#059669;color:#fff;font-weight:600;"
-          title="Trigger auto-order pipeline into Shoonya for BANKNIFTY">⚡ Auto BANKNIFTY</button>
-        <a class="btn" href="/api/trades/csv">CSV</a>
-        <a class="btn" href="/backtest" target="_blank" style="background:#4338ca;color:#fff;font-weight:600;" title="Open 6-Month Backtest Analytics Dashboard">📊 Backtest</a>
-        <button class="btn-kill" onclick="triggerKillSwitch()">KILL SWITCH</button>
-      </div>
-    </header>
+<body>
+  <!-- Toast Notification Container -->
+  <div id="toast-container"></div>
 
+  <!-- Header & Top Navigation Bar -->
+  <header class="topbar">
+    <div class="topbar-main">
+      <div class="brand">
+        <div class="brand-icon">
+          <span class="material-symbols-outlined" style="font-size:22px;">query_stats</span>
+        </div>
+        <div>
+          <div class="brand-title">SHOONYA ORB</div>
+          <div class="brand-sub">Obsidian Velocity Cockpit</div>
+        </div>
+      </div>
+
+      <!-- Live Telemetry Badges -->
+      <div class="telemetry-pills">
+        <span id="mode-badge" class="badge {{ 'live' if snapshot.mode == 'LIVE' else 'paper' }} clickable"
+          onclick="toggleMode()" title="Click to toggle PAPER/LIVE mode">MODE: {{ snapshot.mode }}</span>
+        <span id="user-badge" class="badge info clickable" onclick="openAccountSwitchModal()"
+          title="Click to Switch Shoonya Account">Client: {{ snapshot.user_id or '--' }}</span>
+        <span id="oauth-badge" class="badge clickable" onclick="triggerOAuth()" title="Click to refresh OAuth session">OAuth: {{ snapshot.oauth_status }}</span>
+        <span id="ws-badge" class="badge {{ 'live' if snapshot.ws_connected else 'halted' }}">WS: {{ 'ONLINE' if snapshot.ws_connected else 'OFFLINE' }}</span>
+        <span id="phase-badge" class="badge info">IST: {{ snapshot.ist_time }}</span>
+      </div>
+
+      <!-- Quick Action Controls -->
+      <div class="header-actions">
+        <button class="btn-primary" onclick="openQuickOrderModal('NIFTY', 'CE')" title="Open Quick Live Broker Order Popup">
+          <span class="material-symbols-outlined" style="font-size:16px;">bolt</span>
+          <span>⚡ BROKER ORDER</span>
+        </button>
+        <button onclick="openAccountSwitchModal()" title="Switch or connect another Shoonya account">
+          <span class="material-symbols-outlined" style="font-size:16px;">manage_accounts</span>
+          <span>Switch User</span>
+        </button>
+        <button class="btn-kill" onclick="triggerKillSwitch()" title="Emergency cancel all orders and square off positions">
+          <span class="material-symbols-outlined" style="font-size:16px;">power_settings_new</span>
+          <span>KILL SWITCH</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Navigation Tabs -->
+    <nav class="nav-tabs">
+      <button id="tab-btn-radar-signals" class="nav-tab-btn active" onclick="showTab('radar-signals')">
+        <span class="material-symbols-outlined" style="font-size:17px;">radar</span>
+        <span>Radar &amp; Signals</span>
+      </button>
+      <button id="tab-btn-positions-books" class="nav-tab-btn" onclick="showTab('positions-books')">
+        <span class="material-symbols-outlined" style="font-size:17px;">account_balance_wallet</span>
+        <span>Positions &amp; Books</span>
+      </button>
+      <button id="tab-btn-terminal-logs" class="nav-tab-btn" onclick="showTab('terminal-logs')">
+        <span class="material-symbols-outlined" style="font-size:17px;">terminal</span>
+        <span>Terminal Logs</span>
+      </button>
+      <button id="tab-btn-analytics-backtest" class="nav-tab-btn" onclick="showTab('analytics-backtest')">
+        <span class="material-symbols-outlined" style="font-size:17px;">analytics</span>
+        <span>Analytics &amp; Backtest</span>
+      </button>
+    </nav>
+  </header>
+
+  <!-- Main View Area -->
+  <main>
+    <!-- TOP TELEMETRY RIBBON (Visible across views) -->
     <section class="kpi-strip">
       <div class="card">
         <div class="card-label">Live Total MTM</div>
-        <div id="mtm-val" class="card-val {{ 'pos' if snapshot.mtm_pnl >= 0 else 'neg' }}">₹{{
-          "%.2f"|format(snapshot.mtm_pnl) }}</div>
+        <div id="mtm-val" class="card-val {{ 'pos' if snapshot.mtm_pnl >= 0 else 'neg' }}">
+          ₹{{ "%.2f"|format(snapshot.mtm_pnl) }}
+        </div>
         <div class="card-sub">Max Daily Loss: -₹{{ "%.0f"|format(snapshot.max_daily_loss) }}</div>
       </div>
       <div class="card">
-        <div class="card-label">Broker Cash / Net Margin</div>
+        <div class="card-label">Broker Net Available</div>
         <div id="kpi-brk-cash" class="card-val">₹0.00</div>
-        <div id="kpi-brk-status" class="card-sub">Checking Shoonya Limits...</div>
+        <div id="kpi-brk-status" class="card-sub">Syncing Shoonya limits...</div>
       </div>
       <div class="card">
         <div class="card-label">Strategy Capital</div>
@@ -807,9 +798,10 @@
         <div class="card-sub">Alloc: 50% (75% Tue Expiry)</div>
       </div>
       <div class="card">
-        <div class="card-label">Trades Today <button onclick="resetTradesCounter()" class="badge info"
-            style="cursor:pointer;padding:1px 6px;margin-left:6px;"
-            title="Reset counter to 0/2 for testing">Reset</button></div>
+        <div class="card-label">
+          Trades Today
+          <button onclick="resetTradesCounter()" class="badge info" style="padding:1px 6px;margin-left:4px;cursor:pointer;" title="Reset daily quota">Reset</button>
+        </div>
         <div id="trades-val" class="card-val">{{ snapshot.trades_taken }} / {{ snapshot.max_trades }}</div>
         <div class="card-sub">Scan: 10:00-13:15 IST</div>
       </div>
@@ -821,151 +813,286 @@
       <div class="card">
         <div class="card-label">India VIX (Min 12.0)</div>
         <div id="vix-val" class="card-val">{{ snapshot.india_vix if snapshot.india_vix is not none else '--' }}</div>
-        <div class="card-sub">Cached Contracts: <span id="kpi-contracts">{{ snapshot.cached_contracts }}</span></div>
+        <div class="card-sub">Contracts: <span id="kpi-contracts">{{ snapshot.cached_contracts }}</span></div>
       </div>
       <div class="card">
-        <div class="card-label">Next 5m Candle Eval</div>
+        <div class="card-label">Next 5M Candle Close</div>
         <div id="candle-countdown" class="card-val pos">--</div>
         <div id="halt-val" class="card-sub">{{ snapshot.halt_reason if snapshot.halted else 'Engine: ACTIVE' }}</div>
       </div>
     </section>
 
-    <section class="grid-radars">
-      <div class="card" id="nifty-radar-card">Loading NIFTY Radar...</div>
-      <div class="card" id="bnf-radar-card">Loading BANKNIFTY Radar...</div>
+    <!-- TAB 1: RADAR & SIGNALS -->
+    <div id="pane-radar-signals" class="tab-pane">
+      <div class="grid-radars">
+        <!-- NIFTY Radar Card -->
+        <div class="card" id="nifty-radar-card">Loading NIFTY Radar...</div>
+        <!-- BANKNIFTY Radar Card -->
+        <div class="card" id="bnf-radar-card">Loading BANKNIFTY Radar...</div>
+        <!-- Shoonya Broker, Funds & Daily Timeline -->
+        <div class="card">
+          <div class="section-title">
+            <span>Shoonya Broker &amp; Timeline</span>
+            <span id="broker-conn-badge" class="badge">CHECKING...</span>
+          </div>
+          <div class="kv-grid" style="grid-template-columns: repeat(2, minmax(0, 1fr));">
+            <div class="kv"><small>Client / Profile</small><strong id="brk-client">--</strong></div>
+            <div class="kv"><small>Broker Cash / Margin Used</small><strong id="brk-cash">--</strong></div>
+            <div class="kv"><small>Payin / Collateral</small><strong id="brk-coll">--</strong></div>
+            <div class="kv"><small>Net Available Margin</small><strong id="brk-net">--</strong></div>
+          </div>
+          <div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap;">
+            <button class="btn-primary" onclick="refreshBrokerData()">
+              <span class="material-symbols-outlined" style="font-size:15px;">refresh</span>
+              <span>Sync Broker</span>
+            </button>
+            <button onclick="openAccountSwitchModal()">
+              <span class="material-symbols-outlined" style="font-size:15px;">sync_alt</span>
+              <span>Switch User</span>
+            </button>
+            <a class="btn" href="https://trade.shoonya.com/" target="_blank" rel="noopener">Shoonya Web</a>
+          </div>
+          <div style="display:flex;gap:6px;align-items:center;margin-bottom:12px;">
+            <input id="funds-amount" type="number" step="1000" value="50000" class="form-input" style="width:110px;" />
+            <select id="funds-action" class="form-select" style="width:105px;">
+              <option value="add">Add Cap</option>
+              <option value="set">Set Cap</option>
+            </select>
+            <button onclick="submitFunds()">Update Cap</button>
+          </div>
+          <div class="section-title" style="margin-top:6px;margin-bottom:6px;"><span>Daily Institutional Schedule</span></div>
+          <div class="timeline" id="schedule-timeline"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 2: POSITIONS & BOOKS -->
+    <div id="pane-positions-books" class="tab-pane" style="display:none;">
+      <div style="display:flex;flex-direction:column;gap:14px;">
+        <div class="card">
+          <div class="section-title">
+            <span>Active Strategy Bracket Positions</span>
+            <span class="badge info">SL-LMT &amp; Trailing Active</span>
+          </div>
+          <div class="table-wrap" id="positions-container">
+            <div class="empty-msg">No active strategy positions.</div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="section-title">
+            <span>Completed Strategy Trades Today</span>
+            <div style="display:flex;gap:8px;">
+              <a class="btn" href="/api/trades/csv" onclick="showToast('Export', 'Downloading completed trades CSV...', 'info')">
+                <span class="material-symbols-outlined" style="font-size:16px;">download</span>
+                <span>Download CSV</span>
+              </a>
+            </div>
+          </div>
+          <div class="table-wrap" id="trades-container">
+            <div class="empty-msg">No completed trades yet.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 3: TERMINAL LOGS & TELEMETRY -->
+    <div id="pane-terminal-logs" class="tab-pane" style="display:none;">
       <div class="card">
         <div class="section-title">
-          <span>Shoonya Broker, Funds &amp; Auto-Schedule</span>
-          <span id="broker-conn-badge" class="badge">CHECKING...</span>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span class="material-symbols-outlined" style="color:var(--primary);font-size:20px;">terminal</span>
+            <span>Live System Event Stream &amp; Audit Trail</span>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <button onclick="copyTerminalLogs()">
+              <span class="material-symbols-outlined" style="font-size:15px;">content_copy</span>
+              <span>Copy Logs</span>
+            </button>
+            <button onclick="refreshBrokerData()">
+              <span class="material-symbols-outlined" style="font-size:15px;">refresh</span>
+              <span>Refresh</span>
+            </button>
+          </div>
         </div>
-        <div class="kv-grid" style="grid-template-columns: repeat(2, minmax(0, 1fr));">
-          <div class="kv"><small>Client / Profile</small><strong id="brk-client">--</strong></div>
-          <div class="kv"><small>Broker Cash / Margin Used</small><strong id="brk-cash">--</strong></div>
-          <div class="kv"><small>Payin / Collateral</small><strong id="brk-coll">--</strong></div>
-          <div class="kv"><small>Net Available Margin</small><strong id="brk-net">--</strong></div>
-        </div>
-        <div class="row-actions">
-          <button class="btn-primary" onclick="refreshBrokerData()">Sync Broker</button>
-          <a class="btn btn-green" href="https://prism.shoonya.com/" target="_blank" rel="noopener">+ Add Real Funds</a>
-          <a class="btn" href="https://trade.shoonya.com/" target="_blank" rel="noopener">Shoonya Web</a>
-        </div>
-        <div class="row-actions">
-          <input id="funds-amount" type="number" step="1000" value="50000"
-            style="width:105px;padding:6px 8px;border-radius:8px;border:1px solid var(--border);background:var(--surface-alt);color:var(--text);" />
-          <select id="funds-action"
-            style="padding:6px 8px;border-radius:8px;border:1px solid var(--border);background:var(--surface-alt);color:var(--text);">
-            <option value="add">Add Cap</option>
-            <option value="set">Set Cap</option>
-          </select>
-          <button onclick="submitFunds()">Update Cap</button>
-        </div>
-        <div id="funds-msg" class="status-note"></div>
-        <div class="section-title" style="margin-top:12px;margin-bottom:4px;"><span>Automated Daily Timeline</span>
-        </div>
-        <div id="auto-note" class="card-sub"></div>
-        <div class="timeline" id="schedule-timeline"></div>
+        <div id="terminal-logs-stream" class="log-terminal">Loading system logs...</div>
       </div>
-    </section>
+    </div>
 
-    <section class="grid-2">
-      <div class="stack">
-        <div class="card">
-          <div class="section-title"><span>Active Strategy Bracket Positions</span></div>
-          <div class="table-wrap" id="positions-container">
-            <p class="empty">No active strategy positions.</p>
-          </div>
-        </div>
-        <div class="card">
-          <div class="section-title"><span>Completed Strategy Trades Today</span></div>
-          <div class="table-wrap" id="trades-container">
-            <p class="empty">No completed trades yet.</p>
-          </div>
-        </div>
-      </div>
-      <div class="stack">
-        <div class="card">
-          <div class="section-title"><span>Live Shoonya Broker Order Book (OrderBook)</span></div>
-          <div class="table-wrap" id="broker-orders-container">
-            <p class="empty">Waiting for broker orders...</p>
-          </div>
-        </div>
-        <div class="card">
-          <div class="section-title"><span>Live Shoonya Broker Positions (PositionBook)</span></div>
-          <div class="table-wrap" id="broker-positions-container">
-            <p class="empty">No open broker positions.</p>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <section class="grid-2">
-      <div class="stack">
-        <div class="card">
-          <div class="section-title"><span>Quick Live Broker Order (Manual Test)</span></div>
-          <div class="form-grid">
-            <div class="field"><label>Exch</label><select id="ord-exch">
-                <option value="NSE">NSE</option>
-                <option value="NFO">NFO</option>
-                <option value="MCX">MCX</option>
-              </select></div>
-            <div class="field"><label>Symbol</label><input id="ord-tsym" type="text" value="TCS-EQ" /></div>
-            <div class="field"><label>Side</label><select id="ord-side">
-                <option value="B">BUY</option>
-                <option value="S">SELL</option>
-              </select></div>
-            <div class="field"><label>Prod</label><select id="ord-prd">
-                <option value="C">CNC</option>
-                <option value="I">MIS</option>
-                <option value="M">NRML</option>
-              </select></div>
-            <div class="field"><label>Type</label><select id="ord-prctyp">
-                <option value="LMT">LMT</option>
-                <option value="MKT">MKT</option>
-              </select></div>
-            <div class="field"><label>Qty</label><input id="ord-qty" type="number" min="1" value="1" /></div>
-            <div class="field"><label>Price</label><input id="ord-prc" type="number" step="0.05" value="2407.50" />
-            </div>
-            <div class="field"><button class="btn-primary" style="width:100%;" onclick="placeBrokerOrder()">Send
-                Order</button></div>
-          </div>
-          <div id="order-msg" class="status-note"></div>
-        </div>
-
-        <div class="card">
-          <details>
-            <summary>Connect / Switch Any Shoonya Account (Multi-User) ▾</summary>
-            <div class="form-grid" style="margin-top:8px;">
-              <div class="field"><label>User ID *</label><input id="conn-uid" type="text" placeholder="e.g. FA53975" />
-              </div>
-              <div class="field"><label>Account ID</label><input id="conn-actid" type="text" placeholder="Optional" />
-              </div>
-              <div class="field"><label>Password *</label><input id="conn-pwd" type="password" /></div>
-              <div class="field"><label>TOTP Secret *</label><input id="conn-totp" type="password" /></div>
-              <div class="field"><label>API Key</label><input id="conn-apikey" type="text" placeholder="<UID>_U" />
-              </div>
-              <div class="field"><label>Secret Key *</label><input id="conn-skey" type="password" /></div>
-              <div class="field"><label>Algo ID</label><input id="conn-algoid" type="text" placeholder="Optional" />
-              </div>
-              <div class="field"><button class="btn-primary" style="width:100%;"
-                  onclick="connectBrokerAccount()">Connect Account</button></div>
-            </div>
-            <div id="connect-msg" class="status-note"></div>
-          </details>
-        </div>
-      </div>
-
+    <!-- TAB 4: ANALYTICS & BACKTEST -->
+    <div id="pane-analytics-backtest" class="tab-pane" style="display:none;">
       <div class="card">
-        <div class="section-title"><span>Live Engine &amp; Auto-Execution Logs</span></div>
-        <div class="logs-box" id="logs-box"></div>
+        <div class="section-title">
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span class="material-symbols-outlined" style="color:var(--primary);font-size:20px;">insights</span>
+            <span>6-Month Backtest Analytics &amp; Alpha Optimization</span>
+          </div>
+          <a class="btn btn-primary" href="/backtest" target="_blank" onclick="showToast('Backtest', 'Opening full report in new window...', 'info')">
+            <span class="material-symbols-outlined" style="font-size:16px;">open_in_new</span>
+            <span>Open Standalone Dashboard</span>
+          </a>
+        </div>
+        <iframe src="/backtest" style="width:100%;height:680px;border:none;border-radius:var(--radius-md);"></iframe>
       </div>
-    </section>
+    </div>
+  </main>
+
+  <!-- MODAL 1: QUICK LIVE BROKER ORDER (MANUAL TEST) -->
+  <div id="quick-order-modal" class="modal-backdrop" style="display:none;">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span class="material-symbols-outlined" style="color:var(--primary);font-size:22px;">bolt</span>
+          <h3 style="margin:0;font-size:1.05rem;font-weight:700;font-family:'Space Grotesk',sans-serif;">Quick Broker Order (Manual Test)</h3>
+          <span class="badge info">SHOONYA LIVE API</span>
+        </div>
+        <button class="modal-close-btn" onclick="closeQuickOrderModal()">&times;</button>
+      </div>
+
+      <!-- Action Direction Tabs: BUY vs SELL -->
+      <div class="modal-side-tabs">
+        <button id="modal-side-buy" class="modal-side-btn buy active" onclick="setModalSide('B')">BUY (LONG)</button>
+        <button id="modal-side-sell" class="modal-side-btn sell" onclick="setModalSide('S')">SELL (SHORT)</button>
+      </div>
+
+      <!-- Instrument Controls -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
+        <div class="form-group">
+          <label>Index Underlying</label>
+          <select id="ord-index" class="form-select" onchange="onModalIndexChange(this.value)">
+            <option value="NIFTY" selected>NIFTY (Lot Size: 65)</option>
+            <option value="BANKNIFTY">BANKNIFTY (Lot Size: 30)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Option Type</label>
+          <select id="ord-opttype" class="form-select" onchange="updateModalStrikeSuggestion()">
+            <option value="CE" selected>Call Option (CE)</option>
+            <option value="PE">Put Option (PE)</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>Trading Symbol (Contract)</label>
+        <input id="ord-symbol" class="form-input" type="text" value="NIFTY26NOV24500CE" />
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
+        <div class="form-group">
+          <label>Product Type</label>
+          <select id="ord-product" class="form-select">
+            <option value="M" selected>NRML (Normal Margin)</option>
+            <option value="I">MIS (Intraday Squareoff)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Price Type</label>
+          <select id="ord-ptype" class="form-select" onchange="onModalPriceTypeChange(this.value)">
+            <option value="LMT" selected>LMT (Limit)</option>
+            <option value="MKT">MKT (Market)</option>
+          </select>
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">
+        <div class="form-group">
+          <label>Lots / Quantity</label>
+          <select id="ord-lots" class="form-select" onchange="onModalLotsChange(this.value)">
+            <option value="1">1 Lot (65 qty)</option>
+            <option value="2" selected>2 Lots (130 qty)</option>
+            <option value="3">3 Lots (195 qty)</option>
+            <option value="4">4 Lots (260 qty)</option>
+            <option value="5">5 Lots (325 qty)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Limit Price (₹)</label>
+          <input id="ord-price" class="form-input" type="number" step="0.05" value="125.00" oninput="recalcModalMargin()" />
+        </div>
+      </div>
+
+      <!-- Margin Requirement Telemetry Box -->
+      <div style="background:var(--surface-alt);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 14px;display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+        <div>
+          <span style="font-size:0.68rem;color:var(--muted);text-transform:uppercase;display:block;">Approx Margin Required</span>
+          <strong id="ord-est-margin" style="font-size:1.05rem;color:var(--primary);font-family:'JetBrains Mono',monospace;">₹16,250.00</strong>
+        </div>
+        <div style="text-align:right;">
+          <span style="font-size:0.68rem;color:var(--muted);text-transform:uppercase;display:block;">Broker Net Avail</span>
+          <strong id="ord-avail-margin" style="font-size:0.95rem;color:var(--text);font-family:'JetBrains Mono',monospace;">₹0.00</strong>
+        </div>
+      </div>
+
+      <button id="ord-submit-btn" class="btn-primary" style="width:100%;height:44px;font-size:0.88rem;" onclick="submitQuickBrokerOrder()">
+        <span class="material-symbols-outlined" style="font-size:18px;">send</span>
+        <span id="ord-submit-text">SUBMIT BUY NIFTY ORDER</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- MODAL 2: CONNECT / SWITCH ANY SHOONYA ACCOUNT (MULTI-USER) -->
+  <div id="account-switch-modal" class="modal-backdrop" style="display:none;">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span class="material-symbols-outlined" style="color:var(--primary);font-size:22px;">manage_accounts</span>
+          <h3 style="margin:0;font-size:1.05rem;font-weight:700;font-family:'Space Grotesk',sans-serif;">Switch Shoonya Account (Multi-User)</h3>
+          <span class="badge live">MULTI-USER</span>
+        </div>
+        <button class="modal-close-btn" onclick="closeAccountSwitchModal()">&times;</button>
+      </div>
+
+      <!-- Preset Account Selector -->
+      <div style="margin-bottom:12px;">
+        <span style="font-size:0.68rem;color:var(--muted);text-transform:uppercase;display:block;margin-bottom:6px;">Known Account Presets:</span>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;">
+          <button id="preset-fa53975" class="badge clickable info" onclick="selectPresetAccount('FA53975')">FA53975 (Default)</button>
+          <button class="badge clickable" onclick="clearAccountFields()">+ New Custom Account</button>
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
+        <div class="form-group">
+          <label>User ID (Client Code)</label>
+          <input id="sw-user-id" class="form-input" type="text" value="FA53975" />
+        </div>
+        <div class="form-group">
+          <label>Password</label>
+          <input id="sw-password" class="form-input" type="password" value="Bhuvi@1234" />
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>TOTP Secret Key (Google Authenticator 32-char)</label>
+        <input id="sw-totp" class="form-input" type="text" value="P5JFF5W5333AZA35675XR72X5YCVD7EF" />
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
+        <div class="form-group">
+          <label>API Key</label>
+          <input id="sw-api-key" class="form-input" type="text" value="FA53975_U" />
+        </div>
+        <div class="form-group">
+          <label>Account ID</label>
+          <input id="sw-account-id" class="form-input" type="text" value="FA53975" />
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>Secret Key (SHA-256 HMAC Secret)</label>
+        <input id="sw-secret-key" class="form-input" type="password" value="KhDp0lERNEnBBKRRR3Nz5XciNY97J6g9yCarhJQayQxBn2K21YfYEEaBDrd6ir5o" />
+      </div>
+
+      <button id="sw-submit-btn" class="btn-primary" style="width:100%;height:44px;font-size:0.88rem;margin-top:6px;" onclick="submitAccountSwitch()">
+        <span class="material-symbols-outlined" style="font-size:18px;">login</span>
+        <span>AUTHENTICATE &amp; SWITCH SESSION</span>
+      </button>
+    </div>
   </div>
 
   <script>
-    function fmt(val, digits = 2) {
-      if (val === null || val === undefined) return "--";
-      return Number(val).toFixed(digits);
-    }
+    let activeModalSide = 'B';
+    let latestSnapshot = {};
 
     function esc(str) {
       return String(str ?? "").replace(/[&<>"']/g, s => ({
@@ -973,21 +1100,456 @@
       }[s]));
     }
 
-    function applyTheme(themeName) {
-      const chosen = ["midnight", "emerald", "gold", "light", "nordic"].includes(themeName) ? themeName : "midnight";
-      document.body.setAttribute("data-theme", chosen);
-      const sel = document.getElementById("theme-select");
-      if (sel && sel.value !== chosen) sel.value = chosen;
-      try { localStorage.setItem("orb_ui_theme", chosen); } catch (e) { }
+    function fmt(val, dec = 2) {
+      if (val === null || val === undefined || isNaN(val)) return "--";
+      return Number(val).toLocaleString("en-IN", {
+        minimumFractionDigits: dec,
+        maximumFractionDigits: dec,
+      });
     }
 
-    function showNote(id, ok, msg) {
+    /* High-Tech Toast Notification System */
+    function showToast(title, message, type = 'info', duration = 3500) {
+      const container = document.getElementById('toast-container');
+      if (!container) return;
+      const id = 'toast-' + Date.now() + '-' + Math.floor(Math.random() * 1000);
+      const colors = {
+        success: { border: '#10b981', bg: 'rgba(16, 185, 129, 0.15)', icon: 'check_circle', text: '#10b981' },
+        error: { border: '#ff3366', bg: 'rgba(255, 51, 102, 0.18)', icon: 'error', text: '#ff3366' },
+        warning: { border: '#ffb703', bg: 'rgba(255, 183, 3, 0.18)', icon: 'warning', text: '#ffb703' },
+        info: { border: '#00f5d4', bg: 'rgba(0, 245, 212, 0.15)', icon: 'info', text: '#00f5d4' }
+      };
+      const c = colors[type] || colors.info;
+      const el = document.createElement('div');
+      el.id = id;
+      el.className = 'toast-item';
+      el.style.cssText = `
+        display: flex; align-items: flex-start; gap: 10px;
+        background: #111622; border: 1px solid ${c.border};
+        box-shadow: 0 4px 20px rgba(0,0,0,0.5), 0 0 10px ${c.bg};
+        border-radius: 10px; padding: 12px 16px; min-width: 280px; max-width: 380px;
+        color: #f1f5f9; pointer-events: auto; animation: toastSlideIn 0.25s ease-out;
+        position: relative; overflow: hidden;
+      `;
+      el.innerHTML = `
+        <span class="material-symbols-outlined" style="color:${c.text};font-size:20px;flex-shrink:0;margin-top:1px;">${c.icon}</span>
+        <div style="flex:1;min-width:0;">
+          <div style="font-weight:700;font-size:0.82rem;color:${c.text};margin-bottom:2px;font-family:'Space Grotesk',sans-serif;">${esc(title)}</div>
+          <div style="font-size:0.75rem;color:#cbd5e1;line-height:1.3;">${esc(message)}</div>
+        </div>
+        <button onclick="dismissToast('${id}')" style="background:none;border:none;color:#64748b;cursor:pointer;padding:0;margin-left:4px;font-size:16px;line-height:1;">&times;</button>
+        <div style="position:absolute;bottom:0;left:0;height:2px;background:${c.text};width:100%;animation:toastProgress ${duration}ms linear forwards;"></div>
+      `;
+      container.appendChild(el);
+      setTimeout(() => dismissToast(id), duration);
+    }
+
+    function dismissToast(id) {
       const el = document.getElementById(id);
       if (!el) return;
-      el.textContent = msg;
-      el.className = "status-note show " + (ok ? "ok" : "err");
+      el.style.animation = 'toastSlideOut 0.25s ease-in forwards';
+      setTimeout(() => el.remove(), 250);
     }
 
+    /* Tab Switcher */
+    function showTab(tabId) {
+      const tabs = ['radar-signals', 'positions-books', 'terminal-logs', 'analytics-backtest'];
+      tabs.forEach(t => {
+        const pane = document.getElementById('pane-' + t);
+        const btn = document.getElementById('tab-btn-' + t);
+        if (pane) pane.style.display = (t === tabId) ? 'block' : 'none';
+        if (btn) {
+          if (t === tabId) btn.classList.add('active');
+          else btn.classList.remove('active');
+        }
+      });
+      const tabNames = {
+        'radar-signals': 'Radar & Signals',
+        'positions-books': 'Positions & Books',
+        'terminal-logs': 'Terminal Logs',
+        'analytics-backtest': 'Analytics & Backtest'
+      };
+      showToast('Navigation', `Active View: ${tabNames[tabId] || tabId}`, 'info', 2000);
+    }
+
+    /* Quick Broker Order Modal Handling */
+    function openQuickOrderModal(indexName = 'NIFTY', optType = 'CE') {
+      const modal = document.getElementById('quick-order-modal');
+      if (!modal) return;
+      document.getElementById('ord-index').value = indexName;
+      document.getElementById('ord-opttype').value = optType;
+      setModalSide('B');
+      onModalIndexChange(indexName);
+      modal.style.display = 'flex';
+      showToast('Broker Ticket', `Manual Order Ticket loaded for ${indexName} ${optType}`, 'info', 2000);
+    }
+
+    function closeQuickOrderModal() {
+      const modal = document.getElementById('quick-order-modal');
+      if (modal) modal.style.display = 'none';
+    }
+
+    function setModalSide(side) {
+      activeModalSide = side;
+      const buyBtn = document.getElementById('modal-side-buy');
+      const sellBtn = document.getElementById('modal-side-sell');
+      const submitText = document.getElementById('ord-submit-text');
+      const submitBtn = document.getElementById('ord-submit-btn');
+      const idx = document.getElementById('ord-index')?.value || 'NIFTY';
+      if (side === 'B') {
+        buyBtn.classList.add('active');
+        sellBtn.classList.remove('active');
+        submitText.textContent = `SUBMIT BUY ${idx} ORDER`;
+        submitBtn.className = 'btn-primary';
+      } else {
+        sellBtn.classList.add('active');
+        buyBtn.classList.remove('active');
+        submitText.textContent = `SUBMIT SELL ${idx} ORDER`;
+        submitBtn.className = 'btn-kill';
+      }
+    }
+
+    function onModalIndexChange(indexName) {
+      const lotsSelect = document.getElementById('ord-lots');
+      const lotSize = indexName === 'NIFTY' ? 65 : 30;
+      lotsSelect.innerHTML = [1, 2, 3, 4, 5].map(n => 
+        `<option value="${n}" ${n === 2 ? 'selected' : ''}>${n} Lot${n > 1 ? 's' : ''} (${n * lotSize} qty)</option>`
+      ).join('');
+      updateModalStrikeSuggestion();
+      recalcModalMargin();
+    }
+
+    function updateModalStrikeSuggestion() {
+      const idx = document.getElementById('ord-index').value;
+      const optType = document.getElementById('ord-opttype').value;
+      const r = (latestSnapshot.indices || {})[idx]?.radar || {};
+      const strikeStep = idx === 'NIFTY' ? 50 : 100;
+      const spot = (latestSnapshot.indices || {})[idx]?.spot_ltp || (idx === 'NIFTY' ? 24500 : 52000);
+      const roundedStrike = Math.round(spot / strikeStep) * strikeStep;
+      document.getElementById('ord-symbol').value = `${idx}26NOV${roundedStrike}${optType}`;
+      if (r.atm_premium) {
+        document.getElementById('ord-price').value = r.atm_premium.toFixed(2);
+      }
+      recalcModalMargin();
+    }
+
+    function onModalPriceTypeChange(ptype) {
+      const priceInput = document.getElementById('ord-price');
+      if (ptype === 'MKT') {
+        priceInput.disabled = true;
+        priceInput.value = '0.00';
+      } else {
+        priceInput.disabled = false;
+        recalcModalMargin();
+      }
+    }
+
+    function onModalLotsChange(lots) {
+      recalcModalMargin();
+    }
+
+    function recalcModalMargin() {
+      const idx = document.getElementById('ord-index')?.value || 'NIFTY';
+      const lots = parseInt(document.getElementById('ord-lots')?.value || '2');
+      const price = parseFloat(document.getElementById('ord-price')?.value || '125.00');
+      const lotSize = idx === 'NIFTY' ? 65 : 30;
+      const totalQty = lots * lotSize;
+      const marginReq = totalQty * (price > 0 ? price : 100.0);
+      document.getElementById('ord-est-margin').textContent = '₹' + fmt(marginReq, 2);
+      const avail = latestSnapshot.broker?.net_available || latestSnapshot.avail_fund || 0;
+      document.getElementById('ord-avail-margin').textContent = '₹' + fmt(avail, 2);
+    }
+
+    async function submitQuickBrokerOrder() {
+      const idx = document.getElementById('ord-index').value;
+      const symbol = document.getElementById('ord-symbol').value.trim();
+      const side = activeModalSide;
+      const lots = parseInt(document.getElementById('ord-lots').value);
+      const lotSize = idx === 'NIFTY' ? 65 : 30;
+      const qty = lots * lotSize;
+      const ptype = document.getElementById('ord-ptype').value;
+      const price = parseFloat(document.getElementById('ord-price').value);
+      const prd = document.getElementById('ord-product').value;
+
+      showToast('Executing Order', `Submitting ${side === 'B' ? 'BUY' : 'SELL'} ${qty} ${symbol} (${ptype} @ ₹${price})...`, 'info');
+
+      try {
+        const resp = await fetch('/api/broker/order', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            exchange: 'NFO',
+            tradingsymbol: symbol,
+            buy_or_sell: side,
+            quantity: qty,
+            price_type: ptype,
+            price: price,
+            product_type: prd,
+          })
+        });
+        const data = await resp.json();
+        if (data.ok) {
+          showToast('Order Filled', `Broker Response: ${data.message || 'Order placed successfully'}`, 'success', 5000);
+          closeQuickOrderModal();
+          refreshStatus();
+        } else {
+          showToast('Order Rejected', data.message || 'Broker rejected order', 'error', 6000);
+        }
+      } catch (err) {
+        showToast('Execution Error', err.message, 'error');
+      }
+    }
+
+    /* Shoonya Account Switch Modal */
+    function openAccountSwitchModal() {
+      const modal = document.getElementById('account-switch-modal');
+      if (modal) modal.style.display = 'flex';
+      showToast('Account Manager', 'Shoonya multi-user switcher loaded', 'info', 2000);
+    }
+
+    function closeAccountSwitchModal() {
+      const modal = document.getElementById('account-switch-modal');
+      if (modal) modal.style.display = 'none';
+    }
+
+    function selectPresetAccount(userId) {
+      if (userId === 'FA53975') {
+        document.getElementById('sw-user-id').value = 'FA53975';
+        document.getElementById('sw-password').value = 'Bhuvi@1234';
+        document.getElementById('sw-totp').value = 'P5JFF5W5333AZA35675XR72X5YCVD7EF';
+        document.getElementById('sw-api-key').value = 'FA53975_U';
+        document.getElementById('sw-account-id').value = 'FA53975';
+        document.getElementById('sw-secret-key').value = 'KhDp0lERNEnBBKRRR3Nz5XciNY97J6g9yCarhJQayQxBn2K21YfYEEaBDrd6ir5o';
+        showToast('Preset Loaded', 'Loaded primary credentials for FA53975', 'info', 2000);
+      }
+    }
+
+    function clearAccountFields() {
+      document.getElementById('sw-user-id').value = '';
+      document.getElementById('sw-password').value = '';
+      document.getElementById('sw-totp').value = '';
+      document.getElementById('sw-api-key').value = '';
+      document.getElementById('sw-account-id').value = '';
+      document.getElementById('sw-secret-key').value = '';
+      showToast('New Account', 'Enter your new Shoonya credentials to connect', 'info', 2000);
+    }
+
+    async function submitAccountSwitch() {
+      const payload = {
+        user_id: document.getElementById('sw-user-id').value.trim(),
+        password: document.getElementById('sw-password').value.trim(),
+        totp_secret: document.getElementById('sw-totp').value.trim(),
+        secret_key: document.getElementById('sw-secret-key').value.trim(),
+        account_id: document.getElementById('sw-account-id').value.trim(),
+        api_key: document.getElementById('sw-api-key').value.trim(),
+      };
+      if (!payload.user_id || !payload.password || !payload.totp_secret || !payload.secret_key) {
+        showToast('Validation Error', 'User ID, Password, TOTP Secret, and Secret Key are required.', 'error');
+        return;
+      }
+      showToast('Authenticating', `Connecting to Shoonya account ${payload.user_id}...`, 'info');
+      try {
+        const resp = await fetch('/api/broker/connect', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const data = await resp.json();
+        if (data.ok) {
+          showToast('Account Connected', `Authenticated successfully as ${payload.user_id}!`, 'success', 5000);
+          closeAccountSwitchModal();
+          refreshStatus();
+        } else {
+          showToast('Auth Failed', data.message || 'Authentication error', 'error', 6000);
+        }
+      } catch (err) {
+        showToast('Connection Error', err.message, 'error');
+      }
+    }
+
+    /* Core Terminal Actions with Toast Feedbacks */
+    async function triggerOAuth() {
+      showToast('OAuth 2.0', 'Initiating Shoonya OAuth token handshake...', 'info');
+      try {
+        const resp = await fetch('/api/oauth-login', { method: 'POST' });
+        const data = await resp.json();
+        if (data.ok) {
+          showToast('OAuth Success', `Session Token Renewed! (${data.token_date})`, 'success');
+          refreshStatus();
+        } else {
+          showToast('OAuth Notice', `Status: ${data.oauth_status}`, 'warning');
+        }
+      } catch (err) {
+        showToast('OAuth Error', err.message, 'error');
+      }
+    }
+
+    async function toggleMode() {
+      showToast('Mode Toggle', 'Requesting trade mode switch...', 'info');
+      try {
+        const resp = await fetch('/api/toggle-mode', { method: 'POST' });
+        const data = await resp.json();
+        if (data.ok) {
+          showToast('Mode Switched', `Active Mode is now: ${data.mode}`, 'success');
+          refreshStatus();
+        }
+      } catch (err) {
+        showToast('Mode Error', err.message, 'error');
+      }
+    }
+
+    async function triggerKillSwitch() {
+      if (!confirm("EMERGENCY KILL SWITCH: Cancel all pending orders and exit all open strategy positions immediately?")) {
+        return;
+      }
+      showToast('KILL SWITCH', 'Emergency square-off executing...', 'error');
+      try {
+        const resp = await fetch('/api/kill-switch', { method: 'POST' });
+        const data = await resp.json();
+        showToast('KILL SWITCH', data.message || 'Kill switch executed.', 'error', 6000);
+        refreshStatus();
+      } catch (err) {
+        showToast('Kill Switch Error', err.message, 'error');
+      }
+    }
+
+    async function resetTradesCounter() {
+      showToast('Reset Quota', 'Resetting daily trade counter to 0/2...', 'info');
+      try {
+        const resp = await fetch('/api/trades/reset', { method: 'POST' });
+        const data = await resp.json();
+        if (data.ok) {
+          showToast('Quota Reset', 'Daily trade quota reset to 0/2.', 'success');
+          refreshStatus();
+        }
+      } catch (err) {
+        showToast('Reset Error', err.message, 'error');
+      }
+    }
+
+    async function triggerAutoBreakoutOrder(name) {
+      showToast('Strategy Trigger', `Evaluating auto-breakout order for ${name}...`, 'info');
+      try {
+        const resp = await fetch('/api/strategy/auto-trigger', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ index_name: name, signal_type: 'AUTO' })
+        });
+        const data = await resp.json();
+        if (data.ok) {
+          showToast('Order Triggered', data.message || `${name} Auto-Order executed`, 'success', 5000);
+          refreshStatus();
+        } else {
+          showToast('Order Blocked', data.message || 'Signal gates not met', 'warning', 5000);
+        }
+      } catch (err) {
+        showToast('Trigger Error', err.message, 'error');
+      }
+    }
+
+    async function updateIndexLots(name, val) {
+      showToast('Position Sizing', `Setting ${name} to ${val} lot(s)...`, 'info');
+      try {
+        const resp = await fetch('/api/settings/lots', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ index_name: name, lots: parseInt(val) })
+        });
+        const data = await resp.json();
+        if (data.ok) {
+          showToast('Lots Updated', `${name} now sizing ${val} lot(s).`, 'success');
+          refreshStatus();
+        }
+      } catch (err) {
+        showToast('Lots Error', err.message, 'error');
+      }
+    }
+
+    async function updateIndexProductType(name, val) {
+      showToast('Product Type', `Setting ${name} order product to ${val}...`, 'info');
+      try {
+        const resp = await fetch('/api/settings/product-type', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ index_name: name, product_type: val })
+        });
+        const data = await resp.json();
+        if (data.ok) {
+          showToast('Product Type Set', `${name} product type set to ${val}.`, 'success');
+          refreshStatus();
+        }
+      } catch (err) {
+        showToast('Product Type Error', err.message, 'error');
+      }
+    }
+
+    async function exitPosition(name) {
+      if (!confirm(`Square off active position for ${name} immediately at market?`)) return;
+      showToast('Position Exit', `Squaring off ${name} position...`, 'warning');
+      try {
+        const resp = await fetch('/api/positions/exit', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ index_name: name })
+        });
+        const data = await resp.json();
+        if (data.ok) {
+          showToast('Position Closed', data.message || `${name} exited.`, 'success');
+          refreshStatus();
+        } else {
+          showToast('Exit Failed', data.message, 'error');
+        }
+      } catch (err) {
+        showToast('Exit Error', err.message, 'error');
+      }
+    }
+
+    async function refreshBrokerData() {
+      showToast('Syncing Broker', 'Fetching latest limits, cash & positions from Shoonya...', 'info');
+      try {
+        const resp = await fetch('/api/broker/refresh', { method: 'POST' });
+        const data = await resp.json();
+        if (data.ok) {
+          showToast('Broker Synced', `Available Margin: ₹${fmt(data.broker?.net_available || 0)}`, 'success');
+          refreshStatus();
+        } else {
+          showToast('Broker Sync', 'Limits refreshed.', 'info');
+        }
+      } catch (err) {
+        showToast('Sync Error', err.message, 'error');
+      }
+    }
+
+    async function submitFunds() {
+      const amt = parseFloat(document.getElementById('funds-amount').value);
+      const act = document.getElementById('funds-action').value;
+      showToast('Capital Allocation', `${act === 'set' ? 'Setting' : 'Adding'} ₹${amt} strategy capital...`, 'info');
+      try {
+        const resp = await fetch('/api/broker/funds', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ amount: amt, action: act })
+        });
+        const data = await resp.json();
+        if (data.ok) {
+          showToast('Capital Updated', data.message || `New Capital: ₹${fmt(data.capital)}`, 'success');
+          refreshStatus();
+        }
+      } catch (err) {
+        showToast('Fund Error', err.message, 'error');
+      }
+    }
+
+    function copyTerminalLogs() {
+      const text = document.getElementById('terminal-logs-stream')?.innerText || '';
+      navigator.clipboard.writeText(text).then(() => {
+        showToast('Copied', 'System logs copied to clipboard!', 'success');
+      }).catch(err => {
+        showToast('Copy Error', err.message, 'error');
+      });
+    }
+
+    /* Radar Rendering */
     function renderRadarCard(containerId, name, st, orbStart, orbEnd) {
       const el = document.getElementById(containerId);
       if (!el || !st) return;
@@ -1020,7 +1582,10 @@
       const selProd = userSelectedProd ? userSelectedProd : (currentProd === 'M' ? 'NRML' : 'MIS');
 
       el.innerHTML = `
-        <div class="section-title"><span>${esc(name)} Spot &amp; Auto-Order Radar</span>${statusBadge}</div>
+        <div class="section-title">
+          <span>${esc(name)} Spot &amp; Auto-Order Radar</span>
+          ${statusBadge}
+        </div>
         <div class="kv-grid">
           <div class="kv"><small>Spot LTP</small><strong>${fmt(st.spot_ltp)}</strong></div>
           <div class="kv"><small>ORH (${startT}-${endT})</small><strong>${fmt(st.orh)}</strong></div>
@@ -1029,12 +1594,14 @@
           <div class="kv"><small>Intraday VWAP</small><strong>${fmt(st.vwap)}</strong></div>
           <div class="kv"><small>Wilder RSI(14)</small><strong>${fmt(st.rsi)}</strong></div>
         </div>
-        <div style="display:flex;justify-content:space-between;font-size:0.74rem;color:var(--muted);">
-          <span>Auto-Trigger Readiness</span><strong>${r.readiness_pct ?? 0}%</strong>
+        <div style="display:flex;justify-content:space-between;font-size:0.72rem;color:var(--muted);margin-bottom:2px;">
+          <span>5-Gate Auto-Trigger Readiness</span><strong>${r.readiness_pct ?? 0}%</strong>
         </div>
         <div class="progress-wrap"><div class="progress-fill" style="width:${r.readiness_pct ?? 0}%"></div></div>
         <div class="gates-row">${gates}</div>
-        <div style="margin:6px 0;padding:8px 10px;background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:8px;display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px;font-size:0.75rem;">
+
+        <!-- Position Sizing & Order Setup Box -->
+        <div style="margin:8px 0;padding:8px 10px;background:var(--surface-alt);border:1px solid var(--border);border-radius:var(--radius-sm);display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px;font-size:0.75rem;">
           <div style="display:flex;align-items:center;flex-wrap:wrap;gap:8px;">
             <div style="display:flex;align-items:center;gap:4px;">
               <span style="color:var(--muted);font-weight:600;">Lots:</span>
@@ -1049,19 +1616,29 @@
                 <option value="MIS" ${selProd === 'MIS' ? 'selected' : ''}>MIS</option>
               </select>
             </div>
-            <span style="font-size:0.72rem;color:var(--accent);background:var(--accent-soft);padding:2px 6px;border-radius:4px;">Alloc: ${allocPct}% (₹${fmt(allocFund)})</span>
+            <span style="font-size:0.72rem;color:var(--primary);background:var(--primary-soft);padding:2px 6px;border-radius:4px;">Alloc: ${allocPct}% (₹${fmt(allocFund)})</span>
           </div>
           <div style="text-align:right;">
             <span style="color:var(--muted);">Approx Margin: </span>
-            <strong style="color:var(--pos, #10b981);">₹${fmt(r.est_margin || 0)}</strong>
-            <small style="color:var(--muted);font-size:0.7rem;display:block;">(@ ₹${fmt(r.atm_premium || 0)} ATM)</small>
+            <strong style="color:var(--green);">₹${fmt(r.est_margin || 0)}</strong>
+            <small style="color:var(--muted);font-size:0.68rem;display:block;">(@ ₹${fmt(r.atm_premium || 0)} ATM)</small>
           </div>
         </div>
-        <div style="font-size:0.74rem;color:var(--muted);display:flex;justify-content:space-between;align-items:center;">
-          <span>Candidate: <strong>${esc(r.candidate_ce || '--')}</strong></span>
-          <button onclick="triggerAutoBreakoutOrder('${esc(name)}')" style="padding:3px 10px;font-size:0.72rem;font-weight:600;border-radius:4px;background:#2563eb;color:#fff;border:none;cursor:pointer;" title="Execute strategy entry order immediately for ${esc(name)}">⚡ Trigger Order</button>
+
+        <div style="font-size:0.74rem;color:var(--muted);display:flex;justify-content:space-between;align-items:center;margin-top:6px;">
+          <span>Candidate: <strong style="color:var(--text);">${esc(r.candidate_ce || '--')}</strong></span>
+          <div style="display:flex;gap:4px;">
+            <button class="btn-primary" onclick="openQuickOrderModal('${esc(name)}', 'CE')" style="padding:3px 8px;font-size:0.7rem;" title="Open Manual Broker Order Ticket">
+              <span>Manual Ticket</span>
+            </button>
+            <button onclick="triggerAutoBreakoutOrder('${esc(name)}')" style="padding:3px 8px;font-size:0.7rem;font-weight:600;" title="Execute strategy entry order immediately for ${esc(name)}">
+              <span>⚡ Auto-Order</span>
+            </button>
+          </div>
         </div>
-        <div class="radar-banner ${isImm ? 'imminent' : ''}">${esc(r.radar_summary || ('Waiting for ' + endT + ' ORB lock.'))}</div>
+        <div class="radar-banner ${isImm ? 'imminent' : ''}">
+          ${esc(r.radar_summary || ('Waiting for ' + endT + ' ORB lock.'))}
+        </div>
       `;
       if (activeEl && activeEl.id === `lots-select-${name}`) {
         document.getElementById(`lots-select-${name}`)?.focus();
@@ -1070,54 +1647,41 @@
       }
     }
 
+    /* Core Status Poll and Rendering */
     function renderSnapshot(data) {
-      document.getElementById("algo-id").textContent = data.sebi_algo_id || "--";
-      const descEl = document.getElementById("strategy-desc");
-      if (descEl) descEl.textContent = `${data.orb_window_minutes || 30}-Min ORB (${data.orb_start_time || '09:15'}-${data.orb_end_time || '09:45'}) | Institutional: ${data.entry_start_time || '10:00'}-${data.entry_cutoff_time || '13:15'}`;
-      const orbSel = document.getElementById("orb-anchor-select");
-      const currentAnchorKey = `${data.orb_start_time || '09:15'}|${data.orb_window_minutes || 30}`;
-      if (orbSel && document.activeElement !== orbSel) {
-        if ([...orbSel.options].some(o => o.value === currentAnchorKey)) {
-          orbSel.value = currentAnchorKey;
-        }
-      }
-      const cutoffEl = document.getElementById("entry-cutoff-val");
-      if (cutoffEl && data.entry_cutoff_time) cutoffEl.textContent = data.entry_cutoff_time;
-      const cutoffSel = document.getElementById("cutoff-select");
-      if (cutoffSel && document.activeElement !== cutoffSel && data.entry_cutoff_time) {
-        cutoffSel.value = data.entry_cutoff_time;
-      }
-      document.getElementById("user-badge").textContent = "Client: " + (data.user_id || "--");
+      latestSnapshot = data;
+
+      // Mode & User Badges
       const modeBadge = document.getElementById("mode-badge");
       modeBadge.textContent = "MODE: " + data.mode;
-      modeBadge.className = "badge " + (data.mode === "LIVE" ? "live" : "paper");
-
+      modeBadge.className = "badge clickable " + (data.mode === "LIVE" ? "live" : "paper");
+      document.getElementById("user-badge").textContent = "Client: " + (data.user_id || "--");
       document.getElementById("oauth-badge").textContent = "OAuth: " + data.oauth_status;
       document.getElementById("ws-badge").textContent = "WS: " + (data.ws_connected ? "ONLINE" : "OFFLINE");
-      document.getElementById("ip-badge").textContent = "IP: " + (data.public_ip || "--");
-      document.getElementById("clock-badge").textContent = "IST: " + data.ist_time;
+      document.getElementById("ws-badge").className = "badge " + (data.ws_connected ? "live" : "halted");
+      document.getElementById("phase-badge").textContent = "IST: " + data.ist_time;
 
-      const sched = data.schedule || {};
-      document.getElementById("phase-badge").textContent = sched.phase || "--";
-
+      // MTM
       const mtmEl = document.getElementById("mtm-val");
       mtmEl.textContent = "₹" + fmt(data.mtm_pnl, 2);
       mtmEl.className = "card-val " + (data.mtm_pnl >= 0 ? "pos" : "neg");
 
+      // Broker Telemetry
       const brk = data.broker || {};
-      document.getElementById("kpi-brk-cash").textContent = "₹" + fmt(brk.cash || 0);
+      document.getElementById("kpi-brk-cash").textContent = "₹" + fmt(brk.net_available || brk.cash || 0);
       document.getElementById("kpi-brk-status").textContent = brk.connected
-        ? `Net Avail: ₹${fmt(brk.net_available || 0)}`
+        ? `Cash: ₹${fmt(brk.cash || 0)} | Used: ₹${fmt(brk.margin_used || 0)}`
         : "Run OAuth / Connect Account";
       document.getElementById("kpi-capital").textContent = "₹" + fmt(data.capital || 0);
       document.getElementById("trades-val").textContent = `${data.trades_taken} / ${data.max_trades}`;
 
+      // Weekly Loss Guard
       const wg = data.weekly_guard || {};
       const wgVal = document.getElementById("kpi-weekly-guard");
       const wgSub = document.getElementById("kpi-weekly-guard-sub");
       if (wgVal) {
         wgVal.textContent = `${wg.losses ?? 0} / ${wg.max_losses ?? 2}`;
-        wgVal.className = "card-val " + (wg.is_halted ? "neg" : (wg.losses === 1 ? "amber" : "pos"));
+        wgVal.className = "card-val " + (wg.is_halted ? "neg" : (wg.losses === 1 ? "warn" : "pos"));
       }
       if (wgSub) {
         wgSub.textContent = wg.status_text || "0/2 Losses (ARMED)";
@@ -1126,15 +1690,18 @@
       document.getElementById("vix-val").textContent = data.india_vix !== null ? fmt(data.india_vix, 2) : "--";
       document.getElementById("kpi-contracts").textContent = data.cached_contracts ?? 0;
 
+      const sched = data.schedule || {};
       const cDown = document.getElementById("candle-countdown");
       cDown.textContent = sched.next_candle_close_sec ? `${sched.next_candle_close_sec}s` : (sched.phase === "WEEKEND_STANDBY" ? "WEEKEND" : "CLOSED");
       const haltEl = document.getElementById("halt-val");
       haltEl.textContent = data.halted ? (data.halt_reason || "HALTED") : "Engine: ACTIVE";
       haltEl.className = "card-sub " + (data.halted ? "neg" : "pos");
 
+      // Render Radars (NIFTY & BANKNIFTY)
       renderRadarCard("nifty-radar-card", "NIFTY", (data.indices || {}).NIFTY, data.orb_start_time, data.orb_end_time);
       renderRadarCard("bnf-radar-card", "BANKNIFTY", (data.indices || {}).BANKNIFTY, data.orb_start_time, data.orb_end_time);
 
+      // Broker Box Details
       const brkBadge = document.getElementById("broker-conn-badge");
       brkBadge.textContent = brk.connected ? `CONNECTED (${brk.user_id || data.user_id || "--"})` : "NOT CONNECTED";
       brkBadge.className = "badge " + (brk.connected ? "live" : "halted");
@@ -1144,334 +1711,152 @@
       document.getElementById("brk-coll").textContent = `₹${fmt(brk.payin || 0)} / ₹${fmt(brk.collateral || 0)}`;
       document.getElementById("brk-net").textContent = "₹" + fmt(brk.net_available || 0);
 
-      document.getElementById("auto-note").textContent = sched.auto_mode_note || "";
+      // Daily Schedule Timeline
       document.getElementById("schedule-timeline").innerHTML = (sched.milestones || []).map(m => {
         const cls = m.status === "DONE" ? "pos" : (m.status === "ACTIVE" ? "warn" : "");
         return `<div class="ms-row"><span><strong>${esc(m.time)}</strong> — ${esc(m.label)}</span><span class="ms-status ${cls}">${esc(m.status)}</span></div>`;
       }).join("");
 
-      const posContainer = document.getElementById("positions-container");
-      if (!data.positions || data.positions.length === 0) {
-        posContainer.innerHTML = '<p class="empty">No active strategy positions.</p>';
-      } else {
-        const rows = data.positions.map(p => `
+      // Render Positions Table (Tab 2)
+      renderPositions(data.positions || []);
+
+      // Render Completed Trades Table (Tab 2)
+      renderTrades(data.completed_trades || []);
+
+      // Render System Logs (Tab 3)
+      renderLogs(data.logs || []);
+    }
+
+    function renderPositions(positions) {
+      const container = document.getElementById("positions-container");
+      if (!container) return;
+      if (!positions || positions.length === 0) {
+        container.innerHTML = `<div class="empty-msg">No active strategy positions.</div>`;
+        return;
+      }
+      let html = `
+        <table>
+          <thead>
+            <tr>
+              <th>Contract</th>
+              <th>State</th>
+              <th>Qty</th>
+              <th>Avg Entry</th>
+              <th>Live LTP</th>
+              <th>SL Trigger</th>
+              <th>Breakeven (+20)</th>
+              <th>Target (+40)</th>
+              <th>Unrealized P&amp;L</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody>
+      `;
+      positions.forEach(p => {
+        const pnl = (p.unrealized_pnl || 0) + (p.realized_pnl || 0);
+        html += `
           <tr>
             <td><strong>${esc(p.tradingsymbol)}</strong></td>
-            <td>${esc(p.state)}</td>
-            <td>${p.remaining_qty}/${p.initial_qty}</td>
+            <td><span class="badge ${p.state.includes('OPEN') ? 'live' : 'info'}">${esc(p.state)}</span></td>
+            <td>${p.remaining_qty} / ${p.initial_qty}</td>
             <td>₹${fmt(p.entry_avg_price)}</td>
             <td>₹${fmt(p.last_ltp)}</td>
-            <td>₹${fmt(p.sl_trigger_price)}</td>
-            <td>₹${fmt(p.target1_price)}</td>
-            <td class="${(p.unrealized_pnl + p.realized_pnl) >= 0 ? 'pos' : 'neg'}">₹${fmt(p.unrealized_pnl + p.realized_pnl)}</td>
-            <td><button onclick="exitActivePosition('${esc(p.index_name)}')" style="background:#dc2626;color:#fff;border:none;border-radius:4px;padding:3px 8px;font-size:0.7rem;cursor:pointer;font-weight:600;" title="Square off this active position">Square Off</button></td>
-          </tr>`).join("");
-        posContainer.innerHTML = `<table><thead><tr><th>Contract</th><th>State</th><th>Qty</th><th>Entry</th><th>LTP</th><th>SL</th><th>T1</th><th>P&L</th><th>Action</th></tr></thead><tbody>${rows}</tbody></table>`;
-      }
+            <td><span class="neg font-bold">₹${fmt(p.sl_trigger_price)}</span></td>
+            <td>₹${fmt(p.breakeven_target)}</td>
+            <td><span class="pos font-bold">₹${fmt(p.target1_price)}</span></td>
+            <td class="${pnl >= 0 ? 'pos' : 'neg'} font-bold">₹${fmt(pnl)}</td>
+            <td>
+              <button class="btn-kill" style="padding:2px 8px;font-size:0.7rem;" onclick="exitPosition('${esc(p.index_name)}')">Square Off</button>
+            </td>
+          </tr>
+        `;
+      });
+      html += `</tbody></table>`;
+      container.innerHTML = html;
+    }
 
-      const trdContainer = document.getElementById("trades-container");
-      if (!data.completed_trades || data.completed_trades.length === 0) {
-        trdContainer.innerHTML = '<p class="empty">No completed strategy trades yet.</p>';
-      } else {
-        const rows = data.completed_trades.map(t => `
-          <tr>
-            <td>${esc(t.tradingsymbol)}</td>
-            <td>${esc(t.signal_type)}</td>
-            <td>${t.quantity}</td>
-            <td>${esc(t.entry_time)} @ ₹${fmt(t.entry_price)}</td>
-            <td>${esc(t.exit_time)} @ ₹${fmt(t.exit_price)}</td>
-            <td>${esc(t.exit_reason)}</td>
-            <td class="${t.net_pnl >= 0 ? 'pos' : 'neg'}">₹${fmt(t.net_pnl)}</td>
-          </tr>`).join("");
-        trdContainer.innerHTML = `<table><thead><tr><th>Contract</th><th>Side</th><th>Qty</th><th>Entry</th><th>Exit</th><th>Reason</th><th>Net P&L</th></tr></thead><tbody>${rows}</tbody></table>`;
+    function renderTrades(trades) {
+      const container = document.getElementById("trades-container");
+      if (!container) return;
+      if (!trades || trades.length === 0) {
+        container.innerHTML = `<div class="empty-msg">No completed trades yet today.</div>`;
+        return;
       }
-
-      const brkOrdBox = document.getElementById("broker-orders-container");
-      const brkOrders = brk.orders || [];
-      if (!brk.connected && brkOrders.length === 0) {
-        brkOrdBox.innerHTML = `<p class="empty">${esc(brk.error || "Not connected to Shoonya yet. Click Run OAuth Login or Connect Account.")}</p>`;
-      } else if (brkOrders.length === 0) {
-        brkOrdBox.innerHTML = '<p class="empty">No broker orders placed today on Shoonya.</p>';
-      } else {
-        const rows = brkOrders.map(o => {
-          const st = (o.status || "").toUpperCase();
-          const stCls = st === "COMPLETE" ? "pos" : ((st === "REJECTED" || st === "CANCELED") ? "neg" : "warn");
-          return `
+      let html = `
+        <table>
+          <thead>
             <tr>
-              <td><strong>${esc(o.norenordno)}</strong></td>
-              <td>${esc(o.norentm)}</td>
-              <td>${esc(o.exch)}:${esc(o.tsym)}</td>
-              <td>${esc(o.trantype)} (${esc(o.prd)})</td>
-              <td>${esc(o.fillshares)}/${esc(o.qty)}</td>
-              <td>₹${esc(o.prc)}</td>
-              <td class="${stCls}"><strong>${esc(o.status)}</strong></td>
-              <td>${esc(o.reason)}</td>
-            </tr>`;
-        }).join("");
-        brkOrdBox.innerHTML = `<table><thead><tr><th>Order No</th><th>Time</th><th>Symbol</th><th>Side</th><th>Qty</th><th>Price</th><th>Status</th><th>Reason</th></tr></thead><tbody>${rows}</tbody></table>`;
-      }
-
-      const brkPosBox = document.getElementById("broker-positions-container");
-      const brkPositions = brk.positions || [];
-      if (brkPositions.length === 0) {
-        brkPosBox.innerHTML = '<p class="empty">No open broker positions in Shoonya.</p>';
-      } else {
-        const rows = brkPositions.map(p => `
+              <th>Time</th>
+              <th>Index</th>
+              <th>Contract</th>
+              <th>Type</th>
+              <th>Qty</th>
+              <th>Entry</th>
+              <th>Exit</th>
+              <th>Gross P&amp;L</th>
+              <th>Charges Est</th>
+              <th>Net P&amp;L</th>
+              <th>Exit Reason</th>
+            </tr>
+          </thead>
+          <tbody>
+      `;
+      trades.slice().reverse().forEach(t => {
+        html += `
           <tr>
-            <td><strong>${esc(p.exch)}:${esc(p.tsym)}</strong></td>
-            <td>${esc(p.prd)}</td>
-            <td>${esc(p.netqty)}</td>
-            <td>₹${esc(p.netavgprc)}</td>
-            <td>₹${esc(p.lp)}</td>
-            <td>₹${esc(p.rpnl)}</td>
-            <td>₹${esc(p.urmtom)}</td>
-          </tr>`).join("");
-        brkPosBox.innerHTML = `<table><thead><tr><th>Symbol</th><th>Prod</th><th>Qty</th><th>Avg</th><th>LTP</th><th>RPnL</th><th>MTM</th></tr></thead><tbody>${rows}</tbody></table>`;
-      }
+            <td>${esc(t.exit_time || t.entry_time)}</td>
+            <td><strong>${esc(t.index_name)}</strong></td>
+            <td>${esc(t.tradingsymbol)}</td>
+            <td><span class="badge ${t.signal_type === 'CE' ? 'live' : 'halted'}">${esc(t.signal_type)}</span></td>
+            <td>${t.quantity}</td>
+            <td>₹${fmt(t.entry_price)}</td>
+            <td>₹${fmt(t.exit_price)}</td>
+            <td class="${t.gross_pnl >= 0 ? 'pos' : 'neg'}">₹${fmt(t.gross_pnl)}</td>
+            <td>₹${fmt(t.charges_est)}</td>
+            <td class="${t.net_pnl >= 0 ? 'pos' : 'neg'} font-bold">₹${fmt(t.net_pnl)}</td>
+            <td><span class="badge">${esc(t.exit_reason)}</span></td>
+          </tr>
+        `;
+      });
+      html += `</tbody></table>`;
+      container.innerHTML = html;
+    }
 
-      const logsBox = document.getElementById("logs-box");
-      logsBox.innerHTML = (data.logs || []).map(l =>
-        `<div class="log-line log-${l.level}">[${esc(l.timestamp)}] ${esc(l.level)} | ${esc(l.logger)} | ${esc(l.message)}</div>`
-      ).join("");
-      logsBox.scrollTop = logsBox.scrollHeight;
+    function renderLogs(logs) {
+      const container = document.getElementById("terminal-logs-stream");
+      if (!container) return;
+      if (!logs || logs.length === 0) {
+        container.innerHTML = "No logs recorded yet.";
+        return;
+      }
+      container.innerHTML = logs.map(line => {
+        let cls = "info";
+        if (line.includes("ERROR") || line.includes("CRITICAL")) cls = "error";
+        else if (line.includes("WARNING")) cls = "warn";
+        return `<div class="log-entry ${cls}">${esc(line)}</div>`;
+      }).join("");
     }
 
     async function refreshStatus() {
       try {
-        const res = await fetch("/api/status");
-        if (res.ok) renderSnapshot(await res.json());
-      } catch (e) { console.error(e); }
-    }
-
-    async function triggerKillSwitch() {
-      if (!confirm("Execute EMERGENCY KILL SWITCH? Liquidates all strategy positions and halts trading today.")) return;
-      const res = await fetch("/api/kill-switch", { method: "POST" });
-      if (res.ok) await refreshStatus();
-    }
-
-    async function triggerOAuth() {
-      const res = await fetch("/api/oauth-login", { method: "POST" });
-      const data = await res.json();
-      alert("OAuth status: " + data.oauth_status);
-      await refreshStatus();
-    }
-
-    async function toggleMode() {
-      try {
-        const res = await fetch("/api/toggle-mode", { method: "POST" });
-        const data = await res.json();
-        if (!res.ok) {
-          alert("Cannot toggle mode: " + (data.detail || "error"));
-        } else {
-          if (data.snapshot) renderSnapshot(data.snapshot);
-          showNote("funds-msg", true, data.message || "Switched mode.");
-          await refreshStatus();
+        const resp = await fetch('/api/status');
+        if (resp.ok) {
+          const data = await resp.json();
+          renderSnapshot(data);
         }
-      } catch (e) {
-        alert("Failed toggling mode: " + e);
-      }
-    }
-
-    async function exitActivePosition(indexName) {
-      if (!confirm(`Square off active position for ${indexName}?`)) return;
-      try {
-        const res = await fetch("/api/positions/exit", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ index_name: indexName })
-        });
-        const data = await res.json();
-        if (data.snapshot) renderSnapshot(data.snapshot);
-        showNote("funds-msg", data.ok, data.message || "Position squared off.");
-        alert(data.message || "Position squared off.");
       } catch (err) {
-        alert("Error squaring off position: " + err);
+        // silent polling catch
       }
     }
 
-    async function refreshBrokerData() {
-      const res = await fetch("/api/broker/refresh", { method: "POST" });
-      const data = await res.json();
-      if (data.snapshot) renderSnapshot(data.snapshot);
-      showNote("funds-msg", data.ok, data.ok ? "Synced live Shoonya funds & orders." : "Broker offline — Run OAuth Login or Connect Account.");
-    }
+    // Auto-poll status every 1.5s
+    setInterval(refreshStatus, 1500);
 
-    async function submitFunds() {
-      const amount = parseFloat(document.getElementById("funds-amount").value || "0");
-      const action = document.getElementById("funds-action").value;
-      const res = await fetch("/api/broker/funds", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ amount, action })
-      });
-      const data = await res.json();
-      if (data.snapshot) renderSnapshot(data.snapshot);
-      showNote("funds-msg", data.ok, data.message || "Capital updated.");
-    }
-
-    async function connectBrokerAccount() {
-      const payload = {
-        user_id: document.getElementById("conn-uid").value,
-        account_id: document.getElementById("conn-actid").value,
-        password: document.getElementById("conn-pwd").value,
-        totp_secret: document.getElementById("conn-totp").value,
-        api_key: document.getElementById("conn-apikey").value,
-        secret_key: document.getElementById("conn-skey").value,
-        sebi_algo_id: document.getElementById("conn-algoid").value,
-      };
-      showNote("connect-msg", true, "Authenticating with Shoonya...");
-      const res = await fetch("/api/broker/connect", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-      });
-      const data = await res.json();
-      if (data.snapshot) renderSnapshot(data.snapshot);
-      showNote("connect-msg", data.ok, data.message || data.oauth_status);
-    }
-
-    async function placeBrokerOrder() {
-      const payload = {
-        exchange: document.getElementById("ord-exch").value,
-        tradingsymbol: document.getElementById("ord-tsym").value,
-        buy_or_sell: document.getElementById("ord-side").value,
-        product_type: document.getElementById("ord-prd").value,
-        price_type: document.getElementById("ord-prctyp").value,
-        quantity: parseInt(document.getElementById("ord-qty").value || "1", 10),
-        price: parseFloat(document.getElementById("ord-prc").value || "0"),
-      };
-      if (!confirm(`Send LIVE Shoonya broker order: ${payload.buy_or_sell} ${payload.quantity} ${payload.exchange}:${payload.tradingsymbol} (${payload.product_type} ${payload.price_type} @ ${payload.price})?`)) return;
-      showNote("order-msg", true, "Submitting order to Shoonya...");
-      const res = await fetch("/api/broker/order", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-      });
-      const data = await res.json();
-      if (data.snapshot) renderSnapshot(data.snapshot);
-      showNote("order-msg", data.ok, data.message || "Order request completed.");
-    }
-
-    async function applyOrbAnchor(val) {
-      if (!val) return;
-      const parts = val.split("|");
-      const startTime = parts[0];
-      const mins = parseInt(parts[1] || "15", 10);
-      try {
-        const res = await fetch("/api/settings/orb-anchor", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ start_time: startTime, minutes: mins })
-        });
-        const data = await res.json();
-        if (data.snapshot) renderSnapshot(data.snapshot);
-      } catch (err) {
-        console.error("Failed setting ORB anchor:", err);
-      }
-    }
-
-    async function triggerAutoBreakoutOrder(indexName = "BANKNIFTY") {
-      const mode = (document.getElementById("mode-badge")?.textContent || "MODE: PAPER").replace("MODE: ", "").trim();
-      const msg = `Trigger automated strategy order for ${indexName} in ${mode} mode?\n\n• If LIVE: Order will place directly into your Shoonya Broker Terminal.\n• If PAPER: Order will simulate immediate fill in the app.\n\nProceed?`;
-      if (!confirm(msg)) return;
-      showNote("funds-msg", true, `Submitting auto-order for ${indexName}...`);
-      try {
-        const res = await fetch("/api/strategy/auto-trigger", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ index_name: indexName, signal_type: "AUTO" })
-        });
-        const data = await res.json();
-        if (data.snapshot) renderSnapshot(data.snapshot);
-        showNote("funds-msg", data.ok, data.message || "Auto-order completed.");
-        alert((data.ok ? "SUCCESS: " : "NOTICE: ") + (data.message || "Order processed."));
-      } catch (err) {
-        showNote("funds-msg", false, "Failed triggering auto-order: " + err);
-        alert("Error triggering auto-order: " + err);
-      }
-    }
-
-    async function applyEntryCutoff(val) {
-      if (!val) return;
-      try {
-        const res = await fetch("/api/settings/entry-cutoff", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ cutoff_time: val })
-        });
-        const data = await res.json();
-        if (data.snapshot) renderSnapshot(data.snapshot);
-      } catch (err) {
-        console.error("Failed setting entry cutoff:", err);
-      }
-    }
-
-    async function updateIndexLots(indexName, val) {
-      if (!val) return;
-      try {
-        const res = await fetch("/api/settings/lots", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ index_name: indexName, lots: parseInt(val) })
-        });
-        const data = await res.json();
-        if (data.snapshot) renderSnapshot(data.snapshot);
-        showNote("funds-msg", data.ok, data.message || `Updated lots for ${indexName}`);
-      } catch (err) {
-        showNote("funds-msg", false, `Failed to update lots for ${indexName}: ` + err);
-      }
-    }
-
-    async function updateIndexProductType(indexName, val) {
-      if (!val) return;
-      try {
-        const res = await fetch("/api/settings/product-type", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ index_name: indexName, product_type: val })
-        });
-        const data = await res.json();
-        if (data.snapshot) renderSnapshot(data.snapshot);
-        showNote("funds-msg", data.ok, data.message || `Updated order type for ${indexName}`);
-      } catch (err) {
-        showNote("funds-msg", false, `Failed to update order type for ${indexName}: ` + err);
-      }
-    }
-
-    async function resetTradesCounter() {
-      if (!confirm("Reset today's trades counter to 0/2 and clear halt flags for testing?")) return;
-      try {
-        const res = await fetch("/api/trades/reset", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" }
-        });
-        const data = await res.json();
-        if (data.snapshot) renderSnapshot(data.snapshot);
-      } catch (err) {
-        console.error("Failed resetting trades counter:", err);
-      }
-    }
-
-    async function changeOrbWindow(minutes) {
-      try {
-        const res = await fetch("/api/settings/orb-window", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ minutes: minutes })
-        });
-        const data = await res.json();
-        if (data.snapshot) renderSnapshot(data.snapshot);
-      } catch (err) {
-        console.error("Failed setting ORB window:", err);
-      }
-    }
-
-    try {
-      const saved = localStorage.getItem("orb_ui_theme");
-      if (saved) applyTheme(saved);
-    } catch (e) { }
-    refreshStatus();
-    setInterval(refreshStatus, 1000);
+    // Initial load
+    document.addEventListener("DOMContentLoaded", () => {
+      showToast('System Ready', 'Shoonya ORB Terminal active in LIVE mode', 'success', 3000);
+      refreshStatus();
+    });
   </script>
 </body>
 
