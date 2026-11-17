@@ -46,7 +46,6 @@ class TradingSystemOrchestrator:
             self.mapper,
             notifier=self.notifier,
         )
-        self.risk_manager.load_backtest_trades(limit=50)
 
         self.candle_builders: Dict[str, CandleBuilder] = {
             name: CandleBuilder(name, spec.spot_exchange, spec.spot_token)

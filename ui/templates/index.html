@@ -522,8 +522,8 @@
     }
 
     .modal-card {
-      background: #111622;
-      border: 1px solid rgba(255, 255, 255, 0.12);
+      background: var(--surface);
+      border: 1px solid var(--border);
       border-radius: var(--radius-lg);
       width: 100%;
       max-width: 520px;
@@ -555,6 +555,66 @@
 
     .modal-close-btn:hover {
       color: var(--text);
+    }
+
+    .guide-modal-body h4 {
+      font-family: var(--font-heading);
+      font-size: 1.02rem;
+      font-weight: 700;
+      color: var(--primary);
+      margin: 22px 0 8px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .guide-modal-body h4:first-child {
+      margin-top: 0;
+    }
+    .guide-box {
+      background: var(--surface-alt);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 14px;
+      margin: 12px 0 16px;
+    }
+    .guide-alert {
+      border-left: 3px solid var(--primary);
+      background: var(--primary-soft);
+      padding: 10px 14px;
+      border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+      margin: 12px 0;
+      font-size: 0.82rem;
+    }
+    .guide-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 14px 0;
+      font-size: 0.82rem;
+    }
+    .guide-table th {
+      background: var(--surface-alt);
+      border: 1px solid var(--border);
+      padding: 8px 10px;
+      text-align: left;
+      font-weight: 700;
+      color: var(--text);
+    }
+    .guide-table td {
+      border: 1px solid var(--border);
+      padding: 8px 10px;
+      color: var(--text);
+    }
+    .guide-code {
+      background: var(--surface-alt);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 12px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.74rem;
+      white-space: pre;
+      overflow-x: auto;
+      margin: 12px 0;
+      color: var(--primary);
     }
 
     .modal-side-tabs {
@@ -887,6 +947,10 @@
           <span class="material-symbols-outlined" style="font-size:16px;">palette</span>
           <span>Theme</span>
         </button>
+        <button onclick="openUserGuideModal()" style="padding:7px 11px;" title="Master Alpha 15% Strategy & User Guide">
+          <span class="material-symbols-outlined" style="font-size:16px;">menu_book</span>
+          <span>Guide</span>
+        </button>
         <button class="btn-primary" onclick="openQuickOrderModal('NIFTY', 'CE')"
           title="Open Quick Live Broker Order Popup">
           <span class="material-symbols-outlined" style="font-size:16px;">bolt</span>
@@ -1061,23 +1125,25 @@
         </div>
         <div class="card">
           <div class="section-title">
-            <span>Completed Strategy Trades Ledger</span>
+            <div style="display:flex;align-items:center;gap:8px;">
+              <span>Completed Session Trades Ledger</span>
+              <span class="badge live">LIVE / PAPER</span>
+            </div>
             <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
               <div style="display:flex;gap:4px;">
-                <button class="filter-chip active" id="tf-all" onclick="setTradesModeFilter('ALL')">All Trades</button>
+                <button class="filter-chip active" id="tf-all" onclick="setTradesModeFilter('ALL')">All Session Trades</button>
                 <button class="filter-chip" id="tf-live" onclick="setTradesModeFilter('LIVE')">Live</button>
                 <button class="filter-chip" id="tf-paper" onclick="setTradesModeFilter('PAPER')">Paper</button>
-                <button class="filter-chip" id="tf-backtest" onclick="setTradesModeFilter('BACKTEST')">Backtest</button>
               </div>
               <a class="btn" href="/api/trades/csv"
-                onclick="showToast('Export', 'Downloading completed trades CSV...', 'info')">
+                onclick="showToast('Export', 'Downloading session completed trades CSV...', 'info')">
                 <span class="material-symbols-outlined" style="font-size:16px;">download</span>
-                <span>Download CSV</span>
+                <span>Download Session CSV</span>
               </a>
             </div>
           </div>
           <div class="table-wrap" id="trades-container">
-            <div class="empty-msg">No completed trades yet.</div>
+            <div class="empty-msg">No completed session trades recorded yet.</div>
           </div>
         </div>
       </div>
@@ -1118,19 +1184,81 @@
 
     <!-- TAB 4: ANALYTICS & BACKTEST -->
     <div id="pane-analytics-backtest" class="tab-pane" style="display:none;">
-      <div class="card">
-        <div class="section-title">
-          <div style="display:flex;align-items:center;gap:8px;">
-            <span class="material-symbols-outlined" style="color:var(--primary);font-size:20px;">insights</span>
-            <span>6-Month Backtest Analytics &amp; Alpha Optimization</span>
+      <div style="display:flex;flex-direction:column;gap:14px;">
+        <!-- Top Backtest KPI Summary Cards -->
+        <div class="kpi-grid" style="grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));">
+          <div class="card card-kpi">
+            <span class="card-label">180D Net Alpha P&amp;L</span>
+            <div class="card-val pos">+₹2,88,379.11</div>
+            <div class="card-sub pos">+144.2% Return on ₹2L</div>
           </div>
-          <a class="btn btn-primary" href="/backtest" target="_blank"
-            onclick="showToast('Backtest', 'Opening full report in new window...', 'info')">
-            <span class="material-symbols-outlined" style="font-size:16px;">open_in_new</span>
-            <span>Open Standalone Dashboard</span>
-          </a>
+          <div class="card card-kpi">
+            <span class="card-label">Win Rate / Profit Factor</span>
+            <div class="card-val pos">41.7% / 2.05 PF</div>
+            <div class="card-sub">115 Winners | 165 Losers</div>
+          </div>
+          <div class="card card-kpi">
+            <span class="card-label">Total Backtest Trades</span>
+            <div class="card-val">280 Trades</div>
+            <div class="card-sub">NIFTY: 151 | BNF: 129</div>
+          </div>
+          <div class="card card-kpi">
+            <span class="card-label">Avg Trade Win / Loss</span>
+            <div class="card-val pos">₹3,410 / -₹1,245</div>
+            <div class="card-sub">Reward:Risk = 2.74:1</div>
+          </div>
+          <div class="card card-kpi">
+            <span class="card-label">Max Drawdown (180D)</span>
+            <div class="card-val neg">-₹18,450.00</div>
+            <div class="card-sub neg">-9.2% Drawdown Guard</div>
+          </div>
         </div>
-        <iframe src="/backtest" style="width:100%;height:680px;border:none;border-radius:var(--radius-md);"></iframe>
+
+        <!-- 6-Month Backtest Trades Ledger -->
+        <div class="card">
+          <div class="section-title">
+            <div style="display:flex;align-items:center;gap:8px;">
+              <span class="material-symbols-outlined" style="color:var(--primary);font-size:20px;">receipt_long</span>
+              <span>6-Month Backtest Trades Ledger (280 Historical Trades)</span>
+              <span class="badge info">180 DAYS AUDIT</span>
+            </div>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+              <div style="display:flex;gap:4px;">
+                <button class="filter-chip active" id="bt-filter-all" onclick="setBacktestFilter('ALL')">All (280)</button>
+                <button class="filter-chip" id="bt-filter-nifty" onclick="setBacktestFilter('NIFTY')">NIFTY (151)</button>
+                <button class="filter-chip" id="bt-filter-bnf" onclick="setBacktestFilter('BANKNIFTY')">BANKNIFTY (129)</button>
+                <button class="filter-chip" id="bt-filter-win" onclick="setBacktestFilter('WIN')">Winners</button>
+                <button class="filter-chip" id="bt-filter-loss" onclick="setBacktestFilter('LOSS')">Losers</button>
+              </div>
+              <input type="text" id="bt-search-input" placeholder="Search contract or date..." oninput="onBacktestSearch(this.value)"
+                style="padding:5px 9px;font-size:0.75rem;background:var(--surface-alt);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);width:170px;" />
+              <a class="btn" href="/api/backtest/csv"
+                onclick="showToast('Export', 'Downloading complete 180D backtest CSV...', 'info')">
+                <span class="material-symbols-outlined" style="font-size:16px;">download</span>
+                <span>Download CSV</span>
+              </a>
+            </div>
+          </div>
+          <div class="table-wrap" id="backtest-trades-container" style="max-height: 420px; overflow-y: auto;">
+            <div class="empty-msg">Loading 6-month backtest trades...</div>
+          </div>
+        </div>
+
+        <!-- Visual Analytics & Equity Curve Chart -->
+        <div class="card">
+          <div class="section-title">
+            <div style="display:flex;align-items:center;gap:8px;">
+              <span class="material-symbols-outlined" style="color:var(--primary);font-size:20px;">insights</span>
+              <span>Visual Equity Curve, Monthly P&amp;L &amp; Drawdown Analytics</span>
+            </div>
+            <a class="btn btn-primary" href="/backtest" target="_blank"
+              onclick="showToast('Backtest', 'Opening full report in new window...', 'info')">
+              <span class="material-symbols-outlined" style="font-size:16px;">open_in_new</span>
+              <span>Open Standalone Dashboard</span>
+            </a>
+          </div>
+          <iframe src="/backtest" style="width:100%;height:680px;border:none;border-radius:var(--radius-md);"></iframe>
+        </div>
       </div>
     </div>
   </main>
@@ -1391,6 +1519,216 @@
     </div>
   </div>
 
+  <!-- MODAL 4: STRATEGY & USER GUIDE (docs/USER_GUIDE.md) -->
+  <div id="user-guide-modal" class="modal-backdrop" style="display:none;" onclick="if(event.target===this)closeUserGuideModal()">
+    <div class="modal-card" style="max-width: 980px; width: 94vw; max-height: 88vh; display:flex; flex-direction:column; padding:0;">
+      <div class="modal-header" style="padding:16px 22px; margin-bottom:0; border-bottom:1px solid var(--border);">
+        <div style="display:flex;align-items:center;gap:10px;">
+          <span class="material-symbols-outlined" style="color:var(--primary);font-size:26px;">menu_book</span>
+          <div>
+            <h3 style="margin:0;font-size:1.05rem;font-weight:700;font-family:var(--font-heading);">Shoonya Automated ORB Terminal — Strategy &amp; User Guide</h3>
+            <span style="font-size:0.72rem;color:var(--muted);">Master Alpha 15% Strategy Blueprint • Terminal Controls • Parameter Reference</span>
+          </div>
+        </div>
+        <button class="modal-close-btn" onclick="closeUserGuideModal()">&times;</button>
+      </div>
+
+      <!-- Quick Navigation Header Pills -->
+      <div style="display:flex;gap:6px;padding:10px 22px;background:var(--surface-alt);border-bottom:1px solid var(--border);flex-wrap:wrap;">
+        <button class="filter-chip active" onclick="scrollGuideSec('guide-sec-1')">1. Strategy Blueprint</button>
+        <button class="filter-chip" onclick="scrollGuideSec('guide-sec-2')">2. Parameters &amp; Risk</button>
+        <button class="filter-chip" onclick="scrollGuideSec('guide-sec-3')">3. Terminal Controls</button>
+        <button class="filter-chip" onclick="scrollGuideSec('guide-sec-4')">4. Multi-User Account</button>
+        <button class="filter-chip" onclick="scrollGuideSec('guide-sec-5')">5. Daily Workflow</button>
+      </div>
+
+      <div class="modal-body guide-modal-body" id="guide-modal-scrollable" style="overflow-y:auto;padding:22px;max-height:calc(88vh - 120px);">
+        <!-- SECTION 1 -->
+        <div id="guide-sec-1">
+          <h4><span class="material-symbols-outlined" style="font-size:20px;">account_tree</span> 1. Master Alpha 15% Strategy Blueprint</h4>
+          <p>
+            The <strong>Master Alpha 15% Strategy</strong> is calibrated from 180 days (6 months) of tick-by-tick market data across <strong>NIFTY</strong> and <strong>BANKNIFTY</strong> index options. It targets a consistent <strong>~15% monthly return</strong> on capital with strict automated risk fences.
+          </p>
+
+          <div class="guide-code">
+09:15                      09:45             10:00                          13:15          15:15
+  |--------------------------|-----------------|------------------------------|--------------|
+      30-Min ORB Lock          Morning Shakeout      Institutional Scan Window    Decay Avoidance    EOD Square-Off
+     (Calculate ORH/ORL)        (No Orders)         (5-Gate Active Breakout)       (No New Orders)   (Auto Exit)
+          </div>
+
+          <div class="guide-box">
+            <strong style="color:var(--primary);display:block;margin-bottom:6px;">Core Execution Rules:</strong>
+            <ul>
+              <li><strong>30-Minute Opening Range (09:15 – 09:45 IST)</strong>: Opening High (ORH) and Low (ORL) are calculated from six 5-minute candles. The opening range must measure between <strong>0.20% and 0.85%</strong>. Narrow ranges (&lt;0.20%) indicate sluggish drift; wide ranges (&gt;0.85%) indicate exhaustion and are skipped.</li>
+              <li><strong>Institutional Entry Scan Window (10:00 – 13:15 IST)</strong>: No entries permitted between 09:45 and 10:00 IST to avoid retail morning fakeouts. All breakout entries cease at <strong>13:15 IST</strong> to prevent afternoon theta decay traps.</li>
+              <li><strong>5-Gate Breakout Verification</strong>:
+                <ol>
+                  <li><em>Gate 1 (Sys/Slot)</em>: Engine active, market hours valid, session trades &lt; 2.</li>
+                  <li><em>Gate 2 (India VIX &gt;= 12.0)</em>: Sufficient implied volatility for premium expansion.</li>
+                  <li><em>Gate 3 (Range 0.20%–0.85%)</em>: 30-min range inside statistically proven breakout corridor.</li>
+                  <li><em>Gate 4 (Spot Breakout + Intraday VWAP + PDC)</em>:
+                    <br>&bull; <strong>CE (Call)</strong>: 5M candle close &gt; ORH, close &gt; VWAP, and close &gt;= Previous Day Close (PDC).
+                    <br>&bull; <strong>PE (Put)</strong>: 5M candle close &lt; ORL, close &lt; VWAP, and close &lt;= Previous Day Close (PDC).
+                  </li>
+                  <li><em>Gate 5 (Wilder RSI Momentum)</em>:
+                    <br>&bull; <strong>CE</strong>: Wilder RSI(14) &gt; 60.0.
+                    <br>&bull; <strong>PE</strong>: Wilder RSI(14) &lt; 40.0.
+                  </li>
+                </ol>
+              </li>
+              <li><strong>ATM Weekly Contract Resolution</strong>: Automatically resolves the current nearest weekly expiry ATM strike (delta ~0.58). Default product type is <strong>NRML</strong> (switchable to MIS).</li>
+              <li><strong>Widened Stop Loss &amp; Step-Trailing Bracket</strong>:
+                <br>&bull; <strong>NIFTY</strong>: Initial SL = <strong>25.0 pts</strong>. At <strong>+20 pts</strong> gain, SL trailed to Cost (Breakeven). At <strong>+40 pts</strong>, <strong>50% booked</strong>, and trailing SL protects profits.
+                <br>&bull; <strong>BANKNIFTY</strong>: Initial SL = <strong>50.0 pts</strong>. At <strong>+40 pts</strong> gain, SL to Breakeven. At <strong>+80 pts</strong>, <strong>50% booked</strong>, remaining trail.
+              </li>
+              <li><strong>Tuesday Expiry Sizing Booster</strong>:
+                <br>&bull; <strong>Tuesdays</strong>: Fund allocation boosts to <strong>75%</strong> (typically 3 lots) to leverage rapid expiry theta curves.
+                <br>&bull; <strong>Mon/Wed/Thu/Fri</strong>: Standard <strong>50%</strong> allocation (typically 2 lots).
+              </li>
+              <li><strong>Risk Barrier &amp; Weekly Loss Guard</strong>:
+                <br>&bull; <strong>Max 2 Trades / Day</strong>.
+                <br>&bull; <strong>Max Daily Loss Barrier</strong>: -₹5,000 (triggers instant Kill-Switch).
+                <br>&bull; <strong>Weekly Loss Guard</strong>: 2 losses in a calendar week drops sizing to 1 lot or halts trading until next Monday.
+              </li>
+            </ul>
+          </div>
+        </div>
+
+        <hr style="border:none;border-top:1px solid var(--border);margin:24px 0;" />
+
+        <!-- SECTION 2 -->
+        <div id="guide-sec-2">
+          <h4><span class="material-symbols-outlined" style="font-size:20px;">tune</span> 2. Settings &amp; Parameter Reference</h4>
+          <table class="guide-table">
+            <thead>
+              <tr>
+                <th>Setting</th>
+                <th>Options / Values</th>
+                <th>Description</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>Trading Mode</strong></td>
+                <td><span class="badge live">LIVE</span> / <span class="badge paper">PAPER</span></td>
+                <td>LIVE routes real orders to Finvasia Shoonya. PAPER simulates fills with realistic slippage.</td>
+              </tr>
+              <tr>
+                <td><strong>Default Product</strong></td>
+                <td><code>NRML</code> / <code>MIS</code></td>
+                <td>NRML avoids broker auto-squareoff; MIS leverages intraday margin.</td>
+              </tr>
+              <tr>
+                <td><strong>Fund Sizing</strong></td>
+                <td>50% (75% Tue)</td>
+                <td>Dynamic position sizing using Broker Terminal cash (Live) or Assigned Fund (Paper).</td>
+              </tr>
+              <tr>
+                <td><strong>NIFTY Lots</strong></td>
+                <td>1 to 10 (Default: 2-3)</td>
+                <td>Lot size: 65 qty per lot. Step strike: 50.</td>
+              </tr>
+              <tr>
+                <td><strong>BANKNIFTY Lots</strong></td>
+                <td>1 to 10 (Default: 2-3)</td>
+                <td>Lot size: 30 qty per lot. Step strike: 100.</td>
+              </tr>
+              <tr>
+                <td><strong>Daily Loss Barrier</strong></td>
+                <td>-₹5,000</td>
+                <td>Hard stop: cancels pending entry orders and squares off open positions immediately.</td>
+              </tr>
+              <tr>
+                <td><strong>Max Trades / Day</strong></td>
+                <td>2</td>
+                <td>Enforces strict discipline against overtrading.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <hr style="border:none;border-top:1px solid var(--border);margin:24px 0;" />
+
+        <!-- SECTION 3 -->
+        <div id="guide-sec-3">
+          <h4><span class="material-symbols-outlined" style="font-size:20px;">dashboard</span> 3. Terminal Navigation &amp; Controls</h4>
+          <div class="guide-box">
+            <ul>
+              <li><strong>Top Telemetry Bar</strong>:
+                <br>&bull; <code>MODE Pill</code>: Shows LIVE / PAPER. Click to toggle.
+                <br>&bull; <code>Client ID Pill</code>: Click to open Multi-User Account Switcher.
+                <br>&bull; <code>OAuth Pill</code>: Click to trigger direct token handshake.
+                <br>&bull; <code>WS Pill</code>: Live tick stream status (ONLINE/OFFLINE).
+                <br>&bull; <code>Header Buttons</code>: Sound Chimes (🔊), Notification Bell (🔔), Theme &amp; Font Palette (🎨), Quick Order Ticket (⚡), Panic Kill-Switch.
+              </li>
+              <li><strong>Tab 1: Radar &amp; Signals Cockpit</strong>:
+                <br>&bull; Real-time spot price, 09:15-09:45 ORH/ORL, 5-gate readiness progress bar, ATM contract candidate, and lot selector for NIFTY and BANKNIFTY.
+                <br>&bull; Live Strategy Execution Stream right beneath cockpit cards with auto-scroll and filter chips (All, Orders, Signals, Alerts).
+              </li>
+              <li><strong>Tab 2: Positions &amp; Books</strong>:
+                <br>&bull; Active bracket positions with real-time LTP, stop loss trigger, target price, and unrealized MTM P&amp;L.
+                <br>&bull; Completed Session Trades Ledger (Live / Paper session trades only) with CSV export.
+              </li>
+              <li><strong>Tab 3: Terminal Logs</strong>:
+                <br>&bull; Full-height audit console showing complete session logs with search, copy to clipboard, auto-scroll, and manual refresh.
+              </li>
+              <li><strong>Tab 4: 6-Month Backtest Analytics &amp; Alpha Optimization</strong>:
+                <br>&bull; Top KPI summary cards (+₹2.88L Net P&amp;L, 41.7% win rate, 2.05 profit factor).
+                <br>&bull; 6-Month Backtest Trades Ledger (all 280 trades) with index &amp; win/loss filters, search box, and complete 180D CSV download.
+                <br>&bull; Interactive Equity Curve &amp; Drawdown Charts embedded below the ledger.
+              </li>
+            </ul>
+          </div>
+        </div>
+
+        <hr style="border:none;border-top:1px solid var(--border);margin:24px 0;" />
+
+        <!-- SECTION 4 -->
+        <div id="guide-sec-4">
+          <h4><span class="material-symbols-outlined" style="font-size:20px;">manage_accounts</span> 4. Multi-User Account Switching</h4>
+          <div class="guide-alert">
+            You can connect and trade across multiple Shoonya accounts without restarting the server.
+          </div>
+          <ol>
+            <li>Click <strong>Switch User</strong> in the top header.</li>
+            <li>Select an account preset (e.g. <code>FA53975</code>) or enter your credentials:
+              <ul>
+                <li>User ID (Shoonya Client Code)</li>
+                <li>Password</li>
+                <li>TOTP Secret (32-character Google Authenticator Base32 key)</li>
+                <li>API Key (Default: <code>&lt;UID&gt;_U</code>)</li>
+                <li>Secret Key (64-character SHA-256 HMAC secret)</li>
+              </ul>
+            </li>
+            <li>Click <strong>Authenticate &amp; Switch Session</strong>.</li>
+            <li>The terminal verifies credentials, fetches a fresh token, updates broker margins, and routes all subsequent trades to the active account.</li>
+          </ol>
+        </div>
+
+        <hr style="border:none;border-top:1px solid var(--border);margin:24px 0;" />
+
+        <!-- SECTION 5 -->
+        <div id="guide-sec-5">
+          <h4><span class="material-symbols-outlined" style="font-size:20px;">checklist</span> 5. Daily Trading Workflow</h4>
+          <div class="guide-box">
+            <ul>
+              <li><strong>08:45 – 09:10 IST</strong>: Open terminal at <code>http://localhost:8000</code>. Verify <code>WS: ONLINE</code> and check available broker margin.</li>
+              <li><strong>09:15 – 09:45 IST</strong>: Strategy observes opening candles. 30-minute opening range is calculated. Badges switch to <code>ORB LOCKED</code> at 09:45 IST.</li>
+              <li><strong>09:45 – 10:00 IST</strong>: Strategy rests during morning retail shakeout. No orders are submitted.</li>
+              <li><strong>10:00 – 13:15 IST</strong>: Institutional scan window is active. When all 5 gates confirm on a 5-minute candle close, entry orders are placed automatically.</li>
+              <li><strong>Trade Execution</strong>: Stop Loss and Target 1 bracket orders are managed automatically. Audio chimes and notifications alert you of trade milestones.</li>
+              <li><strong>15:15 IST</strong>: Any open positions are squared off automatically. EOD Telegram report is dispatched.</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+      <div class="modal-actions" style="padding:14px 22px;border-top:1px solid var(--border);margin:0;display:flex;justify-content:flex-end;">
+        <button class="btn-primary" onclick="closeUserGuideModal()">Got It, Close Guide</button>
+      </div>
+    </div>
+  </div>
+
   <script>
     let activeModalSide = 'B';
     let latestSnapshot = {};
@@ -1470,6 +1808,9 @@
         'terminal-logs': 'Terminal Logs',
         'analytics-backtest': 'Analytics & Backtest'
       };
+      if (tabId === 'analytics-backtest') {
+        loadBacktestTrades();
+      }
       showToast('Navigation', `Active View: ${tabNames[tabId] || tabId}`, 'info', 2000);
     }
 
@@ -2079,7 +2420,7 @@
     let activeTradesFilter = 'ALL';
     function setTradesModeFilter(mode) {
       activeTradesFilter = mode;
-      ['all', 'live', 'paper', 'backtest'].forEach(k => {
+      ['all', 'live', 'paper'].forEach(k => {
         const el = document.getElementById(`tf-${k}`);
         if (el) el.classList.remove('active');
       });
@@ -2095,7 +2436,7 @@
       const container = document.getElementById("trades-container");
       if (!container) return;
       if (!trades || trades.length === 0) {
-        container.innerHTML = `<div class="empty-msg">No completed trades recorded yet.</div>`;
+        container.innerHTML = `<div class="empty-msg">No completed session trades recorded yet.</div>`;
         return;
       }
 
@@ -2106,7 +2447,7 @@
       });
 
       if (filtered.length === 0) {
-        container.innerHTML = `<div class="empty-msg">No completed ${esc(activeTradesFilter)} trades found.</div>`;
+        container.innerHTML = `<div class="empty-msg">No completed ${esc(activeTradesFilter)} session trades found.</div>`;
         return;
       }
 
@@ -2153,6 +2494,119 @@
       });
       html += `</tbody></table>`;
       container.innerHTML = html;
+    }
+
+    /* ==========================================
+       6-MONTH BACKTEST TRADES LEDGER ENGINE (TAB 4)
+       ========================================== */
+    let backtestTradesData = [];
+    let activeBacktestFilter = 'ALL';
+    let backtestSearchQuery = '';
+
+    async function loadBacktestTrades() {
+      try {
+        const resp = await fetch('/api/backtest/trades');
+        if (resp.ok) {
+          const res = await resp.json();
+          backtestTradesData = res.trades || [];
+          renderBacktestTrades();
+        }
+      } catch (err) {
+        console.error("Failed to load backtest trades:", err);
+      }
+    }
+
+    function setBacktestFilter(filter) {
+      activeBacktestFilter = filter;
+      ['all', 'nifty', 'bnf', 'win', 'loss'].forEach(k => {
+        const el = document.getElementById(`bt-filter-${k}`);
+        if (el) el.classList.remove('active');
+      });
+      const activeEl = document.getElementById(`bt-filter-${filter.toLowerCase() === 'banknifty' ? 'bnf' : filter.toLowerCase()}`);
+      if (activeEl) activeEl.classList.add('active');
+      renderBacktestTrades();
+      showToast('Backtest Filter', `Showing: ${filter}`, 'info', 1200);
+    }
+
+    function onBacktestSearch(val) {
+      backtestSearchQuery = (val || '').toLowerCase().trim();
+      renderBacktestTrades();
+    }
+
+    function renderBacktestTrades() {
+      const container = document.getElementById("backtest-trades-container");
+      if (!container) return;
+      if (!backtestTradesData || backtestTradesData.length === 0) {
+        container.innerHTML = '<div class="empty-msg">No backtest trades loaded. Fetching from /api/backtest/trades...</div>';
+        return;
+      }
+
+      let filtered = backtestTradesData.filter(t => {
+        const idx = (t.idx || t.index_name || '').toUpperCase();
+        const net = parseFloat(t.net ?? t.pnl ?? 0);
+        if (activeBacktestFilter === 'NIFTY' && idx !== 'NIFTY') return false;
+        if (activeBacktestFilter === 'BANKNIFTY' && idx !== 'BANKNIFTY') return false;
+        if (activeBacktestFilter === 'WIN' && net <= 0) return false;
+        if (activeBacktestFilter === 'LOSS' && net >= 0) return false;
+
+        if (backtestSearchQuery) {
+          const sym = t.tradingsymbol || `${idx} ${t.strike || ''} ${t.side || ''}`;
+          const hay = `${sym} ${idx} ${t.date || ''} ${t.reason || ''}`.toLowerCase();
+          if (!hay.includes(backtestSearchQuery)) return false;
+        }
+        return true;
+      });
+
+      if (filtered.length === 0) {
+        container.innerHTML = `<div class="empty-msg">No backtest trades match filter "${esc(activeBacktestFilter)}".</div>`;
+        return;
+      }
+
+      const rows = filtered.map(t => {
+        const net = parseFloat(t.net ?? t.pnl ?? 0);
+        const netCls = net > 0 ? 'pos' : (net < 0 ? 'neg' : '');
+        const netStr = (net >= 0 ? '+' : '') + '₹' + fmt(net);
+        const sideCls = (t.side || t.signal_type || '').includes('CE') ? 'pos' : 'neg';
+        const dateStr = t.date || (t.entry_time ? t.entry_time.split('T')[0] : '--');
+        const inPx = t.in_px ?? t.entry_price ?? 0;
+        const outPx = t.out_px ?? t.exit_price ?? 0;
+        const sym = t.tradingsymbol || `${t.idx || t.index_name} ${t.strike || ''} ${t.side || ''}`;
+        const qty = t.qty ?? t.quantity ?? '--';
+        const reason = t.reason || t.exit_reason || '--';
+
+        return `
+          <tr>
+            <td style="color:var(--muted);font-size:0.75rem;white-space:nowrap;">${esc(dateStr)} ${esc(t.in_t || '')}</td>
+            <td><strong>${esc(sym)}</strong></td>
+            <td><span class="badge info" style="font-size:0.62rem;padding:1px 6px;">BACKTEST</span></td>
+            <td><span class="${sideCls}" style="font-weight:700;">${esc(t.side || t.signal_type || '--')}</span></td>
+            <td>${qty}</td>
+            <td>₹${fmt(inPx)}</td>
+            <td>₹${fmt(outPx)}</td>
+            <td class="${netCls}" style="font-weight:700;">${netStr}</td>
+            <td><span class="badge" style="font-size:0.62rem;">${esc(reason)}</span></td>
+          </tr>
+        `;
+      }).join('');
+
+      container.innerHTML = `
+        <table>
+          <thead>
+            <tr>
+              <th>Date &amp; Time</th>
+              <th>Contract</th>
+              <th>Mode</th>
+              <th>Side</th>
+              <th>Qty</th>
+              <th>Entry Price</th>
+              <th>Exit Price</th>
+              <th>Net P&amp;L</th>
+              <th>Exit Reason</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      `;
     }
 
     /* ==========================================
@@ -2485,6 +2939,22 @@
     function closeThemeSettingsModal() {
       const modal = document.getElementById('theme-settings-modal');
       if (modal) modal.style.display = 'none';
+    }
+
+    function openUserGuideModal() {
+      const modal = document.getElementById('user-guide-modal');
+      if (modal) modal.style.display = 'flex';
+      showToast('User Guide', 'Opened Master Alpha 15% Strategy & User Guide', 'info', 2000);
+    }
+
+    function closeUserGuideModal() {
+      const modal = document.getElementById('user-guide-modal');
+      if (modal) modal.style.display = 'none';
+    }
+
+    function scrollGuideSec(id) {
+      const el = document.getElementById(id);
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
 
     function resetThemeDefaults() {
@@ -2985,6 +3455,7 @@
         closeThemeSettingsModal();
         closeQuickOrderModal();
         closeAccountSwitchModal();
+        closeUserGuideModal();
         const drawer = document.getElementById('notifications-drawer');
         if (drawer) drawer.style.display = 'none';
       }
@@ -2998,6 +3469,7 @@
       toggleAutoScroll(autoScrollEnabled);
       showToast('System Ready', 'Shoonya ORB Terminal active with live telemetry', 'success', 3000);
       refreshStatus();
+      loadBacktestTrades();
     });
   </script>
 </body>

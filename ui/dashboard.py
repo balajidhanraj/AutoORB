@@ -146,6 +146,60 @@ def create_app(orchestrator: Any) -> FastAPI:
             headers={"Content-Disposition": f'attachment; filename="{csv_path.name}"'},
         )
 
+    @app.get("/api/backtest/trades")
+    def api_backtest_trades() -> JSONResponse:
+        p = Path("data/backtest/all_trades_180d.json")
+        if p.exists():
+            import json
+            try:
+                data = json.loads(p.read_text(encoding="utf-8"))
+                return JSONResponse(content={"ok": True, "count": len(data), "trades": data})
+            except Exception as e:
+                return JSONResponse(status_code=500, content={"ok": False, "error": str(e)})
+        return JSONResponse(content={"ok": True, "count": 0, "trades": []})
+
+    @app.get("/api/backtest/csv")
+    def api_backtest_csv() -> Response:
+        import io, csv, json
+        p = Path("data/backtest/all_trades_180d.json")
+        trades = []
+        if p.exists():
+            try:
+                trades = json.loads(p.read_text(encoding="utf-8"))
+            except Exception:
+                pass
+        output = io.StringIO()
+        fieldnames = [
+            "trade_id", "date", "index_name", "tradingsymbol", "mode", "signal_type",
+            "entry_time", "entry_price", "lots", "qty", "exit_time", "exit_price",
+            "pnl", "reason", "duration_minutes"
+        ]
+        writer = csv.DictWriter(output, fieldnames=fieldnames, extrasaction="ignore")
+        writer.writeheader()
+        for t in trades:
+            writer.writerow({
+                "trade_id": t.get("id") or t.get("trade_id", ""),
+                "date": t.get("date", ""),
+                "index_name": t.get("idx") or t.get("index_name", ""),
+                "tradingsymbol": t.get("tradingsymbol", ""),
+                "mode": "BACKTEST",
+                "signal_type": t.get("side") or t.get("signal_type", ""),
+                "entry_time": t.get("in_t") or t.get("entry_time", ""),
+                "entry_price": t.get("in_px", t.get("entry_price", 0.0)),
+                "lots": t.get("lots", 0),
+                "qty": t.get("qty", 0),
+                "exit_time": t.get("out_t") or t.get("exit_time", ""),
+                "exit_price": t.get("out_px", t.get("exit_price", 0.0)),
+                "pnl": t.get("net", t.get("pnl", 0.0)),
+                "reason": t.get("reason", ""),
+                "duration_minutes": t.get("duration_minutes", 0),
+            })
+        return Response(
+            content=output.getvalue(),
+            media_type="text/csv",
+            headers={"Content-Disposition": "attachment; filename=master_alpha_backtest_180d.csv"},
+        )
+
     @app.post("/api/broker/connect")
     def api_broker_connect(payload: BrokerConnectRequest) -> JSONResponse:
         ok, msg = orchestrator.connect_shoonya_account(
