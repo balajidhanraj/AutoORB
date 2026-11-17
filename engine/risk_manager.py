@@ -61,7 +61,7 @@ class ActivePosition:
     realized_pnl: float = 0.0
     unrealized_pnl: float = 0.0
     trail_steps_applied: int = 0
-    product_type: str = "I"
+    product_type: str = "M"
 
 
 @dataclass
@@ -253,7 +253,7 @@ class RiskManager:
             qty = contract.lot_size * active_lots
             limit_px = round(float(ltp) + self.settings.entry_slippage_buffer, 1)
 
-            prd_type = self.custom_product_types.get(signal.index_name) or getattr(spec, "product_type", "I")
+            prd_type = self.custom_product_types.get(signal.index_name) or getattr(spec, "product_type", "M")
             resp = self.client.place_order(
                 buy_or_sell="B",
                 exchange=contract.exchange,
@@ -330,7 +330,7 @@ class RiskManager:
         spec = INDEX_SPECS[pos.index_name]
         trig_px = round(max(0.1, pos.entry_avg_price - spec.sl_pts), 1)
         limit_px = round(max(0.05, trig_px - spec.sl_buffer_pts), 1)
-        prd_type = getattr(pos, "product_type", getattr(INDEX_SPECS.get(pos.index_name), "product_type", "I"))
+        prd_type = getattr(pos, "product_type", getattr(INDEX_SPECS.get(pos.index_name), "product_type", "M"))
         resp = self.client.place_order(
             buy_or_sell="S",
             exchange=pos.contract.exchange,
@@ -481,7 +481,7 @@ class RiskManager:
 
         # Step B: Book 50% Target 1 via marketable LMT sell order
         exit_lmt = round(max(0.05, ltp - 1.0), 1)
-        prd_type = getattr(pos, "product_type", getattr(INDEX_SPECS.get(pos.index_name), "product_type", "I"))
+        prd_type = getattr(pos, "product_type", getattr(INDEX_SPECS.get(pos.index_name), "product_type", "M"))
         resp = self.client.place_order(
             buy_or_sell="S",
             exchange=pos.contract.exchange,
@@ -692,7 +692,7 @@ class RiskManager:
             token_key = f"{pos.contract.exchange}|{pos.contract.token}"
             ltp = self.client.get_ltp(token_key) or pos.last_ltp or pos.entry_avg_price
             aggr_limit = round(max(0.05, float(ltp) - 5.0), 1)
-            prd_type = getattr(pos, "product_type", getattr(INDEX_SPECS.get(pos.index_name), "product_type", "I"))
+            prd_type = getattr(pos, "product_type", getattr(INDEX_SPECS.get(pos.index_name), "product_type", "M"))
             resp = self.client.place_order(
                 buy_or_sell="S",
                 exchange=pos.contract.exchange,

@@ -986,7 +986,7 @@
 
       const isImm = r.radar_state === "IMMINENT_CE_BREAKOUT" || r.radar_state === "IMMINENT_PE_BREAKOUT";
       const currentLots = r.lots || (name === 'CRUDEOILM' ? 1 : 2);
-      const currentProd = r.product_type || (name === 'CRUDEOILM' ? 'M' : 'I');
+      const currentProd = r.product_type || 'M';
       const lotSize = r.lot_size || (name === 'NIFTY' ? 65 : (name === 'BANKNIFTY' ? 30 : 10));
       const activeEl = document.activeElement;
       const userSelectedVal = (activeEl && activeEl.id === `lots-select-${name}`) ? activeEl.value : null;

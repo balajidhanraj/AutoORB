@@ -740,6 +740,10 @@ def test_custom_lots_and_margin_display(tmp_path: Path) -> None:
     assert nifty_radar["total_qty"] == 195
     assert nifty_radar["est_margin"] > 0
     assert nifty_radar["atm_premium"] > 0
+    assert nifty_radar["product_type"] == "M"
+    assert nifty_radar["product_type_label"] == "NRML"
+    assert snap["indices"]["BANKNIFTY"]["radar"]["product_type"] == "M"
+    assert snap["indices"]["BANKNIFTY"]["radar"]["product_type_label"] == "NRML"
 
     crude_radar = snap["indices"]["CRUDEOILM"]["radar"]
     assert crude_radar["lots"] == 4

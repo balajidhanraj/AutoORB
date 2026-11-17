@@ -34,7 +34,7 @@ class IndexSpec:
     trail_step_pts: float
     target_delta_min: float = 0.55
     target_delta_max: float = 0.65
-    product_type: str = "I"
+    product_type: str = "M"
 
     @property
     def default_quantity(self) -> int:
@@ -68,6 +68,7 @@ INDEX_SPECS: Dict[str, IndexSpec] = {
         breakeven_trigger_pts=20.0,
         target1_pts=40.0,
         trail_step_pts=15.0,
+        product_type="M",
     ),
     "BANKNIFTY": IndexSpec(
         name="BANKNIFTY",
@@ -83,7 +84,7 @@ INDEX_SPECS: Dict[str, IndexSpec] = {
         breakeven_trigger_pts=45.0,
         target1_pts=80.0,
         trail_step_pts=30.0,
-        product_type="I",
+        product_type="M",
     ),
     "CRUDEOILM": IndexSpec(
         name="CRUDEOILM",

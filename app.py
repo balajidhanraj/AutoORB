@@ -208,7 +208,7 @@ def _render_radar_card(
     tot_qty = r.get("total_qty", lots * lot_size)
     est_margin = float(r.get("est_margin", 0.0) or 0.0)
     atm_prem = float(r.get("atm_premium", 0.0) or 0.0)
-    prd_label = r.get("product_type_label", "NRML" if name == "CRUDEOILM" else "MIS")
+    prd_label = r.get("product_type_label", "NRML")
 
     return (
         f'<div style="background:{p["surface"]};border:1px solid {p["border"]};border-radius:14px;padding:15px;color:{p["text"]} !important;">'
