@@ -132,9 +132,10 @@ def _badge(text: str, tone: str, p: Dict[str, str]) -> str:
     }
     fg, bg = colors.get(tone, colors["neutral"])
     return (
-        f'<span style="display:inline-block;padding:4px 10px;border-radius:999px;'
+        f'<span style="display:inline-flex;align-items:center;justify-content:center;'
+        f'white-space:nowrap !important;flex-shrink:0 !important;padding:4px 10px;border-radius:999px;'
         f'font-size:11px;font-weight:600;color:{fg};background:{bg};'
-        f'border:1px solid {fg};margin-right:6px;margin-bottom:4px;">{html.escape(text)}</span>'
+        f'border:1px solid {fg};margin-right:6px;margin-bottom:4px;line-height:1.2;">{html.escape(text)}</span>'
     )
 
 
@@ -215,8 +216,9 @@ def _render_radar_card(
 
     return (
         f'<div style="background:{p["surface"]};border:1px solid {p["border"]};border-radius:14px;padding:15px;color:{p["text"]} !important;">'
-        f'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">'
-        f'<strong style="font-size:14px;color:{p["text"]} !important;">{html.escape(name)} Spot &amp; Auto-Order Radar</strong>{status}</div>'
+        f'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;gap:8px;min-width:0;">'
+        f'<strong style="font-size:14px;color:{p["text"]} !important;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;">{html.escape(name)} Spot &amp; Auto-Order Radar</strong>'
+        f'<div style="flex-shrink:0;white-space:nowrap;">{status}</div></div>'
         f'<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-bottom:10px;">{kv_blocks}</div>'
         f'<div style="display:flex;justify-content:space-between;font-size:11px;color:{p["muted"]} !important;">'
         f'<span style="color:{p["muted"]} !important;">Auto-Trigger Readiness</span><strong style="color:{p["text"]} !important;">{pct}%</strong></div>'
@@ -285,8 +287,9 @@ def _render_broker_and_schedule_col(snap: Dict[str, Any], p: Dict[str, str]) -> 
     )
     return (
         f'<div style="background:{p["surface"]};border:1px solid {p["border"]};border-radius:14px;padding:15px;color:{p["text"]} !important;">'
-        f'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">'
-        f'<strong style="font-size:14px;color:{p["text"]} !important;">Broker Funds &amp; Auto-Schedule</strong>{conn_badge}</div>'
+        f'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;gap:8px;min-width:0;">'
+        f'<strong style="font-size:14px;color:{p["text"]} !important;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;">Shoonya Broker &amp; Timeline</strong>'
+        f'<div style="flex-shrink:0;white-space:nowrap;">{conn_badge}</div></div>'
         f'<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;">{kv_cards}</div>'
         f"{links}"
         f'<div style="font-weight:700;font-size:12px;margin-top:12px;color:{p["text"]} !important;">Automated Daily Timeline</div>'
