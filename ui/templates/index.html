@@ -8,7 +8,7 @@
   <meta name="theme-color" content="#090d14" />
   <title>Shoonya Automated ORB Terminal | Obsidian Velocity</title>
 
-    <!-- Tailwind CSS CDN for Master Alpha Strategy Guide Modal (Preflight: false to preserve terminal styling) -->
+  <!-- Tailwind CSS CDN for Master Alpha Strategy Guide Modal (Preflight: false to preserve terminal styling) -->
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind = window.tailwind || {};
@@ -43,17 +43,43 @@
     };
   </script>
   <style>
-    .code-chip { font-family: 'JetBrains Mono', monospace; }
+    .code-chip {
+      font-family: 'JetBrains Mono', monospace;
+    }
+
     @media print {
-      body > * { display: none !important; }
-      #user-guide-modal, #user-guide-modal * { display: block !important; visibility: visible !important; }
-      #user-guide-modal { position: absolute; left: 0; top: 0; width: 100%; background: #060910 !important; }
-      #user-guide-modal > div { max-height: none !important; overflow: visible !important; box-shadow: none !important; }
-      #user-guide-modal main { max-height: none !important; overflow: visible !important; }
+      body>* {
+        display: none !important;
+      }
+
+      #user-guide-modal,
+      #user-guide-modal * {
+        display: block !important;
+        visibility: visible !important;
+      }
+
+      #user-guide-modal {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100%;
+        background: #060910 !important;
+      }
+
+      #user-guide-modal>div {
+        max-height: none !important;
+        overflow: visible !important;
+        box-shadow: none !important;
+      }
+
+      #user-guide-modal main {
+        max-height: none !important;
+        overflow: visible !important;
+      }
     }
   </style>
 
-  
+
   <style id="guide-modal-theme-styles">
     /* ========================================================
        THEME & TYPOGRAPHY INHERITANCE FOR STRATEGY & USER GUIDE
@@ -62,12 +88,14 @@
       font-family: var(--font-body, 'Geist', sans-serif);
       color: var(--text, #f1f5f9);
     }
+
     #user-guide-modal .guide-card-container {
       background: var(--surface) !important;
       border: 1px solid var(--border) !important;
       color: var(--text) !important;
       font-family: var(--font-body, 'Geist', sans-serif);
     }
+
     #user-guide-modal h1,
     #user-guide-modal h2,
     #user-guide-modal h3,
@@ -75,26 +103,30 @@
       font-family: var(--font-heading, 'Space Grotesk', sans-serif) !important;
       color: var(--text) !important;
     }
+
     #user-guide-modal .code-chip,
     #user-guide-modal code,
     #user-guide-modal pre,
     #user-guide-modal .font-mono {
       font-family: var(--font-mono, 'JetBrains Mono', monospace) !important;
     }
+
     #user-guide-modal header {
       background: var(--surface-alt) !important;
       border-bottom: 1px solid var(--border) !important;
     }
+
     #user-guide-modal footer {
       background: var(--surface-alt) !important;
       border-top: 1px solid var(--border) !important;
     }
+
     #user-guide-modal .guide-glow-ribbon {
       height: 3px;
       width: 100%;
       background: linear-gradient(90deg, var(--green, #10b981), var(--primary, #00f5d4), var(--accent, #38bdf8));
     }
-    
+
     /* Navigation bar - NO HORIZONTAL SCROLLBAR, wraps cleanly */
     #user-guide-modal .guide-nav-bar {
       background: var(--surface-alt) !important;
@@ -104,11 +136,13 @@
       overflow-x: visible !important;
       flex-wrap: wrap !important;
     }
+
     #user-guide-modal .guide-nav-bar::-webkit-scrollbar {
       display: none !important;
       height: 0px !important;
       width: 0px !important;
     }
+
     #user-guide-modal .guide-nav-tab {
       background: var(--surface-container-high) !important;
       color: var(--text-dim) !important;
@@ -125,11 +159,13 @@
       text-decoration: none;
       white-space: nowrap;
     }
+
     #user-guide-modal .guide-nav-tab:hover {
       background: var(--surface) !important;
       color: var(--text) !important;
       border-color: var(--border-focus) !important;
     }
+
     #user-guide-modal .guide-nav-tab.active {
       background: var(--primary-soft) !important;
       color: var(--primary) !important;
@@ -137,20 +173,23 @@
       font-weight: 700 !important;
       box-shadow: 0 0 10px var(--primary-soft);
     }
-    
+
     /* Theme color adaptation overrides */
     #user-guide-modal .text-slate-100,
     #user-guide-modal .text-white {
       color: var(--text) !important;
     }
+
     #user-guide-modal .text-slate-300,
     #user-guide-modal .text-slate-200 {
       color: var(--text-dim) !important;
     }
+
     #user-guide-modal .text-slate-400,
     #user-guide-modal .text-slate-600 {
       color: var(--muted) !important;
     }
+
     #user-guide-modal .bg-\[\#070b13\],
     #user-guide-modal .bg-\[\#080d17\],
     #user-guide-modal .bg-\[\#09101d\],
@@ -160,24 +199,29 @@
       background: var(--surface-alt) !important;
       border-color: var(--border) !important;
     }
+
     #user-guide-modal .bg-terminal-subtle,
     #user-guide-modal .bg-slate-800 {
       background: var(--surface-container-high) !important;
       border-color: var(--border) !important;
     }
+
     #user-guide-modal table {
       color: var(--text) !important;
       border-color: var(--border) !important;
     }
+
     #user-guide-modal th {
       background: var(--surface-container-high) !important;
       color: var(--muted) !important;
       border-bottom: 1px solid var(--border) !important;
     }
+
     #user-guide-modal td {
       border-bottom: 1px solid var(--border) !important;
       color: var(--text) !important;
     }
+
     #user-guide-modal .btn-guide-primary {
       background: var(--primary) !important;
       color: #060910 !important;
@@ -186,16 +230,19 @@
       box-shadow: 0 0 16px var(--primary-soft) !important;
       transition: all 0.2s ease;
     }
+
     #user-guide-modal .btn-guide-primary:hover {
       filter: brightness(1.15);
       box-shadow: 0 0 22px var(--primary) !important;
     }
+
     #user-guide-modal .btn-guide-secondary {
       background: var(--surface-container-high) !important;
       color: var(--text) !important;
       border: 1px solid var(--border) !important;
       font-weight: 600 !important;
     }
+
     #user-guide-modal .btn-guide-secondary:hover {
       background: var(--surface-alt) !important;
       border-color: var(--border-focus) !important;
@@ -282,6 +329,7 @@
       overflow-x: auto;
       scrollbar-width: none;
     }
+
     .topbar-main::-webkit-scrollbar {
       display: none;
     }
@@ -1248,7 +1296,7 @@
         <button class="btn-primary" onclick="openQuickOrderModal('NIFTY', 'CE')"
           title="Open Quick Live Broker Order Popup">
           <span class="material-symbols-outlined" style="font-size:16px;">bolt</span>
-          <span>⚡ BROKER ORDER</span>
+          <span>BROKER ORDER</span>
         </button>
         <button onclick="openAccountSwitchModal()" title="Switch or connect another Shoonya account">
           <span class="material-symbols-outlined" style="font-size:16px;">manage_accounts</span>
@@ -1257,7 +1305,7 @@
         <button class="btn-kill" onclick="triggerKillSwitch()"
           title="Emergency cancel all orders and square off positions">
           <span class="material-symbols-outlined" style="font-size:16px;">power_settings_new</span>
-          <span>KILL SWITCH</span>
+          <!-- <span>KILL SWITCH</span> -->
         </button>
       </div>
     </div>
@@ -1906,551 +1954,654 @@
     </div>
   </div>
 
-    <!-- MODAL 4: STRATEGY & USER GUIDE (Master Alpha 15% Institutional Blueprint) -->
-  <div id="user-guide-modal" class="modal-backdrop" style="display:none; padding:16px; background:rgba(4,7,14,0.85); backdrop-filter:blur(10px); z-index:1000;"
+  <!-- MODAL 4: STRATEGY & USER GUIDE (Master Alpha 15% Institutional Blueprint) -->
+  <div id="user-guide-modal" class="modal-backdrop"
+    style="display:none; padding:16px; background:rgba(4,7,14,0.85); backdrop-filter:blur(10px); z-index:1000;"
     onclick="if(event.target===this)closeUserGuideModal()">
     <!-- Main Background Container Backdrop Simulation -->
-  <div class="guide-card-container relative w-full max-w-6xl mx-auto rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
+    <div
+      class="guide-card-container relative w-full max-w-6xl mx-auto rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
 
-    <!-- Top Glow Ribbon -->
-    <div class="guide-glow-ribbon"></div>
+      <!-- Top Glow Ribbon -->
+      <div class="guide-glow-ribbon"></div>
 
-    <!-- Header Bar -->
-    <header class="px-6 py-4 border-b border-terminal-border bg-terminal-surface/90 backdrop-blur-md flex flex-wrap items-center justify-between gap-4">
-      <div class="flex items-center gap-3.5">
-        <div class="w-10 h-10 rounded-xl bg-terminal-cyan/10 border border-terminal-cyan/30 flex items-center justify-center text-terminal-cyan shadow-[0_0_15px_rgba(0,245,212,0.15)]">
-          <span class="material-symbols-outlined text-[24px]">menu_book</span>
-        </div>
-        <div>
-          <div class="flex items-center gap-2.5">
-            <h1 class="text-base md:text-lg font-bold tracking-tight text-white flex items-center gap-2">
-              Shoonya Automated ORB Terminal
-              <span class="px-2 py-0.5 rounded text-[10px] font-mono tracking-wider font-semibold bg-terminal-cyan/15 text-terminal-cyan border border-terminal-cyan/30">DOCS v4.2</span>
-            </h1>
+      <!-- Header Bar -->
+      <header
+        class="px-6 py-4 border-b border-terminal-border bg-terminal-surface/90 backdrop-blur-md flex flex-wrap items-center justify-between gap-4">
+        <div class="flex items-center gap-3.5">
+          <div
+            class="w-10 h-10 rounded-xl bg-terminal-cyan/10 border border-terminal-cyan/30 flex items-center justify-center text-terminal-cyan shadow-[0_0_15px_rgba(0,245,212,0.15)]">
+            <span class="material-symbols-outlined text-[24px]">menu_book</span>
           </div>
-          <p class="text-xs text-terminal-muted flex items-center gap-2 mt-0.5">
-            <span>Master Alpha 15% Strategy Blueprint</span>
-            <span class="text-slate-600">•</span>
-            <span>Terminal Architecture & Controls</span>
-            <span class="text-slate-600">•</span>
-            <span class="font-mono text-slate-400">SEBI ID: #AP9842</span>
+          <div>
+            <div class="flex items-center gap-2.5">
+              <h1 class="text-base md:text-lg font-bold tracking-tight text-white flex items-center gap-2">
+                Shoonya Automated ORB Terminal
+                <span
+                  class="px-2 py-0.5 rounded text-[10px] font-mono tracking-wider font-semibold bg-terminal-cyan/15 text-terminal-cyan border border-terminal-cyan/30">DOCS
+                  v4.2</span>
+              </h1>
+            </div>
+            <p class="text-xs text-terminal-muted flex items-center gap-2 mt-0.5">
+              <span>Master Alpha 15% Strategy Blueprint</span>
+              <span class="text-slate-600">•</span>
+              <span>Terminal Architecture & Controls</span>
+              <span class="text-slate-600">•</span>
+              <span class="font-mono text-slate-400">SEBI ID: #AP9842</span>
+            </p>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-2.5">
+          <div
+            class="hidden sm:flex items-center gap-2 text-xs font-mono px-3 py-1.5 rounded-lg bg-terminal-bg border border-terminal-border text-terminal-muted">
+            <span class="inline-block w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+            <span>SYSTEM ACTIVE</span>
+          </div>
+          <button
+            class="w-8 h-8 rounded-lg bg-terminal-subtle hover:bg-rose-500/20 hover:text-rose-400 border border-terminal-border flex items-center justify-center text-slate-400 transition-colors"
+            onclick="closeUserGuideModal()" title="Close Guide">
+            <span class="material-symbols-outlined text-lg">close</span>
+          </button>
+        </div>
+      </header>
+
+      <!-- Navigation Pills Header -->
+      <nav class="guide-nav-bar px-6 py-2.5 flex items-center gap-2 text-xs code-chip">
+        <a href="#blueprint" onclick="event.preventDefault(); scrollGuideSec('blueprint');"
+          class="guide-nav-tab active">
+          <span class="material-symbols-outlined text-[15px]">account_tree</span>
+          <span>1. Strategy</span>
+        </a>
+        <a href="#parameters" onclick="event.preventDefault(); scrollGuideSec('parameters');" class="guide-nav-tab">
+          <span class="material-symbols-outlined text-[15px]">tune</span>
+          <span>2. Risk &amp; Params</span>
+        </a>
+        <a href="#terminal-controls" onclick="event.preventDefault(); scrollGuideSec('terminal-controls');"
+          class="guide-nav-tab">
+          <span class="material-symbols-outlined text-[15px]">dashboard</span>
+          <span>3. Controls</span>
+        </a>
+        <a href="#multi-account" onclick="event.preventDefault(); scrollGuideSec('multi-account');"
+          class="guide-nav-tab">
+          <span class="material-symbols-outlined text-[15px]">manage_accounts</span>
+          <span>4. Accounts</span>
+        </a>
+        <a href="#daily-flow" onclick="event.preventDefault(); scrollGuideSec('daily-flow');" class="guide-nav-tab">
+          <span class="material-symbols-outlined text-[15px]">schedule</span>
+          <span>5. Daily SOP</span>
+        </a>
+      </nav>
+
+      <!-- Modal Scrollable Body -->
+      <main class="flex-1 overflow-y-auto p-6 md:p-8 space-y-10 text-sm leading-relaxed">
+
+        <!-- SECTION 1: MASTER ALPHA 15% STRATEGY BLUEPRINT -->
+        <section id="blueprint" class="space-y-4">
+          <div class="flex items-center justify-between border-b border-terminal-border/80 pb-3">
+            <div class="flex items-center gap-2.5">
+              <span class="p-1.5 rounded-md bg-terminal-cyan/10 text-terminal-cyan border border-terminal-cyan/20">
+                <span class="material-symbols-outlined text-[18px]">account_tree</span>
+              </span>
+              <h2 class="text-base md:text-lg font-bold tracking-tight text-white">1. Master Alpha 15% Strategy
+                Blueprint</h2>
+            </div>
+            <span
+              class="text-xs font-mono text-emerald-400 bg-emerald-950/40 border border-emerald-800/40 px-2.5 py-0.5 rounded-full font-medium">180-Day
+              Backtest Validated</span>
+          </div>
+
+          <p class="text-slate-300 text-xs md:text-sm">
+            The <strong class="text-white font-semibold">Master Alpha 15% Strategy</strong> is calibrated from 180 days
+            (6 months) of tick-by-tick quantitative market data across <strong
+              class="text-terminal-cyan font-mono">NIFTY</strong> and <strong
+              class="text-terminal-cyan font-mono">BANKNIFTY</strong> index options. It targets a consistent <strong
+              class="text-emerald-400 font-bold">~15% monthly return</strong> on capital with institutional risk fences
+            and automated strike resolution.
           </p>
-        </div>
-      </div>
 
-      <div class="flex items-center gap-2.5">
-        <div class="hidden sm:flex items-center gap-2 text-xs font-mono px-3 py-1.5 rounded-lg bg-terminal-bg border border-terminal-border text-terminal-muted">
-          <span class="inline-block w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-          <span>SYSTEM ACTIVE</span>
-        </div>
-        <button class="w-8 h-8 rounded-lg bg-terminal-subtle hover:bg-rose-500/20 hover:text-rose-400 border border-terminal-border flex items-center justify-center text-slate-400 transition-colors" onclick="closeUserGuideModal()" title="Close Guide">
-          <span class="material-symbols-outlined text-lg">close</span>
-        </button>
-      </div>
-    </header>
+          <!-- Visual Timeline Diagram -->
+          <div
+            class="rounded-xl bg-[#070b13] border border-terminal-border p-4 md:p-5 font-mono text-xs overflow-x-auto shadow-inner">
+            <div
+              class="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2 flex items-center justify-between">
+              <span>Daily Execution Clock Sequence (IST)</span>
+              <span class="text-terminal-cyan">Zero-Discretion Automation</span>
+            </div>
 
-    <!-- Navigation Pills Header -->
-    <nav class="guide-nav-bar px-6 py-2.5 flex items-center gap-2 text-xs code-chip">
-      <a href="#blueprint" onclick="event.preventDefault(); scrollGuideSec('blueprint');" class="guide-nav-tab active">
-        <span class="material-symbols-outlined text-[15px]">account_tree</span>
-        <span>1. Strategy</span>
-      </a>
-      <a href="#parameters" onclick="event.preventDefault(); scrollGuideSec('parameters');" class="guide-nav-tab">
-        <span class="material-symbols-outlined text-[15px]">tune</span>
-        <span>2. Risk &amp; Params</span>
-      </a>
-      <a href="#terminal-controls" onclick="event.preventDefault(); scrollGuideSec('terminal-controls');" class="guide-nav-tab">
-        <span class="material-symbols-outlined text-[15px]">dashboard</span>
-        <span>3. Controls</span>
-      </a>
-      <a href="#multi-account" onclick="event.preventDefault(); scrollGuideSec('multi-account');" class="guide-nav-tab">
-        <span class="material-symbols-outlined text-[15px]">manage_accounts</span>
-        <span>4. Accounts</span>
-      </a>
-      <a href="#daily-flow" onclick="event.preventDefault(); scrollGuideSec('daily-flow');" class="guide-nav-tab">
-        <span class="material-symbols-outlined text-[15px]">schedule</span>
-        <span>5. Daily SOP</span>
-      </a>
-    </nav>
-
-    <!-- Modal Scrollable Body -->
-    <main class="flex-1 overflow-y-auto p-6 md:p-8 space-y-10 text-sm leading-relaxed">
-
-      <!-- SECTION 1: MASTER ALPHA 15% STRATEGY BLUEPRINT -->
-      <section id="blueprint" class="space-y-4">
-        <div class="flex items-center justify-between border-b border-terminal-border/80 pb-3">
-          <div class="flex items-center gap-2.5">
-            <span class="p-1.5 rounded-md bg-terminal-cyan/10 text-terminal-cyan border border-terminal-cyan/20">
-              <span class="material-symbols-outlined text-[18px]">account_tree</span>
-            </span>
-            <h2 class="text-base md:text-lg font-bold tracking-tight text-white">1. Master Alpha 15% Strategy Blueprint</h2>
-          </div>
-          <span class="text-xs font-mono text-emerald-400 bg-emerald-950/40 border border-emerald-800/40 px-2.5 py-0.5 rounded-full font-medium">180-Day Backtest Validated</span>
-        </div>
-
-        <p class="text-slate-300 text-xs md:text-sm">
-          The <strong class="text-white font-semibold">Master Alpha 15% Strategy</strong> is calibrated from 180 days (6 months) of tick-by-tick quantitative market data across <strong class="text-terminal-cyan font-mono">NIFTY</strong> and <strong class="text-terminal-cyan font-mono">BANKNIFTY</strong> index options. It targets a consistent <strong class="text-emerald-400 font-bold">~15% monthly return</strong> on capital with institutional risk fences and automated strike resolution.
-        </p>
-
-        <!-- Visual Timeline Diagram -->
-        <div class="rounded-xl bg-[#070b13] border border-terminal-border p-4 md:p-5 font-mono text-xs overflow-x-auto shadow-inner">
-          <div class="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2 flex items-center justify-between">
-            <span>Daily Execution Clock Sequence (IST)</span>
-            <span class="text-terminal-cyan">Zero-Discretion Automation</span>
-          </div>
-          
-          <!-- Timeline graphic bar -->
-          <div class="min-w-[680px] my-3">
-            <div class="grid grid-cols-4 gap-1.5 text-center text-[10px] font-bold">
-              <div class="bg-amber-500/10 text-amber-300 border border-amber-500/30 rounded-t py-1.5 px-2">
-                09:15 - 09:45
-                <div class="text-[9px] font-normal text-amber-200/80">30-Min ORB Lock</div>
+            <!-- Timeline graphic bar -->
+            <div class="min-w-[680px] my-3">
+              <div class="grid grid-cols-4 gap-1.5 text-center text-[10px] font-bold">
+                <div class="bg-amber-500/10 text-amber-300 border border-amber-500/30 rounded-t py-1.5 px-2">
+                  09:15 - 09:45
+                  <div class="text-[9px] font-normal text-amber-200/80">30-Min ORB Lock</div>
+                </div>
+                <div class="bg-rose-500/10 text-rose-300 border border-rose-500/30 rounded-t py-1.5 px-2">
+                  09:45 - 10:00
+                  <div class="text-[9px] font-normal text-rose-200/80">Morning Shakeout (No Orders)</div>
+                </div>
+                <div class="bg-emerald-500/10 text-emerald-300 border border-emerald-500/30 rounded-t py-1.5 px-2">
+                  10:00 - 13:15
+                  <div class="text-[9px] font-normal text-emerald-200/80">Institutional 5-Gate Scan Window</div>
+                </div>
+                <div class="bg-slate-800 text-slate-300 border border-slate-700 rounded-t py-1.5 px-2">
+                  13:15 - 15:15
+                  <div class="text-[9px] font-normal text-slate-400">Decay Avoidance & Auto Square-Off</div>
+                </div>
               </div>
-              <div class="bg-rose-500/10 text-rose-300 border border-rose-500/30 rounded-t py-1.5 px-2">
-                09:45 - 10:00
-                <div class="text-[9px] font-normal text-rose-200/80">Morning Shakeout (No Orders)</div>
-              </div>
-              <div class="bg-emerald-500/10 text-emerald-300 border border-emerald-500/30 rounded-t py-1.5 px-2">
-                10:00 - 13:15
-                <div class="text-[9px] font-normal text-emerald-200/80">Institutional 5-Gate Scan Window</div>
-              </div>
-              <div class="bg-slate-800 text-slate-300 border border-slate-700 rounded-t py-1.5 px-2">
-                13:15 - 15:15
-                <div class="text-[9px] font-normal text-slate-400">Decay Avoidance & Auto Square-Off</div>
+              <div class="h-2 w-full bg-slate-800 rounded-b flex overflow-hidden">
+                <div class="w-1/4 bg-amber-500/60"></div>
+                <div class="w-1/8 bg-rose-500/60"></div>
+                <div class="w-1/2 bg-emerald-500/60"></div>
+                <div class="w-1/8 bg-slate-600"></div>
               </div>
             </div>
-            <div class="h-2 w-full bg-slate-800 rounded-b flex overflow-hidden">
-              <div class="w-1/4 bg-amber-500/60"></div>
-              <div class="w-1/8 bg-rose-500/60"></div>
-              <div class="w-1/2 bg-emerald-500/60"></div>
-              <div class="w-1/8 bg-slate-600"></div>
+
+            <div
+              class="grid grid-cols-1 md:grid-cols-2 gap-2 text-[11px] text-slate-400 mt-3 pt-3 border-t border-slate-800">
+              <div><span class="text-amber-400 font-semibold">• 09:15 - 09:45:</span> Establishes initial high (ORH) and
+                low (ORL) over six 5m candles.</div>
+              <div><span class="text-rose-400 font-semibold">• 09:45 - 10:00:</span> Hard cooldown period to filter
+                institutional stop runs and fakeouts.</div>
+              <div><span class="text-emerald-400 font-semibold">• 10:00 - 13:15:</span> Automated breakout trigger
+                active when all 5 gate conditions confirm.</div>
+              <div><span class="text-slate-400 font-semibold">• 15:15 IST:</span> Mandatory auto-liquidation of open
+                intraday legs via broker API.</div>
             </div>
           </div>
 
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-2 text-[11px] text-slate-400 mt-3 pt-3 border-t border-slate-800">
-            <div><span class="text-amber-400 font-semibold">• 09:15 - 09:45:</span> Establishes initial high (ORH) and low (ORL) over six 5m candles.</div>
-            <div><span class="text-rose-400 font-semibold">• 09:45 - 10:00:</span> Hard cooldown period to filter institutional stop runs and fakeouts.</div>
-            <div><span class="text-emerald-400 font-semibold">• 10:00 - 13:15:</span> Automated breakout trigger active when all 5 gate conditions confirm.</div>
-            <div><span class="text-slate-400 font-semibold">• 15:15 IST:</span> Mandatory auto-liquidation of open intraday legs via broker API.</div>
-          </div>
-        </div>
+          <!-- Strategy Rules Box -->
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <!-- 5-Gate Verification Card -->
+            <div class="rounded-xl bg-terminal-surface border border-terminal-border p-4 space-y-3">
+              <div class="flex items-center justify-between">
+                <h3 class="font-bold text-sm text-terminal-cyan flex items-center gap-1.5">
+                  <span class="material-symbols-outlined text-[16px]">verified</span>
+                  The 5-Gate Breakout Verification
+                </h3>
+                <span class="text-[11px] font-mono text-slate-400 bg-slate-800 px-2 py-0.5 rounded">All Must Pass</span>
+              </div>
+              <ul class="space-y-2.5 text-xs text-slate-300">
+                <li class="flex items-start gap-2 bg-[#0b1220] p-2 rounded border border-terminal-border/60">
+                  <span
+                    class="w-5 h-5 rounded bg-terminal-cyan/15 text-terminal-cyan font-mono font-bold flex items-center justify-center shrink-0 text-[10px]">G1</span>
+                  <div><strong class="text-white">Sys & Slot Gate:</strong> Engine active, market hours valid, session
+                    trades &lt; 2 daily cap.</div>
+                </li>
+                <li class="flex items-start gap-2 bg-[#0b1220] p-2 rounded border border-terminal-border/60">
+                  <span
+                    class="w-5 h-5 rounded bg-terminal-cyan/15 text-terminal-cyan font-mono font-bold flex items-center justify-center shrink-0 text-[10px]">G2</span>
+                  <div><strong class="text-white">India VIX Filter (≥ 12.0):</strong> Guarantees sufficient option
+                    premium elasticity and IV expansion.</div>
+                </li>
+                <li class="flex items-start gap-2 bg-[#0b1220] p-2 rounded border border-terminal-border/60">
+                  <span
+                    class="w-5 h-5 rounded bg-terminal-cyan/15 text-terminal-cyan font-mono font-bold flex items-center justify-center shrink-0 text-[10px]">G3</span>
+                  <div><strong class="text-white">Corridor Filter (0.20% – 0.85%):</strong> Filters out sluggish
+                    compression (&lt;0.20%) and exhausted wild swings (&gt;0.85%).</div>
+                </li>
+                <li class="flex items-start gap-2 bg-[#0b1220] p-2 rounded border border-terminal-border/60">
+                  <span
+                    class="w-5 h-5 rounded bg-terminal-cyan/15 text-terminal-cyan font-mono font-bold flex items-center justify-center shrink-0 text-[10px]">G4</span>
+                  <div>
+                    <strong class="text-white">Spot Breakout + Intraday VWAP + PDC:</strong>
+                    <div class="mt-0.5 text-slate-400 font-mono text-[11px]">
+                      • <span class="text-emerald-400">CE:</span> Close &gt; ORH, Close &gt; VWAP, and Close ≥ Previous
+                      Day Close.<br>
+                      • <span class="text-rose-400">PE:</span> Close &lt; ORL, Close &lt; VWAP, and Close ≤ Previous Day
+                      Close.
+                    </div>
+                  </div>
+                </li>
+                <li class="flex items-start gap-2 bg-[#0b1220] p-2 rounded border border-terminal-border/60">
+                  <span
+                    class="w-5 h-5 rounded bg-terminal-cyan/15 text-terminal-cyan font-mono font-bold flex items-center justify-center shrink-0 text-[10px]">G5</span>
+                  <div>
+                    <strong class="text-white">Wilder RSI(14) Momentum:</strong>
+                    <span class="text-emerald-400 font-mono">CE &gt; 60.0</span> / <span
+                      class="text-rose-400 font-mono">PE &lt; 40.0</span> to confirm directional trend velocity.
+                  </div>
+                </li>
+              </ul>
+            </div>
 
-        <!-- Strategy Rules Box -->
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <!-- 5-Gate Verification Card -->
-          <div class="rounded-xl bg-terminal-surface border border-terminal-border p-4 space-y-3">
-            <div class="flex items-center justify-between">
-              <h3 class="font-bold text-sm text-terminal-cyan flex items-center gap-1.5">
-                <span class="material-symbols-outlined text-[16px]">verified</span>
-                The 5-Gate Breakout Verification
+            <!-- Position Management & Sizing Booster -->
+            <div class="rounded-xl bg-terminal-surface border border-terminal-border p-4 space-y-3">
+              <h3 class="font-bold text-sm text-emerald-400 flex items-center gap-1.5">
+                <span class="material-symbols-outlined text-[16px]">price_change</span>
+                Bracket Rules & Expiry Sizing Booster
               </h3>
-              <span class="text-[11px] font-mono text-slate-400 bg-slate-800 px-2 py-0.5 rounded">All Must Pass</span>
-            </div>
-            <ul class="space-y-2.5 text-xs text-slate-300">
-              <li class="flex items-start gap-2 bg-[#0b1220] p-2 rounded border border-terminal-border/60">
-                <span class="w-5 h-5 rounded bg-terminal-cyan/15 text-terminal-cyan font-mono font-bold flex items-center justify-center shrink-0 text-[10px]">G1</span>
-                <div><strong class="text-white">Sys & Slot Gate:</strong> Engine active, market hours valid, session trades &lt; 2 daily cap.</div>
-              </li>
-              <li class="flex items-start gap-2 bg-[#0b1220] p-2 rounded border border-terminal-border/60">
-                <span class="w-5 h-5 rounded bg-terminal-cyan/15 text-terminal-cyan font-mono font-bold flex items-center justify-center shrink-0 text-[10px]">G2</span>
-                <div><strong class="text-white">India VIX Filter (≥ 12.0):</strong> Guarantees sufficient option premium elasticity and IV expansion.</div>
-              </li>
-              <li class="flex items-start gap-2 bg-[#0b1220] p-2 rounded border border-terminal-border/60">
-                <span class="w-5 h-5 rounded bg-terminal-cyan/15 text-terminal-cyan font-mono font-bold flex items-center justify-center shrink-0 text-[10px]">G3</span>
-                <div><strong class="text-white">Corridor Filter (0.20% – 0.85%):</strong> Filters out sluggish compression (&lt;0.20%) and exhausted wild swings (&gt;0.85%).</div>
-              </li>
-              <li class="flex items-start gap-2 bg-[#0b1220] p-2 rounded border border-terminal-border/60">
-                <span class="w-5 h-5 rounded bg-terminal-cyan/15 text-terminal-cyan font-mono font-bold flex items-center justify-center shrink-0 text-[10px]">G4</span>
-                <div>
-                  <strong class="text-white">Spot Breakout + Intraday VWAP + PDC:</strong>
-                  <div class="mt-0.5 text-slate-400 font-mono text-[11px]">
-                    • <span class="text-emerald-400">CE:</span> Close &gt; ORH, Close &gt; VWAP, and Close ≥ Previous Day Close.<br>
-                    • <span class="text-rose-400">PE:</span> Close &lt; ORL, Close &lt; VWAP, and Close ≤ Previous Day Close.
+
+              <div class="space-y-2.5 text-xs text-slate-300">
+                <!-- Stop loss and target points -->
+                <div class="bg-[#0b1220] p-3 rounded-lg border border-terminal-border/60 space-y-2">
+                  <div class="font-semibold text-white flex items-center justify-between">
+                    <span>Step-Trailing Profit Lock</span>
+                    <span class="text-[10px] font-mono text-terminal-cyan">Zero Slippage Trailing</span>
+                  </div>
+                  <div class="grid grid-cols-2 gap-2 text-[11px] font-mono">
+                    <div class="bg-terminal-subtle p-2 rounded border border-terminal-border">
+                      <span class="text-terminal-blue font-bold block mb-1">NIFTY Bracket</span>
+                      Initial SL: <span class="text-rose-400 font-bold">-25 pts</span><br>
+                      Trail to Cost: <span class="text-emerald-400">+20 pts</span><br>
+                      Book 50%: <span class="text-terminal-cyan font-bold">+40 pts</span>
+                    </div>
+                    <div class="bg-terminal-subtle p-2 rounded border border-terminal-border">
+                      <span class="text-terminal-blue font-bold block mb-1">BANKNIFTY Bracket</span>
+                      Initial SL: <span class="text-rose-400 font-bold">-50 pts</span><br>
+                      Trail to Cost: <span class="text-emerald-400">+40 pts</span><br>
+                      Book 50%: <span class="text-terminal-cyan font-bold">+80 pts</span>
+                    </div>
                   </div>
                 </div>
-              </li>
-              <li class="flex items-start gap-2 bg-[#0b1220] p-2 rounded border border-terminal-border/60">
-                <span class="w-5 h-5 rounded bg-terminal-cyan/15 text-terminal-cyan font-mono font-bold flex items-center justify-center shrink-0 text-[10px]">G5</span>
-                <div>
-                  <strong class="text-white">Wilder RSI(14) Momentum:</strong>
-                  <span class="text-emerald-400 font-mono">CE &gt; 60.0</span> / <span class="text-rose-400 font-mono">PE &lt; 40.0</span> to confirm directional trend velocity.
-                </div>
-              </li>
-            </ul>
-          </div>
 
-          <!-- Position Management & Sizing Booster -->
-          <div class="rounded-xl bg-terminal-surface border border-terminal-border p-4 space-y-3">
-            <h3 class="font-bold text-sm text-emerald-400 flex items-center gap-1.5">
-              <span class="material-symbols-outlined text-[16px]">price_change</span>
-              Bracket Rules & Expiry Sizing Booster
-            </h3>
-            
-            <div class="space-y-2.5 text-xs text-slate-300">
-              <!-- Stop loss and target points -->
-              <div class="bg-[#0b1220] p-3 rounded-lg border border-terminal-border/60 space-y-2">
-                <div class="font-semibold text-white flex items-center justify-between">
-                  <span>Step-Trailing Profit Lock</span>
-                  <span class="text-[10px] font-mono text-terminal-cyan">Zero Slippage Trailing</span>
+                <!-- Tuesday booster & Risk barrier -->
+                <div class="p-2.5 rounded bg-terminal-cyan/5 border border-terminal-cyan/20 space-y-1">
+                  <span class="font-bold text-terminal-cyan flex items-center gap-1">
+                    <span class="material-symbols-outlined text-[15px]">trending_up</span>
+                    Tuesday Expiry Sizing Booster (75% Allocation):
+                  </span>
+                  <p class="text-[11px] text-slate-300">
+                    On Tuesdays (FINNIFTY/BANKNIFTY expiry cycle), fund allocation expands to <strong
+                      class="text-white">75% (3 lots)</strong> to capture rapid gamma moves. Standard sessions allocate
+                    <strong class="text-white">50% (2 lots)</strong>.
+                  </p>
                 </div>
-                <div class="grid grid-cols-2 gap-2 text-[11px] font-mono">
-                  <div class="bg-terminal-subtle p-2 rounded border border-terminal-border">
-                    <span class="text-terminal-blue font-bold block mb-1">NIFTY Bracket</span>
-                    Initial SL: <span class="text-rose-400 font-bold">-25 pts</span><br>
-                    Trail to Cost: <span class="text-emerald-400">+20 pts</span><br>
-                    Book 50%: <span class="text-terminal-cyan font-bold">+40 pts</span>
-                  </div>
-                  <div class="bg-terminal-subtle p-2 rounded border border-terminal-border">
-                    <span class="text-terminal-blue font-bold block mb-1">BANKNIFTY Bracket</span>
-                    Initial SL: <span class="text-rose-400 font-bold">-50 pts</span><br>
-                    Trail to Cost: <span class="text-emerald-400">+40 pts</span><br>
-                    Book 50%: <span class="text-terminal-cyan font-bold">+80 pts</span>
-                  </div>
+
+                <div class="p-2.5 rounded bg-rose-500/10 border border-rose-500/20 text-[11px] space-y-1">
+                  <span class="font-bold text-rose-400 flex items-center gap-1">
+                    <span class="material-symbols-outlined text-[15px]">gpp_bad</span>
+                    Risk Barrier & Weekly Circuit Breaker:
+                  </span>
+                  <p class="text-slate-300">
+                    Hard Stop at <strong class="text-rose-400 font-mono">-₹5,000 / day</strong> triggers automatic Kill
+                    Switch. If 2 full losses occur in a calendar week, position sizing drops to 1 lot or halts until the
+                    next Monday.
+                  </p>
                 </div>
               </div>
+            </div>
+          </div>
+        </section>
 
-              <!-- Tuesday booster & Risk barrier -->
-              <div class="p-2.5 rounded bg-terminal-cyan/5 border border-terminal-cyan/20 space-y-1">
-                <span class="font-bold text-terminal-cyan flex items-center gap-1">
-                  <span class="material-symbols-outlined text-[15px]">trending_up</span>
-                  Tuesday Expiry Sizing Booster (75% Allocation):
-                </span>
-                <p class="text-[11px] text-slate-300">
-                  On Tuesdays (FINNIFTY/BANKNIFTY expiry cycle), fund allocation expands to <strong class="text-white">75% (3 lots)</strong> to capture rapid gamma moves. Standard sessions allocate <strong class="text-white">50% (2 lots)</strong>.
-                </p>
+        <!-- SECTION 2: SETTINGS & PARAMETER REFERENCE -->
+        <section id="parameters" class="space-y-4">
+          <div class="flex items-center justify-between border-b border-terminal-border/80 pb-3">
+            <div class="flex items-center gap-2.5">
+              <span class="p-1.5 rounded-md bg-terminal-blue/10 text-terminal-blue border border-terminal-blue/20">
+                <span class="material-symbols-outlined text-[18px]">tune</span>
+              </span>
+              <h2 class="text-base md:text-lg font-bold tracking-tight text-white">2. Settings & Parameter Reference
+              </h2>
+            </div>
+            <span class="text-xs font-mono text-slate-400">Terminal Configuration</span>
+          </div>
+
+          <div class="rounded-xl border border-terminal-border bg-terminal-surface overflow-hidden shadow-sm">
+            <table class="w-full text-left text-xs">
+              <thead
+                class="bg-[#0b1220] border-b border-terminal-border text-[11px] uppercase tracking-wider text-terminal-muted font-mono">
+                <tr>
+                  <th class="py-3 px-4 font-semibold">Setting</th>
+                  <th class="py-3 px-4 font-semibold">Options / Values</th>
+                  <th class="py-3 px-4 font-semibold">Algorithmic Function & Impact</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-terminal-border/50 text-slate-300 font-mono">
+                <tr class="hover:bg-terminal-subtle/50 transition-colors">
+                  <td class="py-3 px-4 font-sans font-bold text-white flex items-center gap-2">
+                    <span class="w-1.5 h-1.5 rounded-full bg-terminal-cyan"></span>
+                    Trading Mode
+                  </td>
+                  <td class="py-3 px-4">
+                    <span
+                      class="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-[10px] font-bold mr-1">LIVE</span>
+                    <span
+                      class="px-2 py-0.5 rounded bg-amber-500/20 text-amber-400 border border-amber-500/30 text-[10px] font-bold">PAPER</span>
+                  </td>
+                  <td class="py-3 px-4 font-sans text-xs text-slate-400">
+                    <strong class="text-slate-200">LIVE</strong> connects and routes real execution to Finvasia Shoonya
+                    broker. <strong class="text-slate-200">PAPER</strong> runs simulated execution with tick-matched
+                    fills and realistic slippage modeling.
+                  </td>
+                </tr>
+                <tr class="hover:bg-terminal-subtle/50 transition-colors">
+                  <td class="py-3 px-4 font-sans font-bold text-white flex items-center gap-2">
+                    <span class="w-1.5 h-1.5 rounded-full bg-terminal-cyan"></span>
+                    Default Product
+                  </td>
+                  <td class="py-3 px-4">
+                    <span
+                      class="text-terminal-cyan bg-terminal-cyan/10 px-1.5 py-0.5 rounded border border-terminal-cyan/20">NRML</span>
+                    /
+                    <span class="text-slate-300 bg-slate-800 px-1.5 py-0.5 rounded border border-slate-700">MIS</span>
+                  </td>
+                  <td class="py-3 px-4 font-sans text-xs text-slate-400">
+                    <strong class="text-slate-200">NRML</strong> prevents auto-liquidation penalties before 15:15 IST
+                    and allows holding through volatile spikes; <strong class="text-slate-200">MIS</strong> provides
+                    intraday broker margin multiplier.
+                  </td>
+                </tr>
+                <tr class="hover:bg-terminal-subtle/50 transition-colors">
+                  <td class="py-3 px-4 font-sans font-bold text-white flex items-center gap-2">
+                    <span class="w-1.5 h-1.5 rounded-full bg-terminal-cyan"></span>
+                    Fund Sizing
+                  </td>
+                  <td class="py-3 px-4 text-emerald-400 font-bold">50% (75% Tue)</td>
+                  <td class="py-3 px-4 font-sans text-xs text-slate-400">
+                    Dynamic position sizing computed against Net Available Margin in Shoonya (Live) or allocated
+                    strategy capital (Paper).
+                  </td>
+                </tr>
+                <tr class="hover:bg-terminal-subtle/50 transition-colors">
+                  <td class="py-3 px-4 font-sans font-bold text-white flex items-center gap-2">
+                    <span class="w-1.5 h-1.5 rounded-full bg-terminal-cyan"></span>
+                    NIFTY Lots
+                  </td>
+                  <td class="py-3 px-4 text-terminal-cyan">1 to 10 (Default: 2-3)</td>
+                  <td class="py-3 px-4 font-sans text-xs text-slate-400">
+                    Fixed lot size: 65 units/lot. Step strike: 50 pts. Automatically rounds down to capital threshold.
+                  </td>
+                </tr>
+                <tr class="hover:bg-terminal-subtle/50 transition-colors">
+                  <td class="py-3 px-4 font-sans font-bold text-white flex items-center gap-2">
+                    <span class="w-1.5 h-1.5 rounded-full bg-terminal-cyan"></span>
+                    BANKNIFTY Lots
+                  </td>
+                  <td class="py-3 px-4 text-terminal-cyan">1 to 10 (Default: 2-3)</td>
+                  <td class="py-3 px-4 font-sans text-xs text-slate-400">
+                    Fixed lot size: 30 units/lot. Step strike: 100 pts. Uses nearest monthly/weekly ATM contract.
+                  </td>
+                </tr>
+                <tr class="hover:bg-terminal-subtle/50 transition-colors">
+                  <td class="py-3 px-4 font-sans font-bold text-white flex items-center gap-2">
+                    <span class="w-1.5 h-1.5 rounded-full bg-rose-500"></span>
+                    Daily Loss Barrier
+                  </td>
+                  <td class="py-3 px-4 text-rose-400 font-bold">-₹5,000</td>
+                  <td class="py-3 px-4 font-sans text-xs text-slate-400">
+                    Tactical hard stop: immediately disarms algo, cancels open trigger orders, and dumps all open
+                    strategy contracts at market.
+                  </td>
+                </tr>
+                <tr class="hover:bg-terminal-subtle/50 transition-colors">
+                  <td class="py-3 px-4 font-sans font-bold text-white flex items-center gap-2">
+                    <span class="w-1.5 h-1.5 rounded-full bg-terminal-cyan"></span>
+                    Max Trades / Day
+                  </td>
+                  <td class="py-3 px-4 text-white font-bold">2 Trades</td>
+                  <td class="py-3 px-4 font-sans text-xs text-slate-400">
+                    Enforces statistical discipline against overtrading in erratic choppy market sessions.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- SECTION 3: TERMINAL NAVIGATION & CONTROLS -->
+        <section id="terminal-controls" class="space-y-4">
+          <div class="flex items-center justify-between border-b border-terminal-border/80 pb-3">
+            <div class="flex items-center gap-2.5">
+              <span class="p-1.5 rounded-md bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                <span class="material-symbols-outlined text-[18px]">dashboard</span>
+              </span>
+              <h2 class="text-base md:text-lg font-bold tracking-tight text-white">3. Terminal Navigation & Dedicated
+                Views</h2>
+            </div>
+            <span class="text-xs font-mono text-slate-400">4 Core Workstation Tabs</span>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <!-- Tab 1 -->
+            <div
+              class="p-4 rounded-xl bg-terminal-surface border border-terminal-border space-y-2 hover:border-terminal-cyan/40 transition-colors">
+              <div class="flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                  <span class="material-symbols-outlined text-terminal-cyan text-lg">radar</span>
+                  <h4 class="font-bold text-sm text-white">Tab 1: Radar & Signals Cockpit</h4>
+                </div>
+                <span
+                  class="text-[10px] font-mono bg-terminal-cyan/10 text-terminal-cyan px-2 py-0.5 rounded border border-terminal-cyan/20">Scanner</span>
               </div>
+              <p class="text-xs text-slate-300">
+                High-density scanner monitoring <strong class="text-white">NIFTY 50</strong>, <strong
+                  class="text-white">BANKNIFTY</strong>, and <strong class="text-white">CRUDEOILM</strong>. Displays
+                live Spot LTP, ORH/ORL barriers, 5-gate checklist, option strike candidates, and instant manual breakout
+                triggers.
+              </p>
+              <div
+                class="text-[11px] font-mono text-terminal-muted bg-[#080d17] p-2 rounded border border-terminal-border/50">
+                • Bottom stream: Radar Confluence & Engine Event Stream with millisecond timestamps and dispatch status.
+              </div>
+            </div>
 
-              <div class="p-2.5 rounded bg-rose-500/10 border border-rose-500/20 text-[11px] space-y-1">
-                <span class="font-bold text-rose-400 flex items-center gap-1">
-                  <span class="material-symbols-outlined text-[15px]">gpp_bad</span>
-                  Risk Barrier & Weekly Circuit Breaker:
-                </span>
-                <p class="text-slate-300">
-                  Hard Stop at <strong class="text-rose-400 font-mono">-₹5,000 / day</strong> triggers automatic Kill Switch. If 2 full losses occur in a calendar week, position sizing drops to 1 lot or halts until the next Monday.
-                </p>
+            <!-- Tab 2 -->
+            <div
+              class="p-4 rounded-xl bg-terminal-surface border border-terminal-border space-y-2 hover:border-terminal-cyan/40 transition-colors">
+              <div class="flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                  <span class="material-symbols-outlined text-emerald-400 text-lg">monitoring</span>
+                  <h4 class="font-bold text-sm text-white">Tab 2: Positions & Order Books</h4>
+                </div>
+                <span
+                  class="text-[10px] font-mono bg-emerald-500/10 text-emerald-400 px-2 py-0.5 rounded border border-emerald-500/20">Execution</span>
+              </div>
+              <p class="text-xs text-slate-300">
+                Live bracket tracking with visual risk/reward spread rulers, entry prices, locked stop-losses, and
+                one-tap partial exit triggers (50% Book / Full Square Off).
+              </p>
+              <div
+                class="text-[11px] font-mono text-terminal-muted bg-[#080d17] p-2 rounded border border-terminal-border/50">
+                • Includes live Shoonya Broker OrderBook, PositionBook, and full session CSV export.
+              </div>
+            </div>
+
+            <!-- Tab 3 -->
+            <div
+              class="p-4 rounded-xl bg-terminal-surface border border-terminal-border space-y-2 hover:border-terminal-cyan/40 transition-colors">
+              <div class="flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                  <span class="material-symbols-outlined text-terminal-blue text-lg">terminal</span>
+                  <h4 class="font-bold text-sm text-white">Tab 3: Terminal Logs</h4>
+                </div>
+                <span
+                  class="text-[10px] font-mono bg-terminal-blue/10 text-terminal-blue px-2 py-0.5 rounded border border-terminal-blue/20">Telemetry</span>
+              </div>
+              <p class="text-xs text-slate-300">
+                Dedicated full-height telemetry console. Color-coded log levels (WEBSOCKET, RISK_MANAGER, ORB_ENGINE,
+                DISPATCH_OUT) with regex grep, quick filters, and clipboard copy.
+              </p>
+              <div
+                class="text-[11px] font-mono text-terminal-muted bg-[#080d17] p-2 rounded border border-terminal-border/50">
+                • Ring-buffer telemetry metrics: WebSocket ping (12ms), order reject ratio (0.00%), GC clean latency.
+              </div>
+            </div>
+
+            <!-- Tab 4 -->
+            <div
+              class="p-4 rounded-xl bg-terminal-surface border border-terminal-border space-y-2 hover:border-terminal-cyan/40 transition-colors">
+              <div class="flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                  <span class="material-symbols-outlined text-purple-400 text-lg">insights</span>
+                  <h4 class="font-bold text-sm text-white">Tab 4: Analytics & Backtest</h4>
+                </div>
+                <span
+                  class="text-[10px] font-mono bg-purple-500/10 text-purple-400 px-2 py-0.5 rounded border border-purple-500/20">Strategy
+                  Cockpit</span>
+              </div>
+              <p class="text-xs text-slate-300">
+                180-Day In-Sample quantitative performance suite (68.4% win rate, 2.14 profit factor, +142.8% return)
+                coupled with real-time risk allocation steppers and tactical emergency disarm.
+              </p>
+              <div
+                class="text-[11px] font-mono text-terminal-muted bg-[#080d17] p-2 rounded border border-terminal-border/50">
+                • Interactive cumulative alpha curve, daily P&L oscillation histogram, and instrument attribution
+                matrix.
               </div>
             </div>
           </div>
-        </div>
-      </section>
+        </section>
 
-      <!-- SECTION 2: SETTINGS & PARAMETER REFERENCE -->
-      <section id="parameters" class="space-y-4">
-        <div class="flex items-center justify-between border-b border-terminal-border/80 pb-3">
-          <div class="flex items-center gap-2.5">
-            <span class="p-1.5 rounded-md bg-terminal-blue/10 text-terminal-blue border border-terminal-blue/20">
-              <span class="material-symbols-outlined text-[18px]">tune</span>
-            </span>
-            <h2 class="text-base md:text-lg font-bold tracking-tight text-white">2. Settings & Parameter Reference</h2>
+        <!-- SECTION 4: MULTI-USER ACCOUNT SWITCHING -->
+        <section id="multi-account" class="space-y-4">
+          <div class="flex items-center justify-between border-b border-terminal-border/80 pb-3">
+            <div class="flex items-center gap-2.5">
+              <span class="p-1.5 rounded-md bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                <span class="material-symbols-outlined text-[18px]">manage_accounts</span>
+              </span>
+              <h2 class="text-base md:text-lg font-bold tracking-tight text-white">4. Multi-User Account Switching &
+                Authentication</h2>
+            </div>
+            <span
+              class="text-xs font-mono text-emerald-400 bg-emerald-950/30 px-2.5 py-0.5 rounded-full border border-emerald-800/40">Zero
+              Restart Required</span>
           </div>
-          <span class="text-xs font-mono text-slate-400">Terminal Configuration</span>
-        </div>
 
-        <div class="rounded-xl border border-terminal-border bg-terminal-surface overflow-hidden shadow-sm">
-          <table class="w-full text-left text-xs">
-            <thead class="bg-[#0b1220] border-b border-terminal-border text-[11px] uppercase tracking-wider text-terminal-muted font-mono">
-              <tr>
-                <th class="py-3 px-4 font-semibold">Setting</th>
-                <th class="py-3 px-4 font-semibold">Options / Values</th>
-                <th class="py-3 px-4 font-semibold">Algorithmic Function & Impact</th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-terminal-border/50 text-slate-300 font-mono">
-              <tr class="hover:bg-terminal-subtle/50 transition-colors">
-                <td class="py-3 px-4 font-sans font-bold text-white flex items-center gap-2">
-                  <span class="w-1.5 h-1.5 rounded-full bg-terminal-cyan"></span>
-                  Trading Mode
-                </td>
-                <td class="py-3 px-4">
-                  <span class="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-[10px] font-bold mr-1">LIVE</span>
-                  <span class="px-2 py-0.5 rounded bg-amber-500/20 text-amber-400 border border-amber-500/30 text-[10px] font-bold">PAPER</span>
-                </td>
-                <td class="py-3 px-4 font-sans text-xs text-slate-400">
-                  <strong class="text-slate-200">LIVE</strong> connects and routes real execution to Finvasia Shoonya broker. <strong class="text-slate-200">PAPER</strong> runs simulated execution with tick-matched fills and realistic slippage modeling.
-                </td>
-              </tr>
-              <tr class="hover:bg-terminal-subtle/50 transition-colors">
-                <td class="py-3 px-4 font-sans font-bold text-white flex items-center gap-2">
-                  <span class="w-1.5 h-1.5 rounded-full bg-terminal-cyan"></span>
-                  Default Product
-                </td>
-                <td class="py-3 px-4">
-                  <span class="text-terminal-cyan bg-terminal-cyan/10 px-1.5 py-0.5 rounded border border-terminal-cyan/20">NRML</span> / 
-                  <span class="text-slate-300 bg-slate-800 px-1.5 py-0.5 rounded border border-slate-700">MIS</span>
-                </td>
-                <td class="py-3 px-4 font-sans text-xs text-slate-400">
-                  <strong class="text-slate-200">NRML</strong> prevents auto-liquidation penalties before 15:15 IST and allows holding through volatile spikes; <strong class="text-slate-200">MIS</strong> provides intraday broker margin multiplier.
-                </td>
-              </tr>
-              <tr class="hover:bg-terminal-subtle/50 transition-colors">
-                <td class="py-3 px-4 font-sans font-bold text-white flex items-center gap-2">
-                  <span class="w-1.5 h-1.5 rounded-full bg-terminal-cyan"></span>
-                  Fund Sizing
-                </td>
-                <td class="py-3 px-4 text-emerald-400 font-bold">50% (75% Tue)</td>
-                <td class="py-3 px-4 font-sans text-xs text-slate-400">
-                  Dynamic position sizing computed against Net Available Margin in Shoonya (Live) or allocated strategy capital (Paper).
-                </td>
-              </tr>
-              <tr class="hover:bg-terminal-subtle/50 transition-colors">
-                <td class="py-3 px-4 font-sans font-bold text-white flex items-center gap-2">
-                  <span class="w-1.5 h-1.5 rounded-full bg-terminal-cyan"></span>
-                  NIFTY Lots
-                </td>
-                <td class="py-3 px-4 text-terminal-cyan">1 to 10 (Default: 2-3)</td>
-                <td class="py-3 px-4 font-sans text-xs text-slate-400">
-                  Fixed lot size: 65 units/lot. Step strike: 50 pts. Automatically rounds down to capital threshold.
-                </td>
-              </tr>
-              <tr class="hover:bg-terminal-subtle/50 transition-colors">
-                <td class="py-3 px-4 font-sans font-bold text-white flex items-center gap-2">
-                  <span class="w-1.5 h-1.5 rounded-full bg-terminal-cyan"></span>
-                  BANKNIFTY Lots
-                </td>
-                <td class="py-3 px-4 text-terminal-cyan">1 to 10 (Default: 2-3)</td>
-                <td class="py-3 px-4 font-sans text-xs text-slate-400">
-                  Fixed lot size: 30 units/lot. Step strike: 100 pts. Uses nearest monthly/weekly ATM contract.
-                </td>
-              </tr>
-              <tr class="hover:bg-terminal-subtle/50 transition-colors">
-                <td class="py-3 px-4 font-sans font-bold text-white flex items-center gap-2">
-                  <span class="w-1.5 h-1.5 rounded-full bg-rose-500"></span>
-                  Daily Loss Barrier
-                </td>
-                <td class="py-3 px-4 text-rose-400 font-bold">-₹5,000</td>
-                <td class="py-3 px-4 font-sans text-xs text-slate-400">
-                  Tactical hard stop: immediately disarms algo, cancels open trigger orders, and dumps all open strategy contracts at market.
-                </td>
-              </tr>
-              <tr class="hover:bg-terminal-subtle/50 transition-colors">
-                <td class="py-3 px-4 font-sans font-bold text-white flex items-center gap-2">
-                  <span class="w-1.5 h-1.5 rounded-full bg-terminal-cyan"></span>
-                  Max Trades / Day
-                </td>
-                <td class="py-3 px-4 text-white font-bold">2 Trades</td>
-                <td class="py-3 px-4 font-sans text-xs text-slate-400">
-                  Enforces statistical discipline against overtrading in erratic choppy market sessions.
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      <!-- SECTION 3: TERMINAL NAVIGATION & CONTROLS -->
-      <section id="terminal-controls" class="space-y-4">
-        <div class="flex items-center justify-between border-b border-terminal-border/80 pb-3">
-          <div class="flex items-center gap-2.5">
-            <span class="p-1.5 rounded-md bg-amber-500/10 text-amber-400 border border-amber-500/20">
-              <span class="material-symbols-outlined text-[18px]">dashboard</span>
-            </span>
-            <h2 class="text-base md:text-lg font-bold tracking-tight text-white">3. Terminal Navigation & Dedicated Views</h2>
-          </div>
-          <span class="text-xs font-mono text-slate-400">4 Core Workstation Tabs</span>
-        </div>
-
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <!-- Tab 1 -->
-          <div class="p-4 rounded-xl bg-terminal-surface border border-terminal-border space-y-2 hover:border-terminal-cyan/40 transition-colors">
-            <div class="flex items-center justify-between">
-              <div class="flex items-center gap-2">
-                <span class="material-symbols-outlined text-terminal-cyan text-lg">radar</span>
-                <h4 class="font-bold text-sm text-white">Tab 1: Radar & Signals Cockpit</h4>
-              </div>
-              <span class="text-[10px] font-mono bg-terminal-cyan/10 text-terminal-cyan px-2 py-0.5 rounded border border-terminal-cyan/20">Scanner</span>
+          <div class="p-4 rounded-xl bg-[#09101d] border border-terminal-border space-y-3">
+            <div class="flex items-center gap-2 text-xs font-semibold text-terminal-cyan">
+              <span class="material-symbols-outlined text-sm">lock_open</span>
+              Instant Hot-Swapping Broker Sessions
             </div>
             <p class="text-xs text-slate-300">
-              High-density scanner monitoring <strong class="text-white">NIFTY 50</strong>, <strong class="text-white">BANKNIFTY</strong>, and <strong class="text-white">CRUDEOILM</strong>. Displays live Spot LTP, ORH/ORL barriers, 5-gate checklist, option strike candidates, and instant manual breakout triggers.
+              You can seamlessly toggle between individual trader accounts or multiple proprietary accounts without
+              restarting the server or websocket listener.
             </p>
-            <div class="text-[11px] font-mono text-terminal-muted bg-[#080d17] p-2 rounded border border-terminal-border/50">
-              • Bottom stream: Radar Confluence & Engine Event Stream with millisecond timestamps and dispatch status.
-            </div>
-          </div>
 
-          <!-- Tab 2 -->
-          <div class="p-4 rounded-xl bg-terminal-surface border border-terminal-border space-y-2 hover:border-terminal-cyan/40 transition-colors">
-            <div class="flex items-center justify-between">
-              <div class="flex items-center gap-2">
-                <span class="material-symbols-outlined text-emerald-400 text-lg">monitoring</span>
-                <h4 class="font-bold text-sm text-white">Tab 2: Positions & Order Books</h4>
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-3 pt-2">
+              <div class="p-3 rounded-lg bg-terminal-surface border border-terminal-border">
+                <div class="text-[11px] text-terminal-cyan font-mono font-bold mb-1">STEP 1</div>
+                <div class="text-xs font-bold text-white mb-0.5">Click Auth Trigger</div>
+                <div class="text-[11px] text-slate-400">Click "Broker Auth" in top header or account badge.</div>
               </div>
-              <span class="text-[10px] font-mono bg-emerald-500/10 text-emerald-400 px-2 py-0.5 rounded border border-emerald-500/20">Execution</span>
-            </div>
-            <p class="text-xs text-slate-300">
-              Live bracket tracking with visual risk/reward spread rulers, entry prices, locked stop-losses, and one-tap partial exit triggers (50% Book / Full Square Off).
-            </p>
-            <div class="text-[11px] font-mono text-terminal-muted bg-[#080d17] p-2 rounded border border-terminal-border/50">
-              • Includes live Shoonya Broker OrderBook, PositionBook, and full session CSV export.
-            </div>
-          </div>
-
-          <!-- Tab 3 -->
-          <div class="p-4 rounded-xl bg-terminal-surface border border-terminal-border space-y-2 hover:border-terminal-cyan/40 transition-colors">
-            <div class="flex items-center justify-between">
-              <div class="flex items-center gap-2">
-                <span class="material-symbols-outlined text-terminal-blue text-lg">terminal</span>
-                <h4 class="font-bold text-sm text-white">Tab 3: Terminal Logs</h4>
+              <div class="p-3 rounded-lg bg-terminal-surface border border-terminal-border">
+                <div class="text-[11px] text-terminal-cyan font-mono font-bold mb-1">STEP 2</div>
+                <div class="text-xs font-bold text-white mb-0.5">Provide Credentials</div>
+                <div class="text-[11px] text-slate-400">Enter User ID (e.g., FA53975), Password & 32-char TOTP Secret.
+                </div>
               </div>
-              <span class="text-[10px] font-mono bg-terminal-blue/10 text-terminal-blue px-2 py-0.5 rounded border border-terminal-blue/20">Telemetry</span>
-            </div>
-            <p class="text-xs text-slate-300">
-              Dedicated full-height telemetry console. Color-coded log levels (WEBSOCKET, RISK_MANAGER, ORB_ENGINE, DISPATCH_OUT) with regex grep, quick filters, and clipboard copy.
-            </p>
-            <div class="text-[11px] font-mono text-terminal-muted bg-[#080d17] p-2 rounded border border-terminal-border/50">
-              • Ring-buffer telemetry metrics: WebSocket ping (12ms), order reject ratio (0.00%), GC clean latency.
-            </div>
-          </div>
-
-          <!-- Tab 4 -->
-          <div class="p-4 rounded-xl bg-terminal-surface border border-terminal-border space-y-2 hover:border-terminal-cyan/40 transition-colors">
-            <div class="flex items-center justify-between">
-              <div class="flex items-center gap-2">
-                <span class="material-symbols-outlined text-purple-400 text-lg">insights</span>
-                <h4 class="font-bold text-sm text-white">Tab 4: Analytics & Backtest</h4>
+              <div class="p-3 rounded-lg bg-terminal-surface border border-terminal-border">
+                <div class="text-[11px] text-terminal-cyan font-mono font-bold mb-1">STEP 3</div>
+                <div class="text-xs font-bold text-white mb-0.5">API & Secret Keys</div>
+                <div class="text-[11px] text-slate-400">Ensure API Key (&lt;UID&gt;_U) & 64-char HMAC key are populated.
+                </div>
               </div>
-              <span class="text-[10px] font-mono bg-purple-500/10 text-purple-400 px-2 py-0.5 rounded border border-purple-500/20">Strategy Cockpit</span>
-            </div>
-            <p class="text-xs text-slate-300">
-              180-Day In-Sample quantitative performance suite (68.4% win rate, 2.14 profit factor, +142.8% return) coupled with real-time risk allocation steppers and tactical emergency disarm.
-            </p>
-            <div class="text-[11px] font-mono text-terminal-muted bg-[#080d17] p-2 rounded border border-terminal-border/50">
-              • Interactive cumulative alpha curve, daily P&L oscillation histogram, and instrument attribution matrix.
+              <div class="p-3 rounded-lg bg-terminal-surface border border-terminal-border">
+                <div class="text-[11px] text-terminal-cyan font-mono font-bold mb-1">STEP 4</div>
+                <div class="text-xs font-bold text-white mb-0.5">Token Handshake</div>
+                <div class="text-[11px] text-slate-400">System generates SHA256 session token and auto-syncs margin.
+                </div>
+              </div>
             </div>
           </div>
+        </section>
+
+        <!-- SECTION 5: DAILY TRADING WORKFLOW -->
+        <section id="daily-flow" class="space-y-4">
+          <div class="flex items-center justify-between border-b border-terminal-border/80 pb-3">
+            <div class="flex items-center gap-2.5">
+              <span class="p-1.5 rounded-md bg-purple-500/10 text-purple-400 border border-purple-500/20">
+                <span class="material-symbols-outlined text-[18px]">checklist</span>
+              </span>
+              <h2 class="text-base md:text-lg font-bold tracking-tight text-white">5. Daily Standard Operating Procedure
+                (SOP)</h2>
+            </div>
+            <span class="text-xs font-mono text-slate-400">Execution Schedule</span>
+          </div>
+
+          <div class="relative border-l-2 border-terminal-border pl-6 ml-3 space-y-5 text-xs">
+            <!-- Step 1 -->
+            <div class="relative">
+              <div
+                class="absolute -left-[31px] top-0.5 w-4 h-4 rounded-full bg-terminal-cyan border-2 border-[#060910] shadow-[0_0_8px_rgba(0,245,212,0.8)]">
+              </div>
+              <div class="font-mono text-[11px] font-bold text-terminal-cyan">08:45 – 09:10 IST</div>
+              <div class="text-sm font-bold text-white mt-0.5">Pre-Flight Telemetry & Margin Sync</div>
+              <p class="text-slate-400 mt-1">
+                Initialize workstation at <code
+                  class="text-terminal-cyan bg-terminal-cyan/10 px-1 py-0.5 rounded">http://localhost:8000</code>.
+                Verify WebSocket status displays <code class="text-emerald-400">ONLINE</code>, ensure India VIX is
+                loaded, and check available broker margin.
+              </p>
+            </div>
+
+            <!-- Step 2 -->
+            <div class="relative">
+              <div class="absolute -left-[31px] top-0.5 w-4 h-4 rounded-full bg-amber-400 border-2 border-[#060910]">
+              </div>
+              <div class="font-mono text-[11px] font-bold text-amber-400">09:15 – 09:45 IST</div>
+              <div class="text-sm font-bold text-white mt-0.5">30-Minute Opening Range Formation</div>
+              <p class="text-slate-400 mt-1">
+                Engine records opening candle range across NIFTY and BANKNIFTY. No orders are placed. Radar status
+                switches to <code class="text-terminal-cyan bg-terminal-cyan/10 px-1 py-0.5 rounded">ORB LOCKED</code>
+                at 09:45 IST once 6 consecutive 5m candles print.
+              </p>
+            </div>
+
+            <!-- Step 3 -->
+            <div class="relative">
+              <div class="absolute -left-[31px] top-0.5 w-4 h-4 rounded-full bg-rose-400 border-2 border-[#060910]">
+              </div>
+              <div class="font-mono text-[11px] font-bold text-rose-400">09:45 – 10:00 IST</div>
+              <div class="text-sm font-bold text-white mt-0.5">Morning Retail Shakeout Quarantine</div>
+              <p class="text-slate-400 mt-1">
+                Trading algorithm enters passive observation. All trigger pulses are suppressed to bypass erratic
+                institutional liquidity traps.
+              </p>
+            </div>
+
+            <!-- Step 4 -->
+            <div class="relative">
+              <div
+                class="absolute -left-[31px] top-0.5 w-4 h-4 rounded-full bg-emerald-400 border-2 border-[#060910] shadow-[0_0_8px_rgba(16,185,129,0.8)]">
+              </div>
+              <div class="font-mono text-[11px] font-bold text-emerald-400">10:00 – 13:15 IST</div>
+              <div class="text-sm font-bold text-white mt-0.5">Institutional Scan Window & Automated Execution</div>
+              <p class="text-slate-400 mt-1">
+                Active breakout surveillance window. When a 5-minute candle closes beyond the ORH/ORL range with VWAP
+                and Wilder RSI confluence, bracket entry orders are dispatched to Shoonya with atomic speed.
+              </p>
+            </div>
+
+            <!-- Step 5 -->
+            <div class="relative">
+              <div class="absolute -left-[31px] top-0.5 w-4 h-4 rounded-full bg-slate-500 border-2 border-[#060910]">
+              </div>
+              <div class="font-mono text-[11px] font-bold text-slate-400">15:15 IST</div>
+              <div class="text-sm font-bold text-white mt-0.5">Mandatory Intraday Square-Off & EOD Audit</div>
+              <p class="text-slate-400 mt-1">
+                All intraday MIS positions are liquidated at market depth. Final telemetry logs and execution ledger are
+                exported, and trade summaries are dispatched to Telegram.
+              </p>
+            </div>
+          </div>
+        </section>
+
+      </main>
+
+      <!-- Modal Action Footer -->
+      <footer
+        class="px-6 py-4 border-t border-terminal-border bg-terminal-surface flex items-center justify-between gap-4">
+        <div class="flex items-center gap-2 text-xs text-terminal-muted font-mono">
+          <span class="material-symbols-outlined text-[16px] text-terminal-cyan">verified_user</span>
+          <span>SEBI Compliant Quantitative Framework</span>
         </div>
-      </section>
-
-      <!-- SECTION 4: MULTI-USER ACCOUNT SWITCHING -->
-      <section id="multi-account" class="space-y-4">
-        <div class="flex items-center justify-between border-b border-terminal-border/80 pb-3">
-          <div class="flex items-center gap-2.5">
-            <span class="p-1.5 rounded-md bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-              <span class="material-symbols-outlined text-[18px]">manage_accounts</span>
-            </span>
-            <h2 class="text-base md:text-lg font-bold tracking-tight text-white">4. Multi-User Account Switching & Authentication</h2>
-          </div>
-          <span class="text-xs font-mono text-emerald-400 bg-emerald-950/30 px-2.5 py-0.5 rounded-full border border-emerald-800/40">Zero Restart Required</span>
+        <div class="flex items-center gap-3">
+          <button onclick="window.print()"
+            class="btn-guide-secondary px-4 py-2 rounded-lg text-xs font-semibold transition-colors"
+            title="Print Guide">
+            Print / Export PDF
+          </button>
+          <button onclick="closeUserGuideModal()"
+            class="btn-guide-primary px-5 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5"
+            title="Return to Terminal">
+            <span>Got It, Return to Terminal</span>
+            <span class="material-symbols-outlined text-sm">arrow_forward</span>
+          </button>
         </div>
+      </footer>
 
-        <div class="p-4 rounded-xl bg-[#09101d] border border-terminal-border space-y-3">
-          <div class="flex items-center gap-2 text-xs font-semibold text-terminal-cyan">
-            <span class="material-symbols-outlined text-sm">lock_open</span>
-            Instant Hot-Swapping Broker Sessions
-          </div>
-          <p class="text-xs text-slate-300">
-            You can seamlessly toggle between individual trader accounts or multiple proprietary accounts without restarting the server or websocket listener.
-          </p>
-
-          <div class="grid grid-cols-1 md:grid-cols-4 gap-3 pt-2">
-            <div class="p-3 rounded-lg bg-terminal-surface border border-terminal-border">
-              <div class="text-[11px] text-terminal-cyan font-mono font-bold mb-1">STEP 1</div>
-              <div class="text-xs font-bold text-white mb-0.5">Click Auth Trigger</div>
-              <div class="text-[11px] text-slate-400">Click "Broker Auth" in top header or account badge.</div>
-            </div>
-            <div class="p-3 rounded-lg bg-terminal-surface border border-terminal-border">
-              <div class="text-[11px] text-terminal-cyan font-mono font-bold mb-1">STEP 2</div>
-              <div class="text-xs font-bold text-white mb-0.5">Provide Credentials</div>
-              <div class="text-[11px] text-slate-400">Enter User ID (e.g., FA53975), Password & 32-char TOTP Secret.</div>
-            </div>
-            <div class="p-3 rounded-lg bg-terminal-surface border border-terminal-border">
-              <div class="text-[11px] text-terminal-cyan font-mono font-bold mb-1">STEP 3</div>
-              <div class="text-xs font-bold text-white mb-0.5">API & Secret Keys</div>
-              <div class="text-[11px] text-slate-400">Ensure API Key (&lt;UID&gt;_U) & 64-char HMAC key are populated.</div>
-            </div>
-            <div class="p-3 rounded-lg bg-terminal-surface border border-terminal-border">
-              <div class="text-[11px] text-terminal-cyan font-mono font-bold mb-1">STEP 4</div>
-              <div class="text-xs font-bold text-white mb-0.5">Token Handshake</div>
-              <div class="text-[11px] text-slate-400">System generates SHA256 session token and auto-syncs margin.</div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <!-- SECTION 5: DAILY TRADING WORKFLOW -->
-      <section id="daily-flow" class="space-y-4">
-        <div class="flex items-center justify-between border-b border-terminal-border/80 pb-3">
-          <div class="flex items-center gap-2.5">
-            <span class="p-1.5 rounded-md bg-purple-500/10 text-purple-400 border border-purple-500/20">
-              <span class="material-symbols-outlined text-[18px]">checklist</span>
-            </span>
-            <h2 class="text-base md:text-lg font-bold tracking-tight text-white">5. Daily Standard Operating Procedure (SOP)</h2>
-          </div>
-          <span class="text-xs font-mono text-slate-400">Execution Schedule</span>
-        </div>
-
-        <div class="relative border-l-2 border-terminal-border pl-6 ml-3 space-y-5 text-xs">
-          <!-- Step 1 -->
-          <div class="relative">
-            <div class="absolute -left-[31px] top-0.5 w-4 h-4 rounded-full bg-terminal-cyan border-2 border-[#060910] shadow-[0_0_8px_rgba(0,245,212,0.8)]"></div>
-            <div class="font-mono text-[11px] font-bold text-terminal-cyan">08:45 – 09:10 IST</div>
-            <div class="text-sm font-bold text-white mt-0.5">Pre-Flight Telemetry & Margin Sync</div>
-            <p class="text-slate-400 mt-1">
-              Initialize workstation at <code class="text-terminal-cyan bg-terminal-cyan/10 px-1 py-0.5 rounded">http://localhost:8000</code>. Verify WebSocket status displays <code class="text-emerald-400">ONLINE</code>, ensure India VIX is loaded, and check available broker margin.
-            </p>
-          </div>
-
-          <!-- Step 2 -->
-          <div class="relative">
-            <div class="absolute -left-[31px] top-0.5 w-4 h-4 rounded-full bg-amber-400 border-2 border-[#060910]"></div>
-            <div class="font-mono text-[11px] font-bold text-amber-400">09:15 – 09:45 IST</div>
-            <div class="text-sm font-bold text-white mt-0.5">30-Minute Opening Range Formation</div>
-            <p class="text-slate-400 mt-1">
-              Engine records opening candle range across NIFTY and BANKNIFTY. No orders are placed. Radar status switches to <code class="text-terminal-cyan bg-terminal-cyan/10 px-1 py-0.5 rounded">ORB LOCKED</code> at 09:45 IST once 6 consecutive 5m candles print.
-            </p>
-          </div>
-
-          <!-- Step 3 -->
-          <div class="relative">
-            <div class="absolute -left-[31px] top-0.5 w-4 h-4 rounded-full bg-rose-400 border-2 border-[#060910]"></div>
-            <div class="font-mono text-[11px] font-bold text-rose-400">09:45 – 10:00 IST</div>
-            <div class="text-sm font-bold text-white mt-0.5">Morning Retail Shakeout Quarantine</div>
-            <p class="text-slate-400 mt-1">
-              Trading algorithm enters passive observation. All trigger pulses are suppressed to bypass erratic institutional liquidity traps.
-            </p>
-          </div>
-
-          <!-- Step 4 -->
-          <div class="relative">
-            <div class="absolute -left-[31px] top-0.5 w-4 h-4 rounded-full bg-emerald-400 border-2 border-[#060910] shadow-[0_0_8px_rgba(16,185,129,0.8)]"></div>
-            <div class="font-mono text-[11px] font-bold text-emerald-400">10:00 – 13:15 IST</div>
-            <div class="text-sm font-bold text-white mt-0.5">Institutional Scan Window & Automated Execution</div>
-            <p class="text-slate-400 mt-1">
-              Active breakout surveillance window. When a 5-minute candle closes beyond the ORH/ORL range with VWAP and Wilder RSI confluence, bracket entry orders are dispatched to Shoonya with atomic speed.
-            </p>
-          </div>
-
-          <!-- Step 5 -->
-          <div class="relative">
-            <div class="absolute -left-[31px] top-0.5 w-4 h-4 rounded-full bg-slate-500 border-2 border-[#060910]"></div>
-            <div class="font-mono text-[11px] font-bold text-slate-400">15:15 IST</div>
-            <div class="text-sm font-bold text-white mt-0.5">Mandatory Intraday Square-Off & EOD Audit</div>
-            <p class="text-slate-400 mt-1">
-              All intraday MIS positions are liquidated at market depth. Final telemetry logs and execution ledger are exported, and trade summaries are dispatched to Telegram.
-            </p>
-          </div>
-        </div>
-      </section>
-
-    </main>
-
-    <!-- Modal Action Footer -->
-    <footer class="px-6 py-4 border-t border-terminal-border bg-terminal-surface flex items-center justify-between gap-4">
-      <div class="flex items-center gap-2 text-xs text-terminal-muted font-mono">
-        <span class="material-symbols-outlined text-[16px] text-terminal-cyan">verified_user</span>
-        <span>SEBI Compliant Quantitative Framework</span>
-      </div>
-      <div class="flex items-center gap-3">
-        <button onclick="window.print()" class="btn-guide-secondary px-4 py-2 rounded-lg text-xs font-semibold transition-colors" title="Print Guide">
-          Print / Export PDF
-        </button>
-        <button onclick="closeUserGuideModal()" class="btn-guide-primary px-5 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5" title="Return to Terminal">
-          <span>Got It, Return to Terminal</span>
-          <span class="material-symbols-outlined text-sm">arrow_forward</span>
-        </button>
-      </div>
-    </footer>
-
-  </div>
+    </div>
   </div>
 
   <script>
@@ -2592,7 +2743,19 @@
       const strikeStep = idx === 'NIFTY' ? 50 : 100;
       const spot = (latestSnapshot.indices || {})[idx]?.spot_ltp || (idx === 'NIFTY' ? 24500 : 52000);
       const roundedStrike = Math.round(spot / strikeStep) * strikeStep;
-      document.getElementById('ord-symbol').value = `${idx}26NOV${roundedStrike}${optType}`;
+
+      const realSymbol = optType === 'CE' ? r.actual_symbol_ce : r.actual_symbol_pe;
+      if (realSymbol) {
+        document.getElementById('ord-symbol').value = realSymbol;
+      } else {
+        const now = new Date();
+        const d = String(now.getDate()).padStart(2, '0');
+        const months = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+        const m = months[now.getMonth()];
+        const y = String(now.getFullYear()).slice(-2);
+        const optChar = optType === 'CE' ? 'C' : 'P';
+        document.getElementById('ord-symbol').value = `${idx}${d}${m}${y}${optChar}${roundedStrike}`;
+      }
       if (r.atm_premium) {
         document.getElementById('ord-price').value = r.atm_premium.toFixed(2);
       }

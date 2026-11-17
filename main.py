@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import re
 import threading
 import time
 import urllib.request
@@ -257,19 +258,39 @@ class TradingSystemOrchestrator:
         product_type: str = "C",
     ) -> Tuple[bool, str, Dict[str, Any]]:
         """Place a live broker order directly through Shoonya API and return status."""
-        if not tradingsymbol.strip():
+        tsym = tradingsymbol.strip().upper()
+        if not tsym:
             return False, "Trading symbol is required.", {}
         if int(quantity) <= 0:
             return False, "Order quantity must be positive.", {}
 
+        # Auto-resolve / sanitize symbol if formatted like NIFTY26NOV24500CE or NIFTY 24500 CE
+        m = re.search(r"(NIFTY|BANKNIFTY)[\s\w]*?(\d{4,5})\s*(CE|PE|C|P)", tsym)
+        if m and (exchange == "NFO" or "NIFTY" in tsym):
+            idx_name = m.group(1)
+            strike = int(m.group(2))
+            opt_type = "CE" if "C" in m.group(3) else "PE"
+            try:
+                resolved_c = self.mapper.select_option_contract(idx_name, float(strike), opt_type)
+                if resolved_c and resolved_c.tradingsymbol:
+                    tsym = resolved_c.tradingsymbol
+            except Exception as e:
+                logger.warning("Could not auto-resolve contract for %s: %s", tsym, e)
+
+        prd = str(product_type).strip().upper()
+        if prd in ("NRML", "NORMAL", "C", "CNC"):
+            prd = "M"
+        elif prd in ("MIS", "INTRADAY"):
+            prd = "I"
+
         resp = self.client.place_live_broker_order(
             exchange=exchange,
-            tradingsymbol=tradingsymbol,
+            tradingsymbol=tsym,
             buy_or_sell=buy_or_sell,
             quantity=quantity,
             price_type=price_type,
             price=price,
-            product_type=product_type,
+            product_type=prd,
         )
         ok = isinstance(resp, dict) and resp.get("stat") == "Ok"
         msg = (
@@ -277,7 +298,7 @@ class TradingSystemOrchestrator:
             if ok
             else str(resp.get("emsg") or resp)
         )
-        logger.info("Manual broker order (%s %s qty=%s): ok=%s msg=%s", buy_or_sell, tradingsymbol, quantity, ok, msg)
+        logger.info("Manual broker order (%s %s qty=%s): ok=%s msg=%s", buy_or_sell, tsym, quantity, ok, msg)
         return ok, msg, resp
 
     def run_instrument_cache(self) -> int:
@@ -744,14 +765,22 @@ class TradingSystemOrchestrator:
         alloc_pct = 75 if is_tuesday else 50
         alloc_fund = round(avail_fund * (alloc_pct / 100.0), 2)
 
+        actual_symbol_ce = ""
+        actual_symbol_pe = ""
         atm_premium = 120.0 if index_name == "NIFTY" else 260.0
         if spot_ltp is not None and spot_ltp > 0:
             try:
                 c = self.mapper.select_option_contract(index_name, spot_ltp, "CE", vix=vix or 15.0)
+                actual_symbol_ce = c.tradingsymbol
                 token_key = f"{c.exchange}|{c.token}"
                 cached_ltp = self.client.get_ltp(token_key)
                 if cached_ltp is not None and cached_ltp > 0:
                     atm_premium = float(cached_ltp)
+            except Exception:
+                pass
+            try:
+                c_pe = self.mapper.select_option_contract(index_name, spot_ltp, "PE", vix=vix or 15.0)
+                actual_symbol_pe = c_pe.tradingsymbol
             except Exception:
                 pass
 
@@ -826,6 +855,8 @@ class TradingSystemOrchestrator:
             "dist_to_orl": dist_to_orl,
             "candidate_ce": candidate_ce,
             "candidate_pe": candidate_pe,
+            "actual_symbol_ce": actual_symbol_ce,
+            "actual_symbol_pe": actual_symbol_pe,
             "readiness_pct": readiness_pct,
             "radar_state": radar_state,
             "radar_summary": radar_summary,

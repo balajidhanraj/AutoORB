@@ -142,10 +142,11 @@ class CompatibleNorenApi:
         self._session.headers.update({"Authorization": f"Bearer {access_token}"})
 
     def _post(self, endpoint: str, body: Dict[str, Any], _retry: bool = True) -> Any:
-        if "Authorization" in self._session.headers:
-            data = f"jData={json.dumps(body)}"
+        token_to_send = getattr(self, "susertoken", "") or getattr(self, "access_token", "")
+        if token_to_send:
+            data = f"jData={json.dumps(body)}&jKey={token_to_send}"
         else:
-            data = f"jData={json.dumps(body)}&jKey={self.access_token}"
+            data = f"jData={json.dumps(body)}"
         try:
             resp = self._session.post(f"{self.host}{endpoint}", data=data, timeout=15)
             if resp.status_code == 401 and _retry and self._reauth_callback:
@@ -206,6 +207,7 @@ class CompatibleNorenApi:
 
     def place_order(self, **kwargs: Any) -> Dict[str, Any]:
         payload = {
+            "ordersource": "API",
             "uid": self.username,
             "actid": self.account_id,
             "exch": kwargs["exchange"],
@@ -214,16 +216,18 @@ class CompatibleNorenApi:
             "prc": str(kwargs.get("price", 0)),
             "trgprc": str(kwargs.get("trigger_price", 0)),
             "dscqty": str(kwargs.get("discloseqty", 0)),
-            "prd": kwargs.get("product_type", "I"),
+            "prd": kwargs.get("product_type", "M"),
             "trantype": kwargs["buy_or_sell"],
             "prctyp": kwargs.get("price_type", "LMT"),
             "ret": kwargs.get("retention", "DAY"),
-            "remarks": kwargs.get("remarks", ""),
+            "remarks": kwargs.get("remarks", "ORB_UI"),
+            "amo": kwargs.get("amo", "NO"),
         }
         return self._post("PlaceOrder", payload)
 
     def modify_order(self, **kwargs: Any) -> Dict[str, Any]:
         payload = {
+            "ordersource": "API",
             "uid": self.username,
             "norenordno": str(kwargs["orderno"]),
             "exch": kwargs["exchange"],
@@ -236,7 +240,7 @@ class CompatibleNorenApi:
         return self._post("ModifyOrder", payload)
 
     def cancel_order(self, orderno: str) -> Dict[str, Any]:
-        return self._post("CancelOrder", {"uid": self.username, "norenordno": str(orderno)})
+        return self._post("CancelOrder", {"ordersource": "API", "uid": self.username, "norenordno": str(orderno)})
 
     def get_positions(self) -> List[Dict[str, Any]]:
         resp = self._post("PositionBook", {"uid": self.username, "actid": self.account_id})
@@ -827,16 +831,28 @@ class ShoonyaClient:
         quantity: int,
         price_type: str = "LMT",
         price: float = 0.0,
-        product_type: str = "C",
+        product_type: str = "M",
     ) -> Dict[str, Any]:
         """Place a manual/test order directly on the live Shoonya broker API."""
         if not getattr(self.api, "access_token", ""):
             return {"stat": "Not_Ok", "emsg": "Shoonya session is not authenticated. Connect account first."}
 
+        prd = str(product_type).strip().upper()
+        if prd in ("NRML", "NORMAL", "C", "CNC"):
+            prd = "M"
+        elif prd in ("MIS", "INTRADAY"):
+            prd = "I"
+
+        now_ist = datetime.now(IST)
+        mkt_open = now_ist.replace(hour=9, minute=15, second=0, microsecond=0)
+        mkt_close = now_ist.replace(hour=15, minute=30, second=0, microsecond=0)
+        is_market_hours = (now_ist.weekday() < 5) and (mkt_open <= now_ist <= mkt_close)
+        amo_flag = "NO" if is_market_hours else "YES"
+
         try:
             resp = self.api.place_order(
                 buy_or_sell=buy_or_sell.strip().upper(),
-                product_type=product_type.strip().upper(),
+                product_type=prd,
                 exchange=exchange.strip().upper(),
                 tradingsymbol=tradingsymbol.strip().upper(),
                 quantity=int(quantity),
@@ -846,6 +862,7 @@ class ShoonyaClient:
                 trigger_price=0.0,
                 retention="DAY",
                 remarks=self.settings.sebi_algo_id or "UI_MANUAL",
+                amo=amo_flag,
             )
         except Exception as exc:
             resp = {"stat": "Not_Ok", "emsg": str(exc)}
