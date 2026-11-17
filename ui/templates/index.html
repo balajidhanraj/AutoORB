@@ -731,11 +731,36 @@
       line-height: 1.3;
       text-transform: uppercase;
     }
-    .tag-info { background: rgba(0, 245, 212, 0.12); color: var(--primary); border: 1px solid rgba(0, 245, 212, 0.25); }
-    .tag-warn { background: rgba(255, 183, 3, 0.12); color: var(--amber); border: 1px solid rgba(255, 183, 3, 0.25); }
-    .tag-error { background: rgba(255, 51, 102, 0.12); color: var(--secondary); border: 1px solid rgba(255, 51, 102, 0.25); }
-    .tag-order { background: rgba(16, 185, 129, 0.12); color: var(--green); border: 1px solid rgba(16, 185, 129, 0.25); }
-    .tag-signal { background: rgba(147, 51, 234, 0.12); color: #c084fc; border: 1px solid rgba(147, 51, 234, 0.25); }
+
+    .tag-info {
+      background: rgba(0, 245, 212, 0.12);
+      color: var(--primary);
+      border: 1px solid rgba(0, 245, 212, 0.25);
+    }
+
+    .tag-warn {
+      background: rgba(255, 183, 3, 0.12);
+      color: var(--amber);
+      border: 1px solid rgba(255, 183, 3, 0.25);
+    }
+
+    .tag-error {
+      background: rgba(255, 51, 102, 0.12);
+      color: var(--secondary);
+      border: 1px solid rgba(255, 51, 102, 0.25);
+    }
+
+    .tag-order {
+      background: rgba(16, 185, 129, 0.12);
+      color: var(--green);
+      border: 1px solid rgba(16, 185, 129, 0.25);
+    }
+
+    .tag-signal {
+      background: rgba(147, 51, 234, 0.12);
+      color: #c084fc;
+      border: 1px solid rgba(147, 51, 234, 0.25);
+    }
 
     .log-entry.error {
       color: #f87171;
@@ -1300,12 +1325,14 @@
   </div>
 
   <!-- Modal: Theme Appearance & Typography Settings -->
-  <div id="theme-settings-modal" class="modal-backdrop" style="display:none;" onclick="if(event.target===this)closeThemeSettingsModal()">
+  <div id="theme-settings-modal" class="modal-backdrop" style="display:none;"
+    onclick="if(event.target===this)closeThemeSettingsModal()">
     <div class="modal-card" style="max-width: 640px;">
       <div class="modal-header">
         <div style="display:flex;align-items:center;gap:8px;">
           <span class="material-symbols-outlined" style="color:var(--primary);font-size:22px;">palette</span>
-          <h3 style="margin:0;font-size:1.05rem;font-weight:700;font-family:var(--font-heading);">Terminal Appearance &amp; Color Palettes</h3>
+          <h3 style="margin:0;font-size:1.05rem;font-weight:700;font-family:var(--font-heading);">Terminal Appearance
+            &amp; Color Palettes</h3>
           <span class="badge info">CUSTOM THEMES</span>
         </div>
         <button class="modal-close-btn" onclick="closeThemeSettingsModal()">&times;</button>
@@ -2952,7 +2979,7 @@
     // Auto-poll status every 1.5s
     setInterval(refreshStatus, 1500);
 
-        // Escape key listener for modals and drawer
+    // Escape key listener for modals and drawer
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') {
         closeThemeSettingsModal();
