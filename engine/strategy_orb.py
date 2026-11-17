@@ -101,7 +101,7 @@ class ORBStrategy:
                 orb_candles.append(c)
 
         if len(orb_candles) < expected_count:
-            logger.warning(
+            logger.debug(
                 "Cannot lock ORB for %s yet: only %d/%d opening candles present",
                 index_name,
                 len(orb_candles),

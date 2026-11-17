@@ -46,6 +46,7 @@ class TradingSystemOrchestrator:
             self.mapper,
             notifier=self.notifier,
         )
+        self.risk_manager.load_backtest_trades(limit=50)
 
         self.candle_builders: Dict[str, CandleBuilder] = {
             name: CandleBuilder(name, spec.spot_exchange, spec.spot_token)
@@ -630,11 +631,18 @@ class TradingSystemOrchestrator:
                 self._mark_milestone("ws", today)
 
             if current_t >= self.settings.orb_end_time and self._milestone_ready("orb_lock", today):
-                for builder in self.candle_builders.values():
-                    builder.flush_due_candles(dt)
-                locked = self.run_lock_orb(dt)
-                if locked:
+                if current_t >= self.settings.market_close_time:
+                    # After market hours: mark milestone complete so scheduler does not repeatedly poll
                     self._mark_milestone("orb_lock", today)
+                else:
+                    now_ts = time.time()
+                    if now_ts - getattr(self, "_last_orb_lock_attempt", 0.0) >= 30.0:
+                        self._last_orb_lock_attempt = now_ts
+                        for builder in self.candle_builders.values():
+                            builder.flush_due_candles(dt)
+                        locked = self.run_lock_orb(dt)
+                        if locked:
+                            self._mark_milestone("orb_lock", today)
 
             if current_t >= self.settings.auto_squareoff_time and self._milestone_ready("squareoff", today):
                 self.run_eod_squareoff()

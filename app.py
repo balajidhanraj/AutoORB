@@ -378,6 +378,7 @@ def render_dashboard_html(theme_name: Optional[str] = None) -> str:
     trade_rows = "".join(
         f'<tr style="color:{p["text"]} !important;">'
         f'<td style="padding:7px;border-bottom:1px solid {p["border"]};color:{p["text"]} !important;">{html.escape(str(t.get("tradingsymbol", "")))}</td>'
+        f'<td style="padding:7px;border-bottom:1px solid {p["border"]};color:{p["text"]} !important;">{_badge(str(t.get("mode", "LIVE")), "live" if t.get("mode") == "LIVE" else "paper" if t.get("mode") == "PAPER" else "info", p)}</td>'
         f'<td style="padding:7px;border-bottom:1px solid {p["border"]};color:{p["text"]} !important;">{html.escape(str(t.get("signal_type", "")))}</td>'
         f'<td style="padding:7px;border-bottom:1px solid {p["border"]};color:{p["text"]} !important;">{t.get("quantity", 0)}</td>'
         f'<td style="padding:7px;border-bottom:1px solid {p["border"]};color:{p["text"]} !important;">{html.escape(str(t.get("exit_reason", "")))}</td>'
@@ -385,7 +386,7 @@ def render_dashboard_html(theme_name: Optional[str] = None) -> str:
         f"</tr>"
         for t in snap.get("completed_trades", [])
     )
-    trades_table = _table_html(["Contract", "Side", "Qty", "Reason", "Net P&L"], trade_rows, "No completed strategy trades yet.", p)
+    trades_table = _table_html(["Contract", "Mode", "Side", "Qty", "Reason", "Net P&L"], trade_rows, "No completed strategy trades yet.", p)
 
     ord_rows = "".join(
         f'<tr style="color:{p["text"]} !important;">'

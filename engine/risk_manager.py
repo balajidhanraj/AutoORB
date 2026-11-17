@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import csv
+import json
 import math
 import re
 import threading
@@ -110,6 +111,39 @@ class RiskManager:
         self.custom_lots: Dict[str, int] = {}
         self.custom_product_types: Dict[str, str] = {}
         self.weekly_losses: Dict[Tuple[int, int], int] = {}
+
+    def load_backtest_trades(self, limit: int = 50) -> None:
+        """Load recent Master Alpha 15% backtest trades into completed trades ledger."""
+        json_path = Path(__file__).resolve().parent.parent / "data" / "backtest" / "all_trades_180d.json"
+        if not json_path.exists():
+            return
+        try:
+            with open(json_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            recent = data[-limit:] if limit > 0 else data
+            with self._lock:
+                for t in recent:
+                    rec = TradeRecord(
+                        trade_id=str(t.get("id")),
+                        date=str(t.get("date")),
+                        index_name=str(t.get("idx")),
+                        tradingsymbol=str(t.get("tradingsymbol") or f"{t.get('idx')} {t.get('strike')} {t.get('side')}"),
+                        signal_type=str(t.get("side")),
+                        quantity=int(t.get("qty", 0)),
+                        entry_time=str(t.get("in_t")),
+                        entry_price=float(t.get("in_px", 0.0)),
+                        exit_time=str(t.get("out_t")),
+                        exit_price=float(t.get("out_px", 0.0)),
+                        gross_pnl=float(t.get("gross", 0.0)),
+                        charges_est=float(t.get("charges", 0.0)),
+                        net_pnl=float(t.get("net", 0.0)),
+                        exit_reason=str(t.get("reason", "BACKTEST_EXIT")),
+                        mode=str(t.get("mode", "BACKTEST")),
+                    )
+                    if not any(x.trade_id == rec.trade_id for x in self.completed_trades):
+                        self.completed_trades.append(rec)
+        except Exception as e:
+            logger.warning("Could not load backtest trades into risk manager: %s", e)
 
     def set_index_lots(self, index_name: str, lots: int) -> None:
         self.custom_lots[index_name] = max(1, int(lots))

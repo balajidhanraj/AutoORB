@@ -188,7 +188,8 @@
       flex-shrink: 0;
     }
 
-    button, .btn {
+    button,
+    .btn {
       display: inline-flex;
       align-items: center;
       justify-content: center;
@@ -207,7 +208,8 @@
       white-space: nowrap;
     }
 
-    button:hover, .btn:hover {
+    button:hover,
+    .btn:hover {
       background: var(--surface-container-high);
       border-color: rgba(255, 255, 255, 0.2);
     }
@@ -323,9 +325,17 @@
       margin-top: 2px;
     }
 
-    .pos { color: var(--green); }
-    .neg { color: var(--secondary); }
-    .warn { color: var(--amber); }
+    .pos {
+      color: var(--green);
+    }
+
+    .neg {
+      color: var(--secondary);
+    }
+
+    .warn {
+      color: var(--amber);
+    }
 
     /* 3-Column Cockpit Layout (Radar Tab) */
     .grid-radars {
@@ -345,12 +355,21 @@
       align-items: center;
       gap: 10px;
       min-width: 0;
+      flex-wrap: nowrap;
     }
 
     .section-title span:first-child {
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
+      flex: 1 1 auto;
+      min-width: 0;
+    }
+
+    .section-title .badge {
+      flex: 0 0 auto;
+      white-space: nowrap !important;
+      word-break: keep-all !important;
     }
 
     .kv-grid {
@@ -365,6 +384,7 @@
       padding: 8px 10px;
       border-radius: var(--radius-sm);
       border: 1px solid var(--border);
+      min-width: 0;
     }
 
     .kv small {
@@ -373,12 +393,19 @@
       font-size: 0.66rem;
       font-family: 'JetBrains Mono', monospace;
       text-transform: uppercase;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
 
     .kv strong {
+      display: block;
       font-size: 0.92rem;
       font-family: 'JetBrains Mono', monospace;
       font-weight: 600;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
 
     .progress-wrap {
@@ -580,7 +607,8 @@
       letter-spacing: 0.05em;
     }
 
-    .form-input, .form-select {
+    .form-input,
+    .form-select {
       background: var(--surface-alt);
       border: 1px solid var(--border);
       border-radius: var(--radius-sm);
@@ -592,7 +620,8 @@
       width: 100%;
     }
 
-    .form-input:focus, .form-select:focus {
+    .form-input:focus,
+    .form-select:focus {
       border-color: var(--primary);
       box-shadow: 0 0 8px rgba(0, 245, 212, 0.2);
     }
@@ -610,28 +639,59 @@
     }
 
     @keyframes toastSlideIn {
-      from { transform: translateX(110%); opacity: 0; }
-      to { transform: translateX(0); opacity: 1; }
+      from {
+        transform: translateX(110%);
+        opacity: 0;
+      }
+
+      to {
+        transform: translateX(0);
+        opacity: 1;
+      }
     }
 
     @keyframes toastSlideOut {
-      from { transform: translateX(0); opacity: 1; }
-      to { transform: translateX(110%); opacity: 0; }
+      from {
+        transform: translateX(0);
+        opacity: 1;
+      }
+
+      to {
+        transform: translateX(110%);
+        opacity: 0;
+      }
     }
 
     @keyframes toastProgress {
-      from { width: 100%; }
-      to { width: 0%; }
+      from {
+        width: 100%;
+      }
+
+      to {
+        width: 0%;
+      }
     }
 
     @keyframes fadeIn {
-      from { opacity: 0; }
-      to { opacity: 1; }
+      from {
+        opacity: 0;
+      }
+
+      to {
+        opacity: 1;
+      }
     }
 
     @keyframes zoomIn {
-      from { transform: scale(0.94); opacity: 0; }
-      to { transform: scale(1); opacity: 1; }
+      from {
+        transform: scale(0.94);
+        opacity: 0;
+      }
+
+      to {
+        transform: scale(1);
+        opacity: 1;
+      }
     }
 
     /* Log Stream Terminal */
@@ -654,9 +714,17 @@
       word-break: break-word;
     }
 
-    .log-entry.error { color: #f87171; }
-    .log-entry.warn { color: #fbbf24; }
-    .log-entry.info { color: #cbd5e1; }
+    .log-entry.error {
+      color: #f87171;
+    }
+
+    .log-entry.warn {
+      color: #fbbf24;
+    }
+
+    .log-entry.info {
+      color: #cbd5e1;
+    }
 
     /* Timeline */
     .timeline {
@@ -688,6 +756,7 @@
       .kpi-strip {
         grid-template-columns: repeat(4, minmax(0, 1fr));
       }
+
       .grid-radars {
         grid-template-columns: repeat(2, minmax(0, 1fr));
       }
@@ -697,15 +766,18 @@
       .grid-radars {
         grid-template-columns: 1fr;
       }
+
       .kpi-strip {
         grid-template-columns: repeat(2, minmax(0, 1fr));
       }
+
       .topbar-main {
         flex-direction: column;
         height: auto;
         padding: 10px 0;
         gap: 8px;
       }
+
       .telemetry-pills {
         justify-content: center;
       }
@@ -736,25 +808,31 @@
           onclick="toggleMode()" title="Click to toggle PAPER/LIVE mode">MODE: {{ snapshot.mode }}</span>
         <span id="user-badge" class="badge info clickable" onclick="openAccountSwitchModal()"
           title="Click to Switch Shoonya Account">Client: {{ snapshot.user_id or '--' }}</span>
-        <span id="oauth-badge" class="badge clickable" onclick="triggerOAuth()" title="Click to refresh OAuth session">OAuth: {{ snapshot.oauth_status }}</span>
-        <span id="ws-badge" class="badge {{ 'live' if snapshot.ws_connected else 'halted' }}">WS: {{ 'ONLINE' if snapshot.ws_connected else 'OFFLINE' }}</span>
+        <span id="oauth-badge" class="badge clickable" onclick="triggerOAuth()"
+          title="Click to refresh OAuth session">OAuth: {{ snapshot.oauth_status }}</span>
+        <span id="ws-badge" class="badge {{ 'live' if snapshot.ws_connected else 'halted' }}">WS: {{ 'ONLINE' if
+          snapshot.ws_connected else 'OFFLINE' }}</span>
         <span id="phase-badge" class="badge info">IST: {{ snapshot.ist_time }}</span>
       </div>
 
       <!-- Quick Action Controls -->
       <div class="header-actions">
-        <button id="sound-toggle-btn" onclick="toggleSoundAlerts()" style="padding:7px 10px;" title="Toggle Audio Sound Alerts">
+        <button id="sound-toggle-btn" onclick="toggleSoundAlerts()" style="padding:7px 10px;"
+          title="Toggle Audio Sound Alerts">
           <span id="sound-icon" class="material-symbols-outlined" style="font-size:16px;">volume_up</span>
         </button>
-        <button id="notif-bell-btn" onclick="toggleNotificationDrawer()" style="position:relative;padding:7px 10px;" title="Event Notifications History">
+        <button id="notif-bell-btn" onclick="toggleNotificationDrawer()" style="position:relative;padding:7px 10px;"
+          title="Event Notifications History">
           <span class="material-symbols-outlined" style="font-size:16px;">notifications</span>
-          <span id="notif-badge-count" class="badge live" style="position:absolute;top:-4px;right:-4px;font-size:0.58rem;padding:0px 4px;min-width:15px;height:15px;border-radius:8px;display:none;">0</span>
+          <span id="notif-badge-count" class="badge live"
+            style="position:absolute;top:-4px;right:-4px;font-size:0.58rem;padding:0px 4px;min-width:15px;height:15px;border-radius:8px;display:none;">0</span>
         </button>
         <button onclick="openThemeSettingsModal()" style="padding:7px 11px;" title="Theme Colors & Font Settings">
           <span class="material-symbols-outlined" style="font-size:16px;">palette</span>
           <span>Theme</span>
         </button>
-        <button class="btn-primary" onclick="openQuickOrderModal('NIFTY', 'CE')" title="Open Quick Live Broker Order Popup">
+        <button class="btn-primary" onclick="openQuickOrderModal('NIFTY', 'CE')"
+          title="Open Quick Live Broker Order Popup">
           <span class="material-symbols-outlined" style="font-size:16px;">bolt</span>
           <span>⚡ BROKER ORDER</span>
         </button>
@@ -762,7 +840,8 @@
           <span class="material-symbols-outlined" style="font-size:16px;">manage_accounts</span>
           <span>Switch User</span>
         </button>
-        <button class="btn-kill" onclick="triggerKillSwitch()" title="Emergency cancel all orders and square off positions">
+        <button class="btn-kill" onclick="triggerKillSwitch()"
+          title="Emergency cancel all orders and square off positions">
           <span class="material-symbols-outlined" style="font-size:16px;">power_settings_new</span>
           <span>KILL SWITCH</span>
         </button>
@@ -782,7 +861,8 @@
       <button id="tab-btn-terminal-logs" class="nav-tab-btn" onclick="showTab('terminal-logs')">
         <span class="material-symbols-outlined" style="font-size:17px;">terminal</span>
         <span>Terminal Logs</span>
-        <span id="logs-count-badge" class="badge live" style="font-size:0.65rem;padding:1px 6px;margin-left:4px;">● LIVE</span>
+        <span id="logs-count-badge" class="badge live" style="font-size:0.65rem;padding:1px 6px;margin-left:4px;">●
+          LIVE</span>
       </button>
       <button id="tab-btn-analytics-backtest" class="nav-tab-btn" onclick="showTab('analytics-backtest')">
         <span class="material-symbols-outlined" style="font-size:17px;">analytics</span>
@@ -815,7 +895,8 @@
       <div class="card">
         <div class="card-label">
           Trades Today
-          <button onclick="resetTradesCounter()" class="badge info" style="padding:1px 6px;margin-left:4px;cursor:pointer;" title="Reset daily quota">Reset</button>
+          <button onclick="resetTradesCounter()" class="badge info"
+            style="padding:1px 6px;margin-left:4px;cursor:pointer;" title="Reset daily quota">Reset</button>
         </div>
         <div id="trades-val" class="card-val">{{ snapshot.trades_taken }} / {{ snapshot.max_trades }}</div>
         <div class="card-sub">Scan: 10:00-13:15 IST</div>
@@ -875,7 +956,8 @@
             </select>
             <button onclick="submitFunds()">Update Cap</button>
           </div>
-          <div class="section-title" style="margin-top:6px;margin-bottom:6px;"><span>Daily Institutional Schedule</span></div>
+          <div class="section-title" style="margin-top:6px;margin-bottom:6px;"><span>Daily Institutional Schedule</span>
+          </div>
           <div class="timeline" id="schedule-timeline"></div>
         </div>
       </div>
@@ -894,8 +976,10 @@
               <button class="filter-chip" id="filter-radar-signals" onclick="setLogFilter('SIGNALS')">Signals</button>
               <button class="filter-chip" id="filter-radar-alerts" onclick="setLogFilter('WARNS')">Alerts</button>
             </div>
-            <label style="display:flex;align-items:center;gap:4px;font-size:0.72rem;color:var(--muted);cursor:pointer;margin-left:4px;">
-              <input type="checkbox" id="autoscroll-toggle-radar" checked onchange="toggleAutoScroll(this.checked)" /> Auto-scroll
+            <label
+              style="display:flex;align-items:center;gap:4px;font-size:0.72rem;color:var(--muted);cursor:pointer;margin-left:4px;">
+              <input type="checkbox" id="autoscroll-toggle-radar" checked onchange="toggleAutoScroll(this.checked)" />
+              Auto-scroll
             </label>
             <button onclick="showTab('terminal-logs')" style="padding:3px 9px;font-size:0.7rem;">
               <span class="material-symbols-outlined" style="font-size:14px;">open_in_full</span>
@@ -921,9 +1005,16 @@
         </div>
         <div class="card">
           <div class="section-title">
-            <span>Completed Strategy Trades Today</span>
-            <div style="display:flex;gap:8px;">
-              <a class="btn" href="/api/trades/csv" onclick="showToast('Export', 'Downloading completed trades CSV...', 'info')">
+            <span>Completed Strategy Trades Ledger</span>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+              <div style="display:flex;gap:4px;">
+                <button class="filter-chip active" id="tf-all" onclick="setTradesModeFilter('ALL')">All Trades</button>
+                <button class="filter-chip" id="tf-live" onclick="setTradesModeFilter('LIVE')">Live</button>
+                <button class="filter-chip" id="tf-paper" onclick="setTradesModeFilter('PAPER')">Paper</button>
+                <button class="filter-chip" id="tf-backtest" onclick="setTradesModeFilter('BACKTEST')">Backtest</button>
+              </div>
+              <a class="btn" href="/api/trades/csv"
+                onclick="showToast('Export', 'Downloading completed trades CSV...', 'info')">
                 <span class="material-symbols-outlined" style="font-size:16px;">download</span>
                 <span>Download CSV</span>
               </a>
@@ -952,7 +1043,8 @@
               <button class="filter-chip" id="filter-term-alerts" onclick="setLogFilter('WARNS')">Alerts</button>
             </div>
             <label style="display:flex;align-items:center;gap:4px;font-size:0.72rem;color:var(--muted);cursor:pointer;">
-              <input type="checkbox" id="autoscroll-toggle-term" checked onchange="toggleAutoScroll(this.checked)" /> Auto-scroll
+              <input type="checkbox" id="autoscroll-toggle-term" checked onchange="toggleAutoScroll(this.checked)" />
+              Auto-scroll
             </label>
             <button onclick="copyTerminalLogs()">
               <span class="material-symbols-outlined" style="font-size:15px;">content_copy</span>
@@ -976,7 +1068,8 @@
             <span class="material-symbols-outlined" style="color:var(--primary);font-size:20px;">insights</span>
             <span>6-Month Backtest Analytics &amp; Alpha Optimization</span>
           </div>
-          <a class="btn btn-primary" href="/backtest" target="_blank" onclick="showToast('Backtest', 'Opening full report in new window...', 'info')">
+          <a class="btn btn-primary" href="/backtest" target="_blank"
+            onclick="showToast('Backtest', 'Opening full report in new window...', 'info')">
             <span class="material-symbols-outlined" style="font-size:16px;">open_in_new</span>
             <span>Open Standalone Dashboard</span>
           </a>
@@ -992,7 +1085,8 @@
       <div class="modal-header">
         <div style="display:flex;align-items:center;gap:8px;">
           <span class="material-symbols-outlined" style="color:var(--primary);font-size:22px;">bolt</span>
-          <h3 style="margin:0;font-size:1.05rem;font-weight:700;font-family:'Space Grotesk',sans-serif;">Quick Broker Order (Manual Test)</h3>
+          <h3 style="margin:0;font-size:1.05rem;font-weight:700;font-family:'Space Grotesk',sans-serif;">Quick Broker
+            Order (Manual Test)</h3>
           <span class="badge info">SHOONYA LIVE API</span>
         </div>
         <button class="modal-close-btn" onclick="closeQuickOrderModal()">&times;</button>
@@ -1057,23 +1151,30 @@
         </div>
         <div class="form-group">
           <label>Limit Price (₹)</label>
-          <input id="ord-price" class="form-input" type="number" step="0.05" value="125.00" oninput="recalcModalMargin()" />
+          <input id="ord-price" class="form-input" type="number" step="0.05" value="125.00"
+            oninput="recalcModalMargin()" />
         </div>
       </div>
 
       <!-- Margin Requirement Telemetry Box -->
-      <div style="background:var(--surface-alt);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 14px;display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+      <div
+        style="background:var(--surface-alt);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 14px;display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
         <div>
-          <span style="font-size:0.68rem;color:var(--muted);text-transform:uppercase;display:block;">Approx Margin Required</span>
-          <strong id="ord-est-margin" style="font-size:1.05rem;color:var(--primary);font-family:'JetBrains Mono',monospace;">₹16,250.00</strong>
+          <span style="font-size:0.68rem;color:var(--muted);text-transform:uppercase;display:block;">Approx Margin
+            Required</span>
+          <strong id="ord-est-margin"
+            style="font-size:1.05rem;color:var(--primary);font-family:'JetBrains Mono',monospace;">₹16,250.00</strong>
         </div>
         <div style="text-align:right;">
-          <span style="font-size:0.68rem;color:var(--muted);text-transform:uppercase;display:block;">Broker Net Avail</span>
-          <strong id="ord-avail-margin" style="font-size:0.95rem;color:var(--text);font-family:'JetBrains Mono',monospace;">₹0.00</strong>
+          <span style="font-size:0.68rem;color:var(--muted);text-transform:uppercase;display:block;">Broker Net
+            Avail</span>
+          <strong id="ord-avail-margin"
+            style="font-size:0.95rem;color:var(--text);font-family:'JetBrains Mono',monospace;">₹0.00</strong>
         </div>
       </div>
 
-      <button id="ord-submit-btn" class="btn-primary" style="width:100%;height:44px;font-size:0.88rem;" onclick="submitQuickBrokerOrder()">
+      <button id="ord-submit-btn" class="btn-primary" style="width:100%;height:44px;font-size:0.88rem;"
+        onclick="submitQuickBrokerOrder()">
         <span class="material-symbols-outlined" style="font-size:18px;">send</span>
         <span id="ord-submit-text">SUBMIT BUY NIFTY ORDER</span>
       </button>
@@ -1086,7 +1187,8 @@
       <div class="modal-header">
         <div style="display:flex;align-items:center;gap:8px;">
           <span class="material-symbols-outlined" style="color:var(--primary);font-size:22px;">manage_accounts</span>
-          <h3 style="margin:0;font-size:1.05rem;font-weight:700;font-family:'Space Grotesk',sans-serif;">Switch Shoonya Account (Multi-User)</h3>
+          <h3 style="margin:0;font-size:1.05rem;font-weight:700;font-family:'Space Grotesk',sans-serif;">Switch Shoonya
+            Account (Multi-User)</h3>
           <span class="badge live">MULTI-USER</span>
         </div>
         <button class="modal-close-btn" onclick="closeAccountSwitchModal()">&times;</button>
@@ -1094,9 +1196,12 @@
 
       <!-- Preset Account Selector -->
       <div style="margin-bottom:12px;">
-        <span style="font-size:0.68rem;color:var(--muted);text-transform:uppercase;display:block;margin-bottom:6px;">Known Account Presets:</span>
+        <span
+          style="font-size:0.68rem;color:var(--muted);text-transform:uppercase;display:block;margin-bottom:6px;">Known
+          Account Presets:</span>
         <div style="display:flex;gap:6px;flex-wrap:wrap;">
-          <button id="preset-fa53975" class="badge clickable info" onclick="selectPresetAccount('FA53975')">FA53975 (Default)</button>
+          <button id="preset-fa53975" class="badge clickable info" onclick="selectPresetAccount('FA53975')">FA53975
+            (Default)</button>
           <button class="badge clickable" onclick="clearAccountFields()">+ New Custom Account</button>
         </div>
       </div>
@@ -1130,10 +1235,12 @@
 
       <div class="form-group">
         <label>Secret Key (SHA-256 HMAC Secret)</label>
-        <input id="sw-secret-key" class="form-input" type="password" value="KhDp0lERNEnBBKRRR3Nz5XciNY97J6g9yCarhJQayQxBn2K21YfYEEaBDrd6ir5o" />
+        <input id="sw-secret-key" class="form-input" type="password"
+          value="KhDp0lERNEnBBKRRR3Nz5XciNY97J6g9yCarhJQayQxBn2K21YfYEEaBDrd6ir5o" />
       </div>
 
-      <button id="sw-submit-btn" class="btn-primary" style="width:100%;height:44px;font-size:0.88rem;margin-top:6px;" onclick="submitAccountSwitch()">
+      <button id="sw-submit-btn" class="btn-primary" style="width:100%;height:44px;font-size:0.88rem;margin-top:6px;"
+        onclick="submitAccountSwitch()">
         <span class="material-symbols-outlined" style="font-size:18px;">login</span>
         <span>AUTHENTICATE &amp; SWITCH SESSION</span>
       </button>
@@ -1148,60 +1255,73 @@
         <strong style="font-size:0.85rem;font-family:var(--font-heading);">Important Event Notifications</strong>
       </div>
       <div style="display:flex;align-items:center;gap:6px;">
-        <button onclick="requestDesktopNotificationPermission()" style="padding:2px 7px;font-size:0.68rem;" title="Enable Browser Desktop Push">Desktop Alerts</button>
+        <button onclick="requestDesktopNotificationPermission()" style="padding:2px 7px;font-size:0.68rem;"
+          title="Enable Browser Desktop Push">Desktop Alerts</button>
         <button onclick="clearNotificationHistory()" style="padding:2px 7px;font-size:0.68rem;">Clear</button>
-        <button onclick="toggleNotificationDrawer()" style="padding:2px 6px;font-size:0.85rem;border:none;background:none;color:var(--muted);cursor:pointer;">&times;</button>
+        <button onclick="toggleNotificationDrawer()"
+          style="padding:2px 6px;font-size:0.85rem;border:none;background:none;color:var(--muted);cursor:pointer;">&times;</button>
       </div>
     </div>
     <div id="notifications-drawer-body" class="drawer-body">
-      <div style="text-align:center;color:var(--muted);font-size:0.75rem;padding:24px 0;">No new events recorded yet.</div>
+      <div style="text-align:center;color:var(--muted);font-size:0.75rem;padding:24px 0;">No new events recorded yet.
+      </div>
     </div>
   </div>
 
   <!-- Modal: Theme Appearance & Typography Settings -->
-  <div id="theme-settings-modal" class="modal-backdrop">
-    <div class="modal-card" style="max-width: 620px;">
-      <div class="modal-head">
+  <div id="theme-settings-modal" class="modal-backdrop" style="display:none;" onclick="if(event.target===this)closeThemeSettingsModal()">
+    <div class="modal-card" style="max-width: 640px;">
+      <div class="modal-header">
         <div style="display:flex;align-items:center;gap:8px;">
-          <span class="material-symbols-outlined" style="color:var(--primary);font-size:20px;">palette</span>
+          <span class="material-symbols-outlined" style="color:var(--primary);font-size:22px;">palette</span>
           <h3 style="margin:0;font-size:1.05rem;font-weight:700;font-family:var(--font-heading);">Terminal Appearance &amp; Color Palettes</h3>
+          <span class="badge info">CUSTOM THEMES</span>
         </div>
-        <button class="modal-close" onclick="closeThemeSettingsModal()">&times;</button>
+        <button class="modal-close-btn" onclick="closeThemeSettingsModal()">&times;</button>
       </div>
       <div class="modal-body" style="max-height: calc(85vh - 120px); overflow-y:auto;">
         <!-- Multi-Color Theme Palettes -->
         <div style="margin-bottom: 18px;">
-          <label style="font-size:0.8rem;font-weight:700;color:var(--text);margin-bottom:8px;display:block;text-transform:uppercase;letter-spacing:0.04em;">
+          <label
+            style="font-size:0.8rem;font-weight:700;color:var(--text);margin-bottom:8px;display:block;text-transform:uppercase;letter-spacing:0.04em;">
             Multi-Color Palette Theme
           </label>
-          <div style="display:grid;grid-template-columns:repeat(2, minmax(0, 1fr));gap:8px;" id="theme-options-grid"></div>
+          <div style="display:grid;grid-template-columns:repeat(2, minmax(0, 1fr));gap:8px;" id="theme-options-grid">
+          </div>
         </div>
 
         <!-- Typography / Font Selection -->
         <div style="margin-bottom: 18px;">
-          <label style="font-size:0.8rem;font-weight:700;color:var(--text);margin-bottom:8px;display:block;text-transform:uppercase;letter-spacing:0.04em;">
+          <label
+            style="font-size:0.8rem;font-weight:700;color:var(--text);margin-bottom:8px;display:block;text-transform:uppercase;letter-spacing:0.04em;">
             Typography &amp; Monospace Font
           </label>
-          <div style="display:grid;grid-template-columns:repeat(2, minmax(0, 1fr));gap:8px;" id="font-options-grid"></div>
+          <div style="display:grid;grid-template-columns:repeat(2, minmax(0, 1fr));gap:8px;" id="font-options-grid">
+          </div>
         </div>
 
         <!-- Alert & Notification Settings -->
-        <div style="padding:12px;background:var(--surface-alt);border:1px solid var(--border);border-radius:var(--radius-sm);">
-          <label style="font-size:0.8rem;font-weight:700;color:var(--text);margin-bottom:8px;display:block;text-transform:uppercase;letter-spacing:0.04em;">
+        <div
+          style="padding:12px;background:var(--surface-alt);border:1px solid var(--border);border-radius:var(--radius-sm);">
+          <label
+            style="font-size:0.8rem;font-weight:700;color:var(--text);margin-bottom:8px;display:block;text-transform:uppercase;letter-spacing:0.04em;">
             Alerts &amp; Audio Configuration
           </label>
           <div style="display:flex;flex-direction:column;gap:10px;font-size:0.78rem;">
             <label style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;">
               <span>Audio Chime on Orders, Targets &amp; Halts</span>
-              <input type="checkbox" id="setting-sound-enabled" onchange="updateSoundPreference(this.checked)" checked />
+              <input type="checkbox" id="setting-sound-enabled" onchange="updateSoundPreference(this.checked)"
+                checked />
             </label>
             <label style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;">
               <span>Browser Desktop Push Alerts</span>
-              <button onclick="requestDesktopNotificationPermission()" style="padding:3px 9px;font-size:0.72rem;">Enable Push</button>
+              <button onclick="requestDesktopNotificationPermission()" style="padding:3px 9px;font-size:0.72rem;">Enable
+                Push</button>
             </label>
             <label style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;">
               <span>Auto-Scroll Logs in Live Feeds</span>
-              <input type="checkbox" id="setting-autoscroll-enabled" onchange="toggleAutoScroll(this.checked)" checked />
+              <input type="checkbox" id="setting-autoscroll-enabled" onchange="toggleAutoScroll(this.checked)"
+                checked />
             </label>
           </div>
         </div>
@@ -1335,7 +1455,7 @@
     function onModalIndexChange(indexName) {
       const lotsSelect = document.getElementById('ord-lots');
       const lotSize = indexName === 'NIFTY' ? 65 : 30;
-      lotsSelect.innerHTML = [1, 2, 3, 4, 5].map(n => 
+      lotsSelect.innerHTML = [1, 2, 3, 4, 5].map(n =>
         `<option value="${n}" ${n === 2 ? 'selected' : ''}>${n} Lot${n > 1 ? 's' : ''} (${n * lotSize} qty)</option>`
       ).join('');
       updateModalStrikeSuggestion();
@@ -1898,18 +2018,46 @@
       container.innerHTML = html;
     }
 
+    let activeTradesFilter = 'ALL';
+    function setTradesModeFilter(mode) {
+      activeTradesFilter = mode;
+      ['all', 'live', 'paper', 'backtest'].forEach(k => {
+        const el = document.getElementById(`tf-${k}`);
+        if (el) el.classList.remove('active');
+      });
+      const targetEl = document.getElementById(`tf-${mode.toLowerCase()}`);
+      if (targetEl) targetEl.classList.add('active');
+      if (latestSnapshot && latestSnapshot.completed_trades) {
+        renderTrades(latestSnapshot.completed_trades);
+      }
+      showToast('Trades Filter', `Filtered by: ${mode}`, 'info', 1500);
+    }
+
     function renderTrades(trades) {
       const container = document.getElementById("trades-container");
       if (!container) return;
       if (!trades || trades.length === 0) {
-        container.innerHTML = `<div class="empty-msg">No completed trades yet today.</div>`;
+        container.innerHTML = `<div class="empty-msg">No completed trades recorded yet.</div>`;
         return;
       }
+
+      const filtered = trades.filter(t => {
+        if (activeTradesFilter === 'ALL') return true;
+        const m = (t.mode || 'LIVE').toUpperCase();
+        return m === activeTradesFilter.toUpperCase();
+      });
+
+      if (filtered.length === 0) {
+        container.innerHTML = `<div class="empty-msg">No completed ${esc(activeTradesFilter)} trades found.</div>`;
+        return;
+      }
+
       let html = `
         <table>
           <thead>
             <tr>
               <th>Time</th>
+              <th>Mode</th>
               <th>Index</th>
               <th>Contract</th>
               <th>Type</th>
@@ -1924,10 +2072,14 @@
           </thead>
           <tbody>
       `;
-      trades.slice().reverse().forEach(t => {
+      filtered.slice().reverse().forEach(t => {
+        const modeBadge = (t.mode === 'LIVE')
+          ? '<span class="badge live">LIVE</span>'
+          : ((t.mode === 'PAPER') ? '<span class="badge paper">PAPER</span>' : '<span class="badge info">BACKTEST</span>');
         html += `
           <tr>
             <td>${esc(t.exit_time || t.entry_time)}</td>
+            <td>${modeBadge}</td>
             <td><strong>${esc(t.index_name)}</strong></td>
             <td>${esc(t.tradingsymbol)}</td>
             <td><span class="badge ${t.signal_type === 'CE' ? 'live' : 'halted'}">${esc(t.signal_type)}</span></td>
@@ -1949,6 +2101,72 @@
        THEME & FONT ENGINE
        ========================================== */
     const THEME_PALETTES = {
+      'light-pro': {
+        name: 'Light Pro / Daybreak',
+        bg: '#f8fafc',
+        surface: '#ffffff',
+        surfaceAlt: '#f1f5f9',
+        surfaceHigh: '#e2e8f0',
+        border: 'rgba(15, 23, 42, 0.12)',
+        borderFocus: 'rgba(2, 132, 199, 0.5)',
+        text: '#0f172a',
+        textDim: '#334155',
+        muted: '#64748b',
+        primary: '#0284c7',
+        primarySoft: 'rgba(2, 132, 199, 0.14)',
+        accent: '#0ea5e9',
+        secondary: '#e11d48',
+        green: '#16a34a',
+        greenSoft: 'rgba(22, 163, 74, 0.14)',
+        amber: '#d97706',
+        red: '#dc2626',
+        dots: ['#f8fafc', '#ffffff', '#0284c7'],
+        isLight: true
+      },
+      'paper-white': {
+        name: 'Paper Neutral / Financial',
+        bg: '#fbf9f4',
+        surface: '#f5f0e6',
+        surfaceAlt: '#ebe3d5',
+        surfaceHigh: '#dfd5c3',
+        border: 'rgba(41, 37, 36, 0.14)',
+        borderFocus: 'rgba(217, 119, 6, 0.5)',
+        text: '#1c1917',
+        textDim: '#44403c',
+        muted: '#78716c',
+        primary: '#d97706',
+        primarySoft: 'rgba(217, 119, 6, 0.14)',
+        accent: '#b45309',
+        secondary: '#dc2626',
+        green: '#15803d',
+        greenSoft: 'rgba(21, 128, 61, 0.14)',
+        amber: '#d97706',
+        red: '#b91c1c',
+        dots: ['#fbf9f4', '#f5f0e6', '#d97706'],
+        isLight: true
+      },
+      'slate-neutral': {
+        name: 'Slate Neutral / Minimal',
+        bg: '#181b20',
+        surface: '#20242c',
+        surfaceAlt: '#272c36',
+        surfaceHigh: '#323946',
+        border: 'rgba(255, 255, 255, 0.10)',
+        borderFocus: 'rgba(56, 189, 248, 0.5)',
+        text: '#f1f5f9',
+        textDim: '#cbd5e1',
+        muted: '#94a3b8',
+        primary: '#38bdf8',
+        primarySoft: 'rgba(56, 189, 248, 0.15)',
+        accent: '#38bdf8',
+        secondary: '#f43f5e',
+        green: '#10b981',
+        greenSoft: 'rgba(16, 185, 129, 0.15)',
+        amber: '#fbbf24',
+        red: '#ef4444',
+        dots: ['#181b20', '#20242c', '#38bdf8'],
+        isLight: false
+      },
       'obsidian-cyan': {
         name: 'Obsidian Cyan (Default)',
         bg: '#090d14',
@@ -2160,12 +2378,18 @@
       if (!grid) return;
       grid.innerHTML = Object.entries(THEME_PALETTES).map(([k, t]) => `
         <div class="theme-card ${k === currentTheme ? 'active' : ''}" onclick="applyTheme('${k}', true)">
-          <div>
-            <div style="font-weight:700;font-size:0.8rem;color:var(--text);">${esc(t.name)}</div>
-            <div style="font-size:0.68rem;color:var(--muted);">${esc(t.primary)}</div>
+          <div style="display:flex;align-items:center;gap:10px;">
+            <span class="custom-radio ${k === currentTheme ? 'checked' : ''}"></span>
+            <div>
+              <div style="font-weight:700;font-size:0.8rem;color:var(--text);">${esc(t.name)}</div>
+              <div style="font-size:0.68rem;color:var(--muted);">${esc(t.isLight ? 'Light Theme' : 'Dark Theme')}</div>
+            </div>
           </div>
-          <div class="swatch-row">
-            ${t.dots.map(d => `<span class="swatch-dot" style="background:${d};"></span>`).join('')}
+          <div style="display:flex;align-items:center;gap:8px;">
+            <div class="swatch-row">
+              ${t.dots.map(d => `<span class="swatch-dot" style="background:${d};"></span>`).join('')}
+            </div>
+            <span class="badge ${k === currentTheme ? 'live' : ''}" style="font-size:0.65rem;padding:2px 6px;">${k === currentTheme ? 'ACTIVE' : 'SELECT'}</span>
           </div>
         </div>
       `).join('');
@@ -2176,8 +2400,14 @@
       if (!grid) return;
       grid.innerHTML = Object.entries(FONT_OPTIONS).map(([k, f]) => `
         <div class="font-card ${k === currentFont ? 'active' : ''}" onclick="applyFont('${k}', true)">
-          <div style="font-weight:700;font-size:0.8rem;color:var(--text);">${esc(f.name)}</div>
-          <div style="font-family:${f.mono};font-size:0.7rem;color:var(--primary);margin-top:2px;">${esc(f.sample)}</div>
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <div style="display:flex;align-items:center;gap:10px;">
+              <span class="custom-radio ${k === currentFont ? 'checked' : ''}"></span>
+              <span style="font-weight:700;font-size:0.8rem;color:var(--text);">${esc(f.name)}</span>
+            </div>
+            <span class="badge ${k === currentFont ? 'live' : ''}" style="font-size:0.65rem;padding:2px 6px;">${k === currentFont ? 'ACTIVE' : 'SELECT'}</span>
+          </div>
+          <div style="font-family:${f.mono};font-size:0.7rem;color:var(--primary);margin-top:4px;padding-left:28px;">${esc(f.sample)}</div>
         </div>
       `).join('');
     }
@@ -2189,12 +2419,14 @@
       if (soundCheck) soundCheck.checked = soundAlertsEnabled;
       const scrollCheck = document.getElementById('setting-autoscroll-enabled');
       if (scrollCheck) scrollCheck.checked = autoScrollEnabled;
-      document.getElementById('theme-settings-modal').classList.add('open');
-      showToast('Settings', 'Theme & appearance panel opened', 'info', 2000);
+      const modal = document.getElementById('theme-settings-modal');
+      if (modal) modal.style.display = 'flex';
+      showToast('Appearance', 'Theme & typography settings opened', 'info', 2000);
     }
 
     function closeThemeSettingsModal() {
-      document.getElementById('theme-settings-modal').classList.remove('open');
+      const modal = document.getElementById('theme-settings-modal');
+      if (modal) modal.style.display = 'none';
     }
 
     function resetThemeDefaults() {
@@ -2339,7 +2571,7 @@
             body: message,
             icon: "https://prism.shoonya.com/favicon.ico"
           });
-        } catch (e) {}
+        } catch (e) { }
       }
     }
 
@@ -2648,6 +2880,17 @@
 
     // Auto-poll status every 1.5s
     setInterval(refreshStatus, 1500);
+
+        // Escape key listener for modals and drawer
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        closeThemeSettingsModal();
+        closeQuickOrderModal();
+        closeAccountSwitchModal();
+        const drawer = document.getElementById('notifications-drawer');
+        if (drawer) drawer.style.display = 'none';
+      }
+    });
 
     // Initial load
     document.addEventListener("DOMContentLoaded", () => {
