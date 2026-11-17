@@ -277,7 +277,13 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 12px;
+      gap: 8px;
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+    .topbar-main::-webkit-scrollbar {
+      display: none;
     }
 
     .brand {
@@ -318,10 +324,20 @@
     }
 
     .telemetry-pills {
-      display: flex;
+      display: inline-flex;
       align-items: center;
-      gap: 8px;
-      flex-wrap: wrap;
+      gap: 5px;
+      flex-wrap: nowrap !important;
+      white-space: nowrap !important;
+      flex-shrink: 0 !important;
+    }
+
+    .telemetry-pills .badge {
+      font-size: 0.68rem;
+      padding: 3px 8px;
+      white-space: nowrap !important;
+      flex-shrink: 0 !important;
+      line-height: 1.2;
     }
 
     .badge {
@@ -2899,7 +2915,7 @@
       });
     }
 
-    /* Radar Rendering */
+    /* Radar Rendering - In-Place DOM Updates to prevent picklists from collapsing on poll */
     function renderRadarCard(containerId, name, st, orbStart, orbEnd) {
       const el = document.getElementById(containerId);
       if (!el || !st) return;
@@ -2925,58 +2941,98 @@
       const lotSize = r.lot_size || (name === 'NIFTY' ? 65 : 30);
       const allocPct = r.alloc_pct || 50;
       const allocFund = r.alloc_fund || 0;
-      const activeEl = document.activeElement;
-      const userSelectedVal = (activeEl && activeEl.id === `lots-select-${name}`) ? activeEl.value : null;
-      const selVal = userSelectedVal ? parseInt(userSelectedVal) : currentLots;
-      const userSelectedProd = (activeEl && activeEl.id === `prod-select-${name}`) ? activeEl.value : null;
-      const selProd = userSelectedProd ? userSelectedProd : (currentProd === 'M' ? 'NRML' : 'MIS');
+      const selProd = currentProd === 'M' ? 'NRML' : 'MIS';
 
+      const lotsEl = document.getElementById(`lots-select-${name}`);
+      const prodEl = document.getElementById(`prod-select-${name}`);
+
+      // If already rendered, update text and state in-place without destroying the select elements!
+      if (lotsEl && prodEl && document.getElementById(`spot-ltp-${name}`)) {
+        document.getElementById(`radar-status-${name}`).innerHTML = statusBadge;
+        document.getElementById(`spot-ltp-${name}`).textContent = fmt(st.spot_ltp);
+        document.getElementById(`orh-${name}`).textContent = fmt(st.orh);
+        document.getElementById(`orl-${name}`).textContent = fmt(st.orl);
+        document.getElementById(`range-pct-${name}`).textContent = st.range_pct !== null && st.range_pct !== undefined ? fmt(st.range_pct) + "%" : "--";
+        document.getElementById(`vwap-${name}`).textContent = fmt(st.vwap);
+        document.getElementById(`rsi-${name}`).textContent = fmt(st.rsi);
+        document.getElementById(`readiness-pct-${name}`).textContent = (r.readiness_pct ?? 0) + '%';
+        document.getElementById(`progress-fill-${name}`).style.width = (r.readiness_pct ?? 0) + '%';
+        document.getElementById(`gates-row-${name}`).innerHTML = gates;
+        document.getElementById(`alloc-tag-${name}`).textContent = `Alloc: ${allocPct}% (₹${fmt(allocFund)})`;
+        document.getElementById(`est-margin-${name}`).textContent = '₹' + fmt(r.est_margin || 0);
+        document.getElementById(`atm-premium-${name}`).textContent = `(@ ₹${fmt(r.atm_premium || 0)} ATM)`;
+        document.getElementById(`candidate-ce-${name}`).textContent = esc(r.candidate_ce || '--');
+        const bannerEl = document.getElementById(`radar-banner-${name}`);
+        if (bannerEl) {
+          bannerEl.textContent = r.radar_summary || ('Waiting for ' + endT + ' ORB lock.');
+          bannerEl.className = 'radar-banner ' + (isImm ? 'imminent' : '');
+        }
+
+        // Only sync select value if user is not currently focusing or interacting with it
+        if (document.activeElement !== lotsEl && !lotsEl.matches(':focus') && lotsEl.dataset.interacting !== 'true') {
+          if (lotsEl.value !== String(currentLots)) lotsEl.value = String(currentLots);
+        }
+        if (document.activeElement !== prodEl && !prodEl.matches(':focus') && prodEl.dataset.interacting !== 'true') {
+          if (prodEl.value !== selProd) prodEl.value = selProd;
+        }
+        return;
+      }
+
+      // First-time render: build DOM structure with persistent element IDs
       el.innerHTML = `
         <div class="section-title">
           <span>${esc(name)} Spot &amp; Auto-Order Radar</span>
-          ${statusBadge}
+          <span id="radar-status-${name}">${statusBadge}</span>
         </div>
         <div class="kv-grid">
-          <div class="kv"><small>Spot LTP</small><strong>${fmt(st.spot_ltp)}</strong></div>
-          <div class="kv"><small>ORH (${startT}-${endT})</small><strong>${fmt(st.orh)}</strong></div>
-          <div class="kv"><small>ORL (${startT}-${endT})</small><strong>${fmt(st.orl)}</strong></div>
-          <div class="kv"><small>Range %</small><strong>${st.range_pct !== null && st.range_pct !== undefined ? fmt(st.range_pct) + "%" : "--"}</strong></div>
-          <div class="kv"><small>Intraday VWAP</small><strong>${fmt(st.vwap)}</strong></div>
-          <div class="kv"><small>Wilder RSI(14)</small><strong>${fmt(st.rsi)}</strong></div>
+          <div class="kv"><small>Spot LTP</small><strong id="spot-ltp-${name}">${fmt(st.spot_ltp)}</strong></div>
+          <div class="kv"><small>ORH (${startT}-${endT})</small><strong id="orh-${name}">${fmt(st.orh)}</strong></div>
+          <div class="kv"><small>ORL (${startT}-${endT})</small><strong id="orl-${name}">${fmt(st.orl)}</strong></div>
+          <div class="kv"><small>Range %</small><strong id="range-pct-${name}">${st.range_pct !== null && st.range_pct !== undefined ? fmt(st.range_pct) + "%" : "--"}</strong></div>
+          <div class="kv"><small>Intraday VWAP</small><strong id="vwap-${name}">${fmt(st.vwap)}</strong></div>
+          <div class="kv"><small>Wilder RSI(14)</small><strong id="rsi-${name}">${fmt(st.rsi)}</strong></div>
         </div>
         <div style="display:flex;justify-content:space-between;font-size:0.72rem;color:var(--muted);margin-bottom:2px;">
-          <span>5-Gate Auto-Trigger Readiness</span><strong>${r.readiness_pct ?? 0}%</strong>
+          <span>5-Gate Auto-Trigger Readiness</span><strong id="readiness-pct-${name}">${r.readiness_pct ?? 0}%</strong>
         </div>
-        <div class="progress-wrap"><div class="progress-fill" style="width:${r.readiness_pct ?? 0}%"></div></div>
-        <div class="gates-row">${gates}</div>
+        <div class="progress-wrap"><div id="progress-fill-${name}" class="progress-fill" style="width:${r.readiness_pct ?? 0}%"></div></div>
+        <div id="gates-row-${name}" class="gates-row">${gates}</div>
 
         <!-- Position Sizing & Order Setup Box -->
         <div style="margin:8px 0;padding:8px 10px;background:var(--surface-alt);border:1px solid var(--border);border-radius:var(--radius-sm);display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px;font-size:0.75rem;">
           <div style="display:flex;align-items:center;flex-wrap:wrap;gap:8px;">
             <div style="display:flex;align-items:center;gap:4px;">
               <span style="color:var(--muted);font-weight:600;">Lots:</span>
-              <select id="lots-select-${name}" onchange="updateIndexLots('${esc(name)}', this.value)" style="background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:3px 6px;font-size:0.75rem;cursor:pointer;">
-                ${[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(n => `<option value="${n}" ${n === selVal ? 'selected' : ''}>${n} lot${n > 1 ? 's' : ''} (${n * lotSize} qty)${n === dynamicLots ? ' [Dynamic]' : ''}</option>`).join('')}
+              <select id="lots-select-${name}" 
+                onfocus="this.dataset.interacting='true'"
+                onblur="this.dataset.interacting='false'"
+                onchange="this.dataset.interacting='false'; updateIndexLots('${esc(name)}', this.value)" 
+                style="background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:3px 6px;font-size:0.75rem;cursor:pointer;">
+                ${[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(n => `<option value="${n}" ${n === currentLots ? 'selected' : ''}>${n} lot${n > 1 ? 's' : ''} (${n * lotSize} qty)${n === dynamicLots ? ' [Dynamic]' : ''}</option>`).join('')}
               </select>
             </div>
             <div style="display:flex;align-items:center;gap:4px;">
               <span style="color:var(--muted);font-weight:600;">Type:</span>
-              <select id="prod-select-${name}" onchange="updateIndexProductType('${esc(name)}', this.value)" style="background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:3px 6px;font-size:0.75rem;cursor:pointer;">
+              <select id="prod-select-${name}" 
+                onfocus="this.dataset.interacting='true'"
+                onblur="this.dataset.interacting='false'"
+                onchange="this.dataset.interacting='false'; updateIndexProductType('${esc(name)}', this.value)" 
+                style="background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:3px 6px;font-size:0.75rem;cursor:pointer;">
                 <option value="NRML" ${selProd === 'NRML' ? 'selected' : ''}>NRML</option>
                 <option value="MIS" ${selProd === 'MIS' ? 'selected' : ''}>MIS</option>
               </select>
             </div>
-            <span style="font-size:0.72rem;color:var(--primary);background:var(--primary-soft);padding:2px 6px;border-radius:4px;">Alloc: ${allocPct}% (₹${fmt(allocFund)})</span>
+            <span id="alloc-tag-${name}" style="font-size:0.72rem;color:var(--primary);background:var(--primary-soft);padding:2px 6px;border-radius:4px;">Alloc: ${allocPct}% (₹${fmt(allocFund)})</span>
           </div>
           <div style="text-align:right;">
             <span style="color:var(--muted);">Approx Margin: </span>
-            <strong style="color:var(--green);">₹${fmt(r.est_margin || 0)}</strong>
-            <small style="color:var(--muted);font-size:0.68rem;display:block;">(@ ₹${fmt(r.atm_premium || 0)} ATM)</small>
+            <strong id="est-margin-${name}" style="color:var(--green);">₹${fmt(r.est_margin || 0)}</strong>
+            <small id="atm-premium-${name}" style="color:var(--muted);font-size:0.68rem;display:block;">(@ ₹${fmt(r.atm_premium || 0)} ATM)</small>
           </div>
         </div>
 
         <div style="font-size:0.74rem;color:var(--muted);display:flex;justify-content:space-between;align-items:center;margin-top:6px;">
-          <span>Candidate: <strong style="color:var(--text);">${esc(r.candidate_ce || '--')}</strong></span>
+          <span>Candidate: <strong id="candidate-ce-${name}" style="color:var(--text);">${esc(r.candidate_ce || '--')}</strong></span>
           <div style="display:flex;gap:4px;">
             <button class="btn-primary" onclick="openQuickOrderModal('${esc(name)}', 'CE')" style="padding:3px 8px;font-size:0.7rem;" title="Open Manual Broker Order Ticket">
               <span>Manual Ticket</span>
@@ -2986,15 +3042,10 @@
             </button>
           </div>
         </div>
-        <div class="radar-banner ${isImm ? 'imminent' : ''}">
+        <div id="radar-banner-${name}" class="radar-banner ${isImm ? 'imminent' : ''}">
           ${esc(r.radar_summary || ('Waiting for ' + endT + ' ORB lock.'))}
         </div>
       `;
-      if (activeEl && activeEl.id === `lots-select-${name}`) {
-        document.getElementById(`lots-select-${name}`)?.focus();
-      } else if (activeEl && activeEl.id === `prod-select-${name}`) {
-        document.getElementById(`prod-select-${name}`)?.focus();
-      }
     }
 
     /* Core Status Poll and Rendering */
