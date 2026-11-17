@@ -337,6 +337,83 @@
       color: var(--amber);
     }
 
+    /* KPI Horizontal Tile Grid */
+    .kpi-tiles-grid {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 12px;
+      margin-bottom: 14px;
+      width: 100%;
+    }
+
+    @media (max-width: 1200px) {
+      .kpi-tiles-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+    }
+
+    @media (max-width: 768px) {
+      .kpi-tiles-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+
+    @media (max-width: 480px) {
+      .kpi-tiles-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .kpi-tile {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 14px 16px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      min-width: 0;
+      box-shadow: var(--shadow-sm);
+      transition: all 0.2s ease;
+    }
+
+    .kpi-tile:hover {
+      border-color: var(--primary);
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-glow);
+    }
+
+    .kpi-tile .tile-label {
+      font-size: 0.68rem;
+      font-family: 'JetBrains Mono', monospace;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 6px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .kpi-tile .tile-val {
+      font-size: 1.22rem;
+      font-weight: 700;
+      font-family: 'JetBrains Mono', monospace;
+      line-height: 1.2;
+      margin-bottom: 4px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .kpi-tile .tile-sub {
+      font-size: 0.72rem;
+      color: var(--muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
     /* 3-Column Cockpit Layout (Radar Tab) */
     .grid-radars {
       display: grid;
@@ -567,9 +644,11 @@
       align-items: center;
       gap: 8px;
     }
+
     .guide-modal-body h4:first-child {
       margin-top: 0;
     }
+
     .guide-box {
       background: var(--surface-alt);
       border: 1px solid var(--border);
@@ -577,6 +656,7 @@
       padding: 14px;
       margin: 12px 0 16px;
     }
+
     .guide-alert {
       border-left: 3px solid var(--primary);
       background: var(--primary-soft);
@@ -585,12 +665,14 @@
       margin: 12px 0;
       font-size: 0.82rem;
     }
+
     .guide-table {
       width: 100%;
       border-collapse: collapse;
       margin: 14px 0;
       font-size: 0.82rem;
     }
+
     .guide-table th {
       background: var(--surface-alt);
       border: 1px solid var(--border);
@@ -599,11 +681,13 @@
       font-weight: 700;
       color: var(--text);
     }
+
     .guide-table td {
       border: 1px solid var(--border);
       padding: 8px 10px;
       color: var(--text);
     }
+
     .guide-code {
       background: var(--surface-alt);
       border: 1px solid var(--border);
@@ -1131,7 +1215,8 @@
             </div>
             <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
               <div style="display:flex;gap:4px;">
-                <button class="filter-chip active" id="tf-all" onclick="setTradesModeFilter('ALL')">All Session Trades</button>
+                <button class="filter-chip active" id="tf-all" onclick="setTradesModeFilter('ALL')">All Session
+                  Trades</button>
                 <button class="filter-chip" id="tf-live" onclick="setTradesModeFilter('LIVE')">Live</button>
                 <button class="filter-chip" id="tf-paper" onclick="setTradesModeFilter('PAPER')">Paper</button>
               </div>
@@ -1185,32 +1270,109 @@
     <!-- TAB 4: ANALYTICS & BACKTEST -->
     <div id="pane-analytics-backtest" class="tab-pane" style="display:none;">
       <div style="display:flex;flex-direction:column;gap:14px;">
-        <!-- Top Backtest KPI Summary Cards -->
-        <div class="kpi-grid" style="grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));">
-          <div class="card card-kpi">
-            <span class="card-label">180D Net Alpha P&amp;L</span>
-            <div class="card-val pos">+₹2,88,379.11</div>
-            <div class="card-sub pos">+144.2% Return on ₹2L</div>
+        <!-- Top Backtest KPI Summary Tiles -->
+        <div class="kpi-tiles-grid">
+          <div class="kpi-tile">
+            <span class="tile-label">180D Net Alpha P&amp;L</span>
+            <div class="tile-val pos">+₹2,88,379.11</div>
+            <div class="tile-sub pos">+144.2% Return on ₹2L</div>
           </div>
-          <div class="card card-kpi">
-            <span class="card-label">Win Rate / Profit Factor</span>
-            <div class="card-val pos">41.7% / 2.05 PF</div>
-            <div class="card-sub">115 Winners | 165 Losers</div>
+          <div class="kpi-tile">
+            <span class="tile-label">Win Rate / Profit Factor</span>
+            <div class="tile-val pos">41.7% / 2.05 PF</div>
+            <div class="tile-sub">115 Winners | 165 Losers</div>
           </div>
-          <div class="card card-kpi">
-            <span class="card-label">Total Backtest Trades</span>
-            <div class="card-val">280 Trades</div>
-            <div class="card-sub">NIFTY: 151 | BNF: 129</div>
+          <div class="kpi-tile">
+            <span class="tile-label">Total Backtest Trades</span>
+            <div class="tile-val">280 Trades</div>
+            <div class="tile-sub">NIFTY: 151 | BNF: 129</div>
           </div>
-          <div class="card card-kpi">
-            <span class="card-label">Avg Trade Win / Loss</span>
-            <div class="card-val pos">₹3,410 / -₹1,245</div>
-            <div class="card-sub">Reward:Risk = 2.74:1</div>
+          <div class="kpi-tile">
+            <span class="tile-label">Avg Trade Win / Loss</span>
+            <div class="tile-val pos">₹3,410 / -₹1,245</div>
+            <div class="tile-sub">Reward:Risk = 2.74:1</div>
           </div>
-          <div class="card card-kpi">
-            <span class="card-label">Max Drawdown (180D)</span>
-            <div class="card-val neg">-₹18,450.00</div>
-            <div class="card-sub neg">-9.2% Drawdown Guard</div>
+          <div class="kpi-tile">
+            <span class="tile-label">Max Drawdown (180D)</span>
+            <div class="tile-val neg">-₹18,450.00</div>
+            <div class="tile-sub neg">-9.2% Drawdown Guard</div>
+          </div>
+        </div>
+
+        <!-- Improved Native Visual Performance & Equity Analytics Card -->
+        <div class="card" id="visual-analytics-card">
+          <div class="section-title">
+            <div style="display:flex;align-items:center;gap:8px;">
+              <span class="material-symbols-outlined" style="color:var(--primary);font-size:20px;">insights</span>
+              <span>180-Day Visual Equity Curve &amp; Monthly Alpha Matrix</span>
+              <span class="badge info">COMPOUNDING TRAJECTORY</span>
+            </div>
+            <div style="display:flex;gap:8px;align-items:center;">
+              <button onclick="toggleVisualAnalytics()" id="toggle-visual-btn" style="padding:4px 10px;font-size:0.74rem;">
+                <span class="material-symbols-outlined" style="font-size:15px;" id="toggle-visual-icon">visibility_off</span>
+                <span id="toggle-visual-text">Hide Charts</span>
+              </button>
+              <a class="btn" href="/backtest" target="_blank"
+                onclick="showToast('Analytics', 'Opening full standalone report...', 'info')">
+                <span class="material-symbols-outlined" style="font-size:15px;">open_in_new</span>
+                <span>Open Standalone Dashboard</span>
+              </a>
+            </div>
+          </div>
+
+          <div id="visual-analytics-body">
+            <!-- Native Canvas Equity Curve -->
+            <div style="position:relative;background:var(--surface-alt);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;margin-bottom:14px;">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+                <span style="font-size:0.75rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.04em;">Cumulative Strategy Equity (₹) • 180 Days (280 Trades)</span>
+                <span style="font-size:0.75rem;font-weight:700;color:var(--green);">Peak: +₹2,88,379</span>
+              </div>
+              <canvas id="backtest-equity-canvas" style="width:100%;height:180px;display:block;"></canvas>
+            </div>
+
+            <!-- Monthly Alpha Performance Grid (7 Real Months) -->
+            <div>
+              <div style="font-size:0.75rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:8px;">
+                Monthly Returns &amp; Win Rate Breakdown
+              </div>
+              <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(130px, 1fr));gap:8px;">
+                <div style="background:var(--surface-alt);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 10px;">
+                  <div style="font-size:0.68rem;color:var(--muted);text-transform:uppercase;">May 2026</div>
+                  <div style="font-size:0.95rem;font-weight:700;color:var(--green);font-family:'JetBrains Mono',monospace;">+₹38,624</div>
+                  <div style="font-size:0.68rem;color:var(--muted);">47.1% WR • 17 trades</div>
+                </div>
+                <div style="background:var(--surface-alt);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 10px;">
+                  <div style="font-size:0.68rem;color:var(--muted);text-transform:uppercase;">Jun 2026</div>
+                  <div style="font-size:0.95rem;font-weight:700;color:var(--green);font-family:'JetBrains Mono',monospace;">+₹73,249</div>
+                  <div style="font-size:0.68rem;color:var(--muted);">43.1% WR • 51 trades</div>
+                </div>
+                <div style="background:var(--surface-alt);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 10px;">
+                  <div style="font-size:0.68rem;color:var(--muted);text-transform:uppercase;">Jul 2026</div>
+                  <div style="font-size:0.95rem;font-weight:700;color:var(--secondary);font-family:'JetBrains Mono',monospace;">-₹23,285</div>
+                  <div style="font-size:0.68rem;color:var(--muted);">29.4% WR • Weekly Guard</div>
+                </div>
+                <div style="background:var(--surface-alt);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 10px;">
+                  <div style="font-size:0.68rem;color:var(--muted);text-transform:uppercase;">Aug 2026</div>
+                  <div style="font-size:0.95rem;font-weight:700;color:var(--green);font-family:'JetBrains Mono',monospace;">+₹28,829</div>
+                  <div style="font-size:0.68rem;color:var(--muted);">37.2% WR • 43 trades</div>
+                </div>
+                <div style="background:var(--surface-alt);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 10px;">
+                  <div style="font-size:0.68rem;color:var(--muted);text-transform:uppercase;">Sep 2026</div>
+                  <div style="font-size:0.95rem;font-weight:700;color:var(--green);font-family:'JetBrains Mono',monospace;">+₹48,152</div>
+                  <div style="font-size:0.68rem;color:var(--muted);">33.3% WR • 42 trades</div>
+                </div>
+                <div style="background:var(--surface-alt);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 10px;">
+                  <div style="font-size:0.68rem;color:var(--muted);text-transform:uppercase;">Oct 2026</div>
+                  <div style="font-size:0.95rem;font-weight:700;color:var(--green);font-family:'JetBrains Mono',monospace;">+₹96,931</div>
+                  <div style="font-size:0.68rem;color:var(--muted);">56.4% WR • 55 trades</div>
+                </div>
+                <div style="background:var(--surface-alt);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 10px;">
+                  <div style="font-size:0.68rem;color:var(--muted);text-transform:uppercase;">Nov 2026</div>
+                  <div style="font-size:0.95rem;font-weight:700;color:var(--green);font-family:'JetBrains Mono',monospace;">+₹25,878</div>
+                  <div style="font-size:0.68rem;color:var(--muted);">38.1% WR • 21 trades</div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -1224,13 +1386,17 @@
             </div>
             <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
               <div style="display:flex;gap:4px;">
-                <button class="filter-chip active" id="bt-filter-all" onclick="setBacktestFilter('ALL')">All (280)</button>
-                <button class="filter-chip" id="bt-filter-nifty" onclick="setBacktestFilter('NIFTY')">NIFTY (151)</button>
-                <button class="filter-chip" id="bt-filter-bnf" onclick="setBacktestFilter('BANKNIFTY')">BANKNIFTY (129)</button>
+                <button class="filter-chip active" id="bt-filter-all" onclick="setBacktestFilter('ALL')">All
+                  (280)</button>
+                <button class="filter-chip" id="bt-filter-nifty" onclick="setBacktestFilter('NIFTY')">NIFTY
+                  (151)</button>
+                <button class="filter-chip" id="bt-filter-bnf" onclick="setBacktestFilter('BANKNIFTY')">BANKNIFTY
+                  (129)</button>
                 <button class="filter-chip" id="bt-filter-win" onclick="setBacktestFilter('WIN')">Winners</button>
                 <button class="filter-chip" id="bt-filter-loss" onclick="setBacktestFilter('LOSS')">Losers</button>
               </div>
-              <input type="text" id="bt-search-input" placeholder="Search contract or date..." oninput="onBacktestSearch(this.value)"
+              <input type="text" id="bt-search-input" placeholder="Search contract or date..."
+                oninput="onBacktestSearch(this.value)"
                 style="padding:5px 9px;font-size:0.75rem;background:var(--surface-alt);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);width:170px;" />
               <a class="btn" href="/api/backtest/csv"
                 onclick="showToast('Export', 'Downloading complete 180D backtest CSV...', 'info')">
@@ -1239,25 +1405,9 @@
               </a>
             </div>
           </div>
-          <div class="table-wrap" id="backtest-trades-container" style="max-height: 420px; overflow-y: auto;">
+          <div class="table-wrap" id="backtest-trades-container" style="max-height: 480px; overflow-y: auto;">
             <div class="empty-msg">Loading 6-month backtest trades...</div>
           </div>
-        </div>
-
-        <!-- Visual Analytics & Equity Curve Chart -->
-        <div class="card">
-          <div class="section-title">
-            <div style="display:flex;align-items:center;gap:8px;">
-              <span class="material-symbols-outlined" style="color:var(--primary);font-size:20px;">insights</span>
-              <span>Visual Equity Curve, Monthly P&amp;L &amp; Drawdown Analytics</span>
-            </div>
-            <a class="btn btn-primary" href="/backtest" target="_blank"
-              onclick="showToast('Backtest', 'Opening full report in new window...', 'info')">
-              <span class="material-symbols-outlined" style="font-size:16px;">open_in_new</span>
-              <span>Open Standalone Dashboard</span>
-            </a>
-          </div>
-          <iframe src="/backtest" style="width:100%;height:680px;border:none;border-radius:var(--radius-md);"></iframe>
         </div>
       </div>
     </div>
@@ -1520,21 +1670,26 @@
   </div>
 
   <!-- MODAL 4: STRATEGY & USER GUIDE (docs/USER_GUIDE.md) -->
-  <div id="user-guide-modal" class="modal-backdrop" style="display:none;" onclick="if(event.target===this)closeUserGuideModal()">
-    <div class="modal-card" style="max-width: 980px; width: 94vw; max-height: 88vh; display:flex; flex-direction:column; padding:0;">
+  <div id="user-guide-modal" class="modal-backdrop" style="display:none;"
+    onclick="if(event.target===this)closeUserGuideModal()">
+    <div class="modal-card"
+      style="max-width: 980px; width: 94vw; max-height: 88vh; display:flex; flex-direction:column; padding:0;">
       <div class="modal-header" style="padding:16px 22px; margin-bottom:0; border-bottom:1px solid var(--border);">
         <div style="display:flex;align-items:center;gap:10px;">
           <span class="material-symbols-outlined" style="color:var(--primary);font-size:26px;">menu_book</span>
           <div>
-            <h3 style="margin:0;font-size:1.05rem;font-weight:700;font-family:var(--font-heading);">Shoonya Automated ORB Terminal — Strategy &amp; User Guide</h3>
-            <span style="font-size:0.72rem;color:var(--muted);">Master Alpha 15% Strategy Blueprint • Terminal Controls • Parameter Reference</span>
+            <h3 style="margin:0;font-size:1.05rem;font-weight:700;font-family:var(--font-heading);">Shoonya Automated
+              ORB Terminal — Strategy &amp; User Guide</h3>
+            <span style="font-size:0.72rem;color:var(--muted);">Master Alpha 15% Strategy Blueprint • Terminal Controls
+              • Parameter Reference</span>
           </div>
         </div>
         <button class="modal-close-btn" onclick="closeUserGuideModal()">&times;</button>
       </div>
 
       <!-- Quick Navigation Header Pills -->
-      <div style="display:flex;gap:6px;padding:10px 22px;background:var(--surface-alt);border-bottom:1px solid var(--border);flex-wrap:wrap;">
+      <div
+        style="display:flex;gap:6px;padding:10px 22px;background:var(--surface-alt);border-bottom:1px solid var(--border);flex-wrap:wrap;">
         <button class="filter-chip active" onclick="scrollGuideSec('guide-sec-1')">1. Strategy Blueprint</button>
         <button class="filter-chip" onclick="scrollGuideSec('guide-sec-2')">2. Parameters &amp; Risk</button>
         <button class="filter-chip" onclick="scrollGuideSec('guide-sec-3')">3. Terminal Controls</button>
@@ -1542,34 +1697,46 @@
         <button class="filter-chip" onclick="scrollGuideSec('guide-sec-5')">5. Daily Workflow</button>
       </div>
 
-      <div class="modal-body guide-modal-body" id="guide-modal-scrollable" style="overflow-y:auto;padding:22px;max-height:calc(88vh - 120px);">
+      <div class="modal-body guide-modal-body" id="guide-modal-scrollable"
+        style="overflow-y:auto;padding:22px;max-height:calc(88vh - 120px);">
         <!-- SECTION 1 -->
         <div id="guide-sec-1">
-          <h4><span class="material-symbols-outlined" style="font-size:20px;">account_tree</span> 1. Master Alpha 15% Strategy Blueprint</h4>
+          <h4><span class="material-symbols-outlined" style="font-size:20px;">account_tree</span> 1. Master Alpha 15%
+            Strategy Blueprint</h4>
           <p>
-            The <strong>Master Alpha 15% Strategy</strong> is calibrated from 180 days (6 months) of tick-by-tick market data across <strong>NIFTY</strong> and <strong>BANKNIFTY</strong> index options. It targets a consistent <strong>~15% monthly return</strong> on capital with strict automated risk fences.
+            The <strong>Master Alpha 15% Strategy</strong> is calibrated from 180 days (6 months) of tick-by-tick market
+            data across <strong>NIFTY</strong> and <strong>BANKNIFTY</strong> index options. It targets a consistent
+            <strong>~15% monthly return</strong> on capital with strict automated risk fences.
           </p>
 
           <div class="guide-code">
-09:15                      09:45             10:00                          13:15          15:15
-  |--------------------------|-----------------|------------------------------|--------------|
-      30-Min ORB Lock          Morning Shakeout      Institutional Scan Window    Decay Avoidance    EOD Square-Off
-     (Calculate ORH/ORL)        (No Orders)         (5-Gate Active Breakout)       (No New Orders)   (Auto Exit)
+            09:15 09:45 10:00 13:15 15:15
+            |--------------------------|-----------------|------------------------------|--------------|
+            30-Min ORB Lock Morning Shakeout Institutional Scan Window Decay Avoidance EOD Square-Off
+            (Calculate ORH/ORL) (No Orders) (5-Gate Active Breakout) (No New Orders) (Auto Exit)
           </div>
 
           <div class="guide-box">
             <strong style="color:var(--primary);display:block;margin-bottom:6px;">Core Execution Rules:</strong>
             <ul>
-              <li><strong>30-Minute Opening Range (09:15 – 09:45 IST)</strong>: Opening High (ORH) and Low (ORL) are calculated from six 5-minute candles. The opening range must measure between <strong>0.20% and 0.85%</strong>. Narrow ranges (&lt;0.20%) indicate sluggish drift; wide ranges (&gt;0.85%) indicate exhaustion and are skipped.</li>
-              <li><strong>Institutional Entry Scan Window (10:00 – 13:15 IST)</strong>: No entries permitted between 09:45 and 10:00 IST to avoid retail morning fakeouts. All breakout entries cease at <strong>13:15 IST</strong> to prevent afternoon theta decay traps.</li>
+              <li><strong>30-Minute Opening Range (09:15 – 09:45 IST)</strong>: Opening High (ORH) and Low (ORL) are
+                calculated from six 5-minute candles. The opening range must measure between <strong>0.20% and
+                  0.85%</strong>. Narrow ranges (&lt;0.20%) indicate sluggish drift; wide ranges (&gt;0.85%) indicate
+                exhaustion and are skipped.</li>
+              <li><strong>Institutional Entry Scan Window (10:00 – 13:15 IST)</strong>: No entries permitted between
+                09:45 and 10:00 IST to avoid retail morning fakeouts. All breakout entries cease at <strong>13:15
+                  IST</strong> to prevent afternoon theta decay traps.</li>
               <li><strong>5-Gate Breakout Verification</strong>:
                 <ol>
                   <li><em>Gate 1 (Sys/Slot)</em>: Engine active, market hours valid, session trades &lt; 2.</li>
                   <li><em>Gate 2 (India VIX &gt;= 12.0)</em>: Sufficient implied volatility for premium expansion.</li>
-                  <li><em>Gate 3 (Range 0.20%–0.85%)</em>: 30-min range inside statistically proven breakout corridor.</li>
+                  <li><em>Gate 3 (Range 0.20%–0.85%)</em>: 30-min range inside statistically proven breakout corridor.
+                  </li>
                   <li><em>Gate 4 (Spot Breakout + Intraday VWAP + PDC)</em>:
-                    <br>&bull; <strong>CE (Call)</strong>: 5M candle close &gt; ORH, close &gt; VWAP, and close &gt;= Previous Day Close (PDC).
-                    <br>&bull; <strong>PE (Put)</strong>: 5M candle close &lt; ORL, close &lt; VWAP, and close &lt;= Previous Day Close (PDC).
+                    <br>&bull; <strong>CE (Call)</strong>: 5M candle close &gt; ORH, close &gt; VWAP, and close &gt;=
+                    Previous Day Close (PDC).
+                    <br>&bull; <strong>PE (Put)</strong>: 5M candle close &lt; ORL, close &lt; VWAP, and close &lt;=
+                    Previous Day Close (PDC).
                   </li>
                   <li><em>Gate 5 (Wilder RSI Momentum)</em>:
                     <br>&bull; <strong>CE</strong>: Wilder RSI(14) &gt; 60.0.
@@ -1577,19 +1744,27 @@
                   </li>
                 </ol>
               </li>
-              <li><strong>ATM Weekly Contract Resolution</strong>: Automatically resolves the current nearest weekly expiry ATM strike (delta ~0.58). Default product type is <strong>NRML</strong> (switchable to MIS).</li>
+              <li><strong>ATM Weekly Contract Resolution</strong>: Automatically resolves the current nearest weekly
+                expiry ATM strike (delta ~0.58). Default product type is <strong>NRML</strong> (switchable to MIS).</li>
               <li><strong>Widened Stop Loss &amp; Step-Trailing Bracket</strong>:
-                <br>&bull; <strong>NIFTY</strong>: Initial SL = <strong>25.0 pts</strong>. At <strong>+20 pts</strong> gain, SL trailed to Cost (Breakeven). At <strong>+40 pts</strong>, <strong>50% booked</strong>, and trailing SL protects profits.
-                <br>&bull; <strong>BANKNIFTY</strong>: Initial SL = <strong>50.0 pts</strong>. At <strong>+40 pts</strong> gain, SL to Breakeven. At <strong>+80 pts</strong>, <strong>50% booked</strong>, remaining trail.
+                <br>&bull; <strong>NIFTY</strong>: Initial SL = <strong>25.0 pts</strong>. At <strong>+20 pts</strong>
+                gain, SL trailed to Cost (Breakeven). At <strong>+40 pts</strong>, <strong>50% booked</strong>, and
+                trailing SL protects profits.
+                <br>&bull; <strong>BANKNIFTY</strong>: Initial SL = <strong>50.0 pts</strong>. At <strong>+40
+                  pts</strong> gain, SL to Breakeven. At <strong>+80 pts</strong>, <strong>50% booked</strong>,
+                remaining trail.
               </li>
               <li><strong>Tuesday Expiry Sizing Booster</strong>:
-                <br>&bull; <strong>Tuesdays</strong>: Fund allocation boosts to <strong>75%</strong> (typically 3 lots) to leverage rapid expiry theta curves.
-                <br>&bull; <strong>Mon/Wed/Thu/Fri</strong>: Standard <strong>50%</strong> allocation (typically 2 lots).
+                <br>&bull; <strong>Tuesdays</strong>: Fund allocation boosts to <strong>75%</strong> (typically 3 lots)
+                to leverage rapid expiry theta curves.
+                <br>&bull; <strong>Mon/Wed/Thu/Fri</strong>: Standard <strong>50%</strong> allocation (typically 2
+                lots).
               </li>
               <li><strong>Risk Barrier &amp; Weekly Loss Guard</strong>:
                 <br>&bull; <strong>Max 2 Trades / Day</strong>.
                 <br>&bull; <strong>Max Daily Loss Barrier</strong>: -₹5,000 (triggers instant Kill-Switch).
-                <br>&bull; <strong>Weekly Loss Guard</strong>: 2 losses in a calendar week drops sizing to 1 lot or halts trading until next Monday.
+                <br>&bull; <strong>Weekly Loss Guard</strong>: 2 losses in a calendar week drops sizing to 1 lot or
+                halts trading until next Monday.
               </li>
             </ul>
           </div>
@@ -1599,7 +1774,8 @@
 
         <!-- SECTION 2 -->
         <div id="guide-sec-2">
-          <h4><span class="material-symbols-outlined" style="font-size:20px;">tune</span> 2. Settings &amp; Parameter Reference</h4>
+          <h4><span class="material-symbols-outlined" style="font-size:20px;">tune</span> 2. Settings &amp; Parameter
+            Reference</h4>
           <table class="guide-table">
             <thead>
               <tr>
@@ -1652,7 +1828,8 @@
 
         <!-- SECTION 3 -->
         <div id="guide-sec-3">
-          <h4><span class="material-symbols-outlined" style="font-size:20px;">dashboard</span> 3. Terminal Navigation &amp; Controls</h4>
+          <h4><span class="material-symbols-outlined" style="font-size:20px;">dashboard</span> 3. Terminal Navigation
+            &amp; Controls</h4>
           <div class="guide-box">
             <ul>
               <li><strong>Top Telemetry Bar</strong>:
@@ -1660,22 +1837,28 @@
                 <br>&bull; <code>Client ID Pill</code>: Click to open Multi-User Account Switcher.
                 <br>&bull; <code>OAuth Pill</code>: Click to trigger direct token handshake.
                 <br>&bull; <code>WS Pill</code>: Live tick stream status (ONLINE/OFFLINE).
-                <br>&bull; <code>Header Buttons</code>: Sound Chimes (🔊), Notification Bell (🔔), Theme &amp; Font Palette (🎨), Quick Order Ticket (⚡), Panic Kill-Switch.
+                <br>&bull; <code>Header Buttons</code>: Sound Chimes (🔊), Notification Bell (🔔), Theme &amp; Font
+                Palette (🎨), Quick Order Ticket (⚡), Panic Kill-Switch.
               </li>
               <li><strong>Tab 1: Radar &amp; Signals Cockpit</strong>:
-                <br>&bull; Real-time spot price, 09:15-09:45 ORH/ORL, 5-gate readiness progress bar, ATM contract candidate, and lot selector for NIFTY and BANKNIFTY.
-                <br>&bull; Live Strategy Execution Stream right beneath cockpit cards with auto-scroll and filter chips (All, Orders, Signals, Alerts).
+                <br>&bull; Real-time spot price, 09:15-09:45 ORH/ORL, 5-gate readiness progress bar, ATM contract
+                candidate, and lot selector for NIFTY and BANKNIFTY.
+                <br>&bull; Live Strategy Execution Stream right beneath cockpit cards with auto-scroll and filter chips
+                (All, Orders, Signals, Alerts).
               </li>
               <li><strong>Tab 2: Positions &amp; Books</strong>:
-                <br>&bull; Active bracket positions with real-time LTP, stop loss trigger, target price, and unrealized MTM P&amp;L.
+                <br>&bull; Active bracket positions with real-time LTP, stop loss trigger, target price, and unrealized
+                MTM P&amp;L.
                 <br>&bull; Completed Session Trades Ledger (Live / Paper session trades only) with CSV export.
               </li>
               <li><strong>Tab 3: Terminal Logs</strong>:
-                <br>&bull; Full-height audit console showing complete session logs with search, copy to clipboard, auto-scroll, and manual refresh.
+                <br>&bull; Full-height audit console showing complete session logs with search, copy to clipboard,
+                auto-scroll, and manual refresh.
               </li>
               <li><strong>Tab 4: 6-Month Backtest Analytics &amp; Alpha Optimization</strong>:
                 <br>&bull; Top KPI summary cards (+₹2.88L Net P&amp;L, 41.7% win rate, 2.05 profit factor).
-                <br>&bull; 6-Month Backtest Trades Ledger (all 280 trades) with index &amp; win/loss filters, search box, and complete 180D CSV download.
+                <br>&bull; 6-Month Backtest Trades Ledger (all 280 trades) with index &amp; win/loss filters, search
+                box, and complete 180D CSV download.
                 <br>&bull; Interactive Equity Curve &amp; Drawdown Charts embedded below the ledger.
               </li>
             </ul>
@@ -1686,7 +1869,8 @@
 
         <!-- SECTION 4 -->
         <div id="guide-sec-4">
-          <h4><span class="material-symbols-outlined" style="font-size:20px;">manage_accounts</span> 4. Multi-User Account Switching</h4>
+          <h4><span class="material-symbols-outlined" style="font-size:20px;">manage_accounts</span> 4. Multi-User
+            Account Switching</h4>
           <div class="guide-alert">
             You can connect and trade across multiple Shoonya accounts without restarting the server.
           </div>
@@ -1702,7 +1886,8 @@
               </ul>
             </li>
             <li>Click <strong>Authenticate &amp; Switch Session</strong>.</li>
-            <li>The terminal verifies credentials, fetches a fresh token, updates broker margins, and routes all subsequent trades to the active account.</li>
+            <li>The terminal verifies credentials, fetches a fresh token, updates broker margins, and routes all
+              subsequent trades to the active account.</li>
           </ol>
         </div>
 
@@ -1710,20 +1895,28 @@
 
         <!-- SECTION 5 -->
         <div id="guide-sec-5">
-          <h4><span class="material-symbols-outlined" style="font-size:20px;">checklist</span> 5. Daily Trading Workflow</h4>
+          <h4><span class="material-symbols-outlined" style="font-size:20px;">checklist</span> 5. Daily Trading Workflow
+          </h4>
           <div class="guide-box">
             <ul>
-              <li><strong>08:45 – 09:10 IST</strong>: Open terminal at <code>http://localhost:8000</code>. Verify <code>WS: ONLINE</code> and check available broker margin.</li>
-              <li><strong>09:15 – 09:45 IST</strong>: Strategy observes opening candles. 30-minute opening range is calculated. Badges switch to <code>ORB LOCKED</code> at 09:45 IST.</li>
-              <li><strong>09:45 – 10:00 IST</strong>: Strategy rests during morning retail shakeout. No orders are submitted.</li>
-              <li><strong>10:00 – 13:15 IST</strong>: Institutional scan window is active. When all 5 gates confirm on a 5-minute candle close, entry orders are placed automatically.</li>
-              <li><strong>Trade Execution</strong>: Stop Loss and Target 1 bracket orders are managed automatically. Audio chimes and notifications alert you of trade milestones.</li>
-              <li><strong>15:15 IST</strong>: Any open positions are squared off automatically. EOD Telegram report is dispatched.</li>
+              <li><strong>08:45 – 09:10 IST</strong>: Open terminal at <code>http://localhost:8000</code>. Verify
+                <code>WS: ONLINE</code> and check available broker margin.</li>
+              <li><strong>09:15 – 09:45 IST</strong>: Strategy observes opening candles. 30-minute opening range is
+                calculated. Badges switch to <code>ORB LOCKED</code> at 09:45 IST.</li>
+              <li><strong>09:45 – 10:00 IST</strong>: Strategy rests during morning retail shakeout. No orders are
+                submitted.</li>
+              <li><strong>10:00 – 13:15 IST</strong>: Institutional scan window is active. When all 5 gates confirm on a
+                5-minute candle close, entry orders are placed automatically.</li>
+              <li><strong>Trade Execution</strong>: Stop Loss and Target 1 bracket orders are managed automatically.
+                Audio chimes and notifications alert you of trade milestones.</li>
+              <li><strong>15:15 IST</strong>: Any open positions are squared off automatically. EOD Telegram report is
+                dispatched.</li>
             </ul>
           </div>
         </div>
       </div>
-      <div class="modal-actions" style="padding:14px 22px;border-top:1px solid var(--border);margin:0;display:flex;justify-content:flex-end;">
+      <div class="modal-actions"
+        style="padding:14px 22px;border-top:1px solid var(--border);margin:0;display:flex;justify-content:flex-end;">
         <button class="btn-primary" onclick="closeUserGuideModal()">Got It, Close Guide</button>
       </div>
     </div>
@@ -2510,6 +2703,7 @@
           const res = await resp.json();
           backtestTradesData = res.trades || [];
           renderBacktestTrades();
+          setTimeout(() => drawEquityCurve(backtestTradesData), 60);
         }
       } catch (err) {
         console.error("Failed to load backtest trades:", err);
@@ -2531,6 +2725,121 @@
     function onBacktestSearch(val) {
       backtestSearchQuery = (val || '').toLowerCase().trim();
       renderBacktestTrades();
+    }
+
+    function toggleVisualAnalytics() {
+      const card = document.getElementById('visual-analytics-body');
+      const text = document.getElementById('toggle-visual-text');
+      const icon = document.getElementById('toggle-visual-icon');
+      if (!card) return;
+      const isHidden = card.style.display === 'none';
+      card.style.display = isHidden ? 'block' : 'none';
+      if (text) text.textContent = isHidden ? 'Hide Charts' : 'Show Charts';
+      if (icon) icon.textContent = isHidden ? 'visibility_off' : 'visibility';
+      if (isHidden) {
+        setTimeout(() => drawEquityCurve(backtestTradesData), 50);
+      }
+    }
+
+    function drawEquityCurve(trades) {
+      const canvas = document.getElementById('backtest-equity-canvas');
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+
+      const rect = canvas.getBoundingClientRect();
+      const dpr = window.devicePixelRatio || 1;
+      const w = rect.width || 800;
+      const h = 180;
+      canvas.width = w * dpr;
+      canvas.height = h * dpr;
+      if (ctx.resetTransform) ctx.resetTransform();
+      ctx.scale(dpr, dpr);
+      ctx.clearRect(0, 0, w, h);
+
+      if (!trades || trades.length === 0) return;
+
+      let cum = 0;
+      const points = [0];
+      trades.forEach(t => {
+        cum += parseFloat(t.net ?? t.pnl ?? 0);
+        points.push(cum);
+      });
+
+      const maxVal = Math.max(...points, 20000);
+      const minVal = Math.min(...points, -5000);
+      const range = maxVal - minVal || 1;
+
+      const padX = 54;
+      const padY = 16;
+      const chartW = Math.max(10, w - padX - 16);
+      const chartH = Math.max(10, h - padY * 2);
+
+      const getX = i => padX + (i / (points.length - 1)) * chartW;
+      const getY = val => padY + chartH - ((val - minVal) / range) * chartH;
+      const zeroY = getY(0);
+
+      // Horizontal grid lines & labels
+      ctx.strokeStyle = "rgba(148, 163, 184, 0.12)";
+      ctx.lineWidth = 1;
+      ctx.setLineDash([3, 3]);
+      ctx.fillStyle = "rgba(148, 163, 184, 0.65)";
+      ctx.font = "10px monospace";
+      ctx.textAlign = "right";
+
+      const step = 50000;
+      for (let g = 0; g <= maxVal; g += step) {
+        const y = getY(g);
+        ctx.beginPath();
+        ctx.moveTo(padX, y);
+        ctx.lineTo(padX + chartW, y);
+        ctx.stroke();
+        ctx.fillText("₹" + Math.round(g / 1000) + "k", padX - 6, y + 3);
+      }
+
+      // Zero baseline
+      ctx.strokeStyle = "rgba(148, 163, 184, 0.35)";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(padX, zeroY);
+      ctx.lineTo(padX + chartW, zeroY);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Gradient area under curve
+      const grad = ctx.createLinearGradient(0, padY, 0, padY + chartH);
+      grad.addColorStop(0, "rgba(16, 185, 129, 0.28)");
+      grad.addColorStop(1, "rgba(16, 185, 129, 0.0)");
+
+      ctx.beginPath();
+      ctx.moveTo(getX(0), zeroY);
+      points.forEach((val, i) => ctx.lineTo(getX(i), getY(val)));
+      ctx.lineTo(getX(points.length - 1), zeroY);
+      ctx.closePath();
+      ctx.fillStyle = grad;
+      ctx.fill();
+
+      // Cumulative equity line
+      ctx.beginPath();
+      points.forEach((val, i) => {
+        if (i === 0) ctx.moveTo(getX(i), getY(val));
+        else ctx.lineTo(getX(i), getY(val));
+      });
+      ctx.strokeStyle = "#10b981";
+      ctx.lineWidth = 2.2;
+      ctx.lineJoin = "round";
+      ctx.stroke();
+
+      // Peak highlight dot
+      const lastX = getX(points.length - 1);
+      const lastY = getY(points[points.length - 1]);
+      ctx.beginPath();
+      ctx.arc(lastX, lastY, 4, 0, Math.PI * 2);
+      ctx.fillStyle = "#10b981";
+      ctx.fill();
+      ctx.strokeStyle = "#ffffff";
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
     }
 
     function renderBacktestTrades() {
