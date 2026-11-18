@@ -147,10 +147,26 @@ class RiskManager:
 
     def set_index_lots(self, index_name: str, lots: int) -> None:
         self.custom_lots[index_name] = max(1, int(lots))
+        self.get_dynamic_max_daily_loss()
 
     def set_index_product_type(self, index_name: str, product_type: str) -> None:
         norm = product_type.strip().upper()
         self.custom_product_types[index_name] = "M" if norm in {"M", "NRML", "NORMAL"} else "I"
+
+    def get_dynamic_max_daily_loss(self, now_dt: Optional[datetime] = None) -> float:
+        """Dynamic Max Daily Loss based on active/selected lot sizing:
+        - 1 lot base = ₹2,500
+        - 2 lots base (Mon-Fri) = ₹5,000
+        - 4 lots boosted (Tuesday / custom) = ₹10,000
+        Formula: max(active_lots) * 2,500.0
+        """
+        now = now_dt or datetime.now(IST)
+        nf_lots = self.custom_lots.get("NIFTY") or self.calculate_dynamic_lots("NIFTY", trade_time=now)
+        bnf_lots = self.custom_lots.get("BANKNIFTY") or self.calculate_dynamic_lots("BANKNIFTY", trade_time=now)
+        active_lots = max(1, int(nf_lots), int(bnf_lots))
+        limit = float(active_lots * 2500.0)
+        self.settings.max_daily_loss = limit
+        return limit
 
     def get_available_fund(self) -> float:
         """Return available fund for sizing: live broker terminal net/cash in LIVE mode, or local capital + realized PnL in PAPER mode."""
@@ -712,15 +728,16 @@ class RiskManager:
         return round(stt + exch_txn + sebi_stamp + gst, 2)
 
     def check_mtm_kill_switch(self) -> bool:
-        """Monitor live MTM every 1s; liquidate and halt if MTM <= -MAX_DAILY_LOSS."""
+        """Monitor live MTM every 1s; liquidate and halt if MTM <= -dynamic_max_daily_loss."""
         with self._lock:
             if self.halted:
                 return True
+            max_limit = self.get_dynamic_max_daily_loss()
             mtm = self.total_mtm()
-            if mtm > -abs(self.settings.max_daily_loss):
+            if mtm > -abs(max_limit):
                 return False
 
-            reason = f"DAILY_LOSS_LIMIT_BREACHED (MTM ₹{mtm:.2f} <= -₹{self.settings.max_daily_loss:.2f})"
+            reason = f"DAILY_LOSS_LIMIT_BREACHED (MTM ₹{mtm:.2f} <= -₹{max_limit:.2f})"
             logger.critical("KILL SWITCH TRIGGERED: %s", reason)
             self._liquidate_all_locked(exit_reason="KILL_SWITCH_MTM")
             self.halted = True

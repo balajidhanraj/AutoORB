@@ -482,10 +482,12 @@ class TradingSystemOrchestrator:
         with self._lock:
             self.custom_lots[idx] = val
             self.risk_manager.set_index_lots(idx, val)
+            dynamic_max_loss = self.risk_manager.get_dynamic_max_daily_loss()
+            self.settings.max_daily_loss = dynamic_max_loss
 
         spec = INDEX_SPECS[idx]
         tot_qty = spec.lot_size * val
-        msg = f"Updated {idx} to {val} lot(s) ({tot_qty} quantity)."
+        msg = f"Updated {idx} to {val} lot(s) ({tot_qty} quantity). Dynamic Max Daily Loss set to ₹{dynamic_max_loss:,.0f}."
         logger.info(msg)
         return True, msg
 
@@ -1038,7 +1040,7 @@ class TradingSystemOrchestrator:
             "realized_pnl": self.risk_manager.realized_pnl_today,
             "trades_taken": self.risk_manager.trades_taken_today,
             "max_trades": self.settings.max_trades_per_day,
-            "max_daily_loss": self.settings.max_daily_loss,
+            "max_daily_loss": self.risk_manager.get_dynamic_max_daily_loss(now_ist),
             "halted": self.risk_manager.halted,
             "halt_reason": self.risk_manager.halt_reason,
             "cached_contracts": self.mapper.cached_count,

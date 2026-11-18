@@ -1342,12 +1342,12 @@
         <div id="mtm-val" class="card-val {{ 'pos' if snapshot.mtm_pnl >= 0 else 'neg' }}">
           ₹{{ "%.2f"|format(snapshot.mtm_pnl) }}
         </div>
-        <div class="card-sub">Max Daily Loss: -₹{{ "%.0f"|format(snapshot.max_daily_loss) }}</div>
+        <div id="max-daily-loss-sub" class="card-sub">Max Daily Loss: -₹{{ "%.0f"|format(snapshot.max_daily_loss) }}</div>
       </div>
       <div class="card">
         <div class="card-label">Broker Net Available</div>
         <div id="kpi-brk-cash" class="card-val">₹0.00</div>
-        <div id="kpi-brk-status" class="card-sub">Syncing Shoonya limits...</div>
+        <div id="kpi-brk-status" class="card-sub">Net Avail: ₹0.00</div>
       </div>
       <div class="card">
         <div class="card-label">Strategy Capital</div>
@@ -3232,12 +3232,16 @@
       mtmEl.textContent = "₹" + fmt(data.mtm_pnl, 2);
       mtmEl.className = "card-val " + (data.mtm_pnl >= 0 ? "pos" : "neg");
 
+      const maxLossEl = document.getElementById("max-daily-loss-sub");
+      if (maxLossEl && data.max_daily_loss !== undefined && data.max_daily_loss !== null) {
+        maxLossEl.textContent = `Max Daily Loss: -₹${fmt(data.max_daily_loss, 0)}`;
+      }
+
       // Broker Telemetry
       const brk = data.broker || {};
-      document.getElementById("kpi-brk-cash").textContent = "₹" + fmt(brk.net_available || brk.cash || 0);
-      document.getElementById("kpi-brk-status").textContent = brk.connected
-        ? `Cash: ₹${fmt(brk.cash || 0)} | Used: ₹${fmt(brk.margin_used || 0)}`
-        : "Run OAuth / Connect Account";
+      const netAvail = fmt(brk.net_available || brk.cash || 0);
+      document.getElementById("kpi-brk-cash").textContent = "₹" + netAvail;
+      document.getElementById("kpi-brk-status").textContent = `Net Avail: ₹${netAvail}`;
       document.getElementById("kpi-capital").textContent = "₹" + fmt(data.capital || 0);
       document.getElementById("trades-val").textContent = `${data.trades_taken} / ${data.max_trades}`;
 

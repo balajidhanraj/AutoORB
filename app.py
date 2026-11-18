@@ -344,9 +344,11 @@ def render_dashboard_html(theme_name: Optional[str] = None) -> str:
     wg_halted = wg.get("is_halted", False)
     wg_sub = str(wg.get("status_text") or "0/2 Losses (ARMED)")
 
+    dyn_max_loss = float(snap.get('max_daily_loss') or orchestrator.risk_manager.get_dynamic_max_daily_loss())
+    net_avail_str = f"₹{_fmt_num(brk.get('net_available', 0.0))}"
     kpis = [
-        ("Live Total MTM", f"₹{mtm:.2f}", p["green"] if mtm >= 0 else p["red"], f"Max Loss: -₹{snap.get('max_daily_loss', 5000):.0f}"),
-        ("Broker Cash", f"₹{_fmt_num(brk.get('cash', 0.0))}", p["text"], f"Net Avail: ₹{_fmt_num(brk.get('net_available', 0.0))}"),
+        ("Live Total MTM", f"₹{mtm:.2f}", p["green"] if mtm >= 0 else p["red"], f"Max Loss: -₹{dyn_max_loss:.0f}"),
+        ("Broker Net Available", net_avail_str, p["text"], f"Net Avail: {net_avail_str}"),
         ("Strategy Capital", f"₹{_fmt_num(snap.get('capital', 0.0))}", p["text"], "Alloc: 50% (75% Tue)"),
         ("Trades Today", f"{snap.get('trades_taken', 0)} / {snap.get('max_trades', 2)}", p["text"], "Entry: 10:00-13:15"),
         ("Weekly Loss Guard", f"{wg_losses} / {wg_max}", p["red"] if wg_halted else (p["amber"] if wg_losses == 1 else p["green"]), wg_sub),

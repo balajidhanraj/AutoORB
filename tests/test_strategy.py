@@ -436,6 +436,31 @@ def test_mtm_kill_switch_and_csv_export(tmp_path: Path) -> None:
     assert "NIFTY" in content and "KILL_SWITCH_MTM" in content
 
 
+def test_dynamic_max_daily_loss(tmp_path: Path) -> None:
+    settings = _make_settings(tmp_path, mode="PAPER")
+    client = ShoonyaClient(settings)
+    mapper = InstrumentMapper(client)
+    rm = RiskManager(settings, client, mapper)
+
+    # Mon-Fri 2 lots base -> ₹5,000 max daily loss
+    mon_dt = _ist_dt(2026, 11, 16, 10, 30) # Monday
+    assert rm.get_dynamic_max_daily_loss(mon_dt) == 5000.0
+
+    # Tuesday 4 lots boosted -> ₹10,000 max daily loss
+    tue_dt = _ist_dt(2026, 11, 17, 10, 30) # Tuesday
+    assert rm.get_dynamic_max_daily_loss(tue_dt) == 10000.0
+
+    # Custom 1 lot selection -> ₹2,500 max daily loss
+    rm.set_index_lots("NIFTY", 1)
+    rm.set_index_lots("BANKNIFTY", 1)
+    assert rm.get_dynamic_max_daily_loss(mon_dt) == 2500.0
+    assert rm.get_dynamic_max_daily_loss(tue_dt) == 2500.0
+
+    # Custom 4 lots selection -> ₹10,000 max daily loss
+    rm.set_index_lots("NIFTY", 4)
+    assert rm.get_dynamic_max_daily_loss(mon_dt) == 10000.0
+
+
 # ---------------------------------------------------------------------------
 # 6. FastAPI Web Dashboard Endpoint Tests
 # ---------------------------------------------------------------------------
