@@ -65,9 +65,7 @@ class TradingSystemOrchestrator:
         self._loop_thread: Optional[threading.Thread] = None
         self._last_reconcile_monotonic: float = 0.0
 
-        self.custom_lots: Dict[str, int] = {
-            name: spec.default_lots for name, spec in INDEX_SPECS.items()
-        }
+        self.custom_lots: Dict[str, int] = {}
         self.custom_product_types: Dict[str, str] = {
             name: spec.product_type for name, spec in INDEX_SPECS.items()
         }
@@ -801,8 +799,9 @@ class TradingSystemOrchestrator:
         candidate_pe = "--"
         if spot_ltp is not None and spot_ltp > 0:
             strike = round_to_strike(spot_ltp, spec.strike_step)
-            candidate_ce = f"{index_name} {strike} CE ({total_qty} qty / {lots} lot [{product_type_label}])"
-            candidate_pe = f"{index_name} {strike} PE ({total_qty} qty / {lots} lot [{product_type_label}])"
+            lots_lbl = f"{lots} lot{'s' if lots > 1 else ''}"
+            candidate_ce = f"{index_name} {strike} CE ({total_qty} qty / {lots_lbl} [{product_type_label}])"
+            candidate_pe = f"{index_name} {strike} PE ({total_qty} qty / {lots_lbl} [{product_type_label}])"
 
         ce_score = sum([system_ready, vix_ready, orb_ready, ce_price_ok, ce_rsi_ok])
         pe_score = sum([system_ready, vix_ready, orb_ready, pe_price_ok, pe_rsi_ok])

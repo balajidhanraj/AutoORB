@@ -15,6 +15,7 @@ except ImportError:
         return "ok"
 
 import html
+import logging
 import os
 from typing import Any, Dict, Iterable, Optional, Tuple
 
@@ -23,6 +24,8 @@ import uvicorn
 from config.settings import load_settings
 from main import TradingSystemOrchestrator
 from ui.dashboard import create_app
+
+logger = logging.getLogger("app")
 
 try:
     import gradio as gr
@@ -214,6 +217,13 @@ def _render_radar_card(
     alloc_fund = float(r.get("alloc_fund", 0.0) or 0.0)
     dynamic_lots = r.get("dynamic_lots", lots)
 
+    lots_badge_style = f'background:{p["alt"]};border:1px solid {p["accent"]};padding:2px 6px;border-radius:4px;font-weight:700;'
+    dyn_badge = (
+        f'<span style="font-size:10px;padding:2px 6px;border-radius:4px;background:rgba(16,185,129,0.18);border:1px solid {p["green"]};color:{p["green"]};font-weight:700;">Tue 4 Lots Expiry Boost</span>'
+        if dynamic_lots == 4
+        else f'<span style="font-size:10px;padding:2px 6px;border-radius:4px;background:{p["alt"]};border:1px solid {p["border"]};color:{p["muted"]};">Standard 2 Lots</span>'
+    )
+
     return (
         f'<div style="background:{p["surface"]};border:1px solid {p["border"]};border-radius:14px;padding:15px;color:{p["text"]} !important;">'
         f'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;gap:8px;min-width:0;">'
@@ -228,8 +238,8 @@ def _render_radar_card(
         f'<div style="font-size:11px;color:{p["muted"]} !important;margin-bottom:6px;">Candidate: '
         f'<strong style="color:{p["text"]} !important;">{html.escape(str(r.get("candidate_ce", "--")))}</strong> | '
         f'<strong style="color:{p["text"]} !important;">{html.escape(str(r.get("candidate_pe", "--")))}</strong></div>'
-        f'<div style="font-size:11px;color:{p["muted"]} !important;margin-bottom:6px;display:flex;justify-content:space-between;flex-wrap:wrap;gap:4px;">'
-        f'<span>Position Size: <strong style="color:{p["text"]} !important;">{lots} lot{"s" if lots>1 else ""} ({tot_qty} qty)</strong></span>'
+        f'<div style="font-size:11px;color:{p["muted"]} !important;margin-bottom:6px;display:flex;justify-content:space-between;flex-wrap:wrap;align-items:center;gap:6px;">'
+        f'<span>Position Size: <strong style="{lots_badge_style}color:{p["text"]} !important;">{lots} lot{"s" if lots>1 else ""} ({tot_qty} qty)</strong> {dyn_badge}</span>'
         f'<span>Alloc: <strong style="color:{p["accent"]} !important;">{alloc_pct}% (₹{alloc_fund:,.0f})</strong></span>'
         f'<span>Type: <strong style="color:{p["accent"]} !important;">{prd_label}</strong></span>'
         f'<span>Approx Margin: <strong style="color:{p["green"]} !important;">₹{est_margin:,.2f}</strong> (@ ₹{atm_prem:.2f} ATM)</span></div>'
@@ -597,6 +607,24 @@ def change_entry_cutoff_ui(cutoff_choice: str) -> Tuple[str, str]:
     return banner, render_dashboard_html()
 
 
+def change_index_lots_ui(index_name: str, lots: Any) -> Tuple[str, str]:
+    """Update custom lots for an index (e.g. 2 lots Mon-Fri, 4 lots Tuesday)."""
+    try:
+        val = int(lots)
+    except (TypeError, ValueError):
+        val = 2
+    _ok, msg = orchestrator.set_index_lots(index_name, val)
+    banner = f"**{index_name} Position Sizing**: {msg}"
+    return banner, render_dashboard_html()
+
+
+def change_index_product_type_ui(index_name: str, product_type: str) -> Tuple[str, str]:
+    """Update order product type for an index (NRML or MIS)."""
+    _ok, msg = orchestrator.set_index_product_type(index_name, product_type)
+    banner = f"**{index_name} Product Type**: {msg}"
+    return banner, render_dashboard_html()
+
+
 def refresh_dashboard() -> str:
     """Return the latest HTML snapshot for periodic Gradio timer updates."""
     return render_dashboard_html()
@@ -663,6 +691,34 @@ def build_gradio_demo() -> Any:
             mode_btn = gr.Button("Toggle PAPER / LIVE")
             refresh_btn = gr.Button("Refresh Snapshot")
             kill_btn = gr.Button("PANIC KILL SWITCH", variant="stop")
+
+        with gr.Row():
+            with gr.Accordion("Index Position Sizing & Lot Selection (NIFTY & BANKNIFTY)", open=True):
+                gr.Markdown(
+                    "**Risk Allocation Rule**: 2 Lots (Default Mon/Wed/Thu/Fri) • **4 Lots (Tuesday Expiry Boost)**. "
+                    "Use the controls below to customize active lots or product type for each instrument:"
+                )
+                with gr.Row():
+                    nifty_lots_sel = gr.Dropdown(
+                        choices=[1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+                        value=orchestrator.custom_lots.get("NIFTY") or orchestrator.risk_manager.calculate_dynamic_lots("NIFTY"),
+                        label="NIFTY Lots (65 qty/lot)",
+                    )
+                    nifty_prod_sel = gr.Dropdown(
+                        choices=["NRML", "MIS"],
+                        value="NRML" if orchestrator.custom_product_types.get("NIFTY", "M") == "M" else "MIS",
+                        label="NIFTY Product Type",
+                    )
+                    bnf_lots_sel = gr.Dropdown(
+                        choices=[1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+                        value=orchestrator.custom_lots.get("BANKNIFTY") or orchestrator.risk_manager.calculate_dynamic_lots("BANKNIFTY"),
+                        label="BANKNIFTY Lots (30 qty/lot)",
+                    )
+                    bnf_prod_sel = gr.Dropdown(
+                        choices=["NRML", "MIS"],
+                        value="NRML" if orchestrator.custom_product_types.get("BANKNIFTY", "M") == "M" else "MIS",
+                        label="BANKNIFTY Product Type",
+                    )
 
         with gr.Row():
             with gr.Accordion("Add / Update Strategy Capital & Real Funds", open=False):
@@ -766,6 +822,30 @@ def build_gradio_demo() -> Any:
             outputs=[status_banner, dashboard_html],
             api_name="connect_account",
         )
+        nifty_lots_sel.change(
+            fn=lambda val: change_index_lots_ui("NIFTY", val),
+            inputs=[nifty_lots_sel],
+            outputs=[status_banner, dashboard_html],
+            api_name="change_nifty_lots",
+        )
+        nifty_prod_sel.change(
+            fn=lambda val: change_index_product_type_ui("NIFTY", val),
+            inputs=[nifty_prod_sel],
+            outputs=[status_banner, dashboard_html],
+            api_name="change_nifty_prod",
+        )
+        bnf_lots_sel.change(
+            fn=lambda val: change_index_lots_ui("BANKNIFTY", val),
+            inputs=[bnf_lots_sel],
+            outputs=[status_banner, dashboard_html],
+            api_name="change_banknifty_lots",
+        )
+        bnf_prod_sel.change(
+            fn=lambda val: change_index_product_type_ui("BANKNIFTY", val),
+            inputs=[bnf_prod_sel],
+            outputs=[status_banner, dashboard_html],
+            api_name="change_banknifty_prod",
+        )
         gr.Timer(2.0).tick(fn=refresh_dashboard, outputs=[dashboard_html])
 
     return blocks
@@ -776,18 +856,24 @@ demo = build_gradio_demo()
 
 if __name__ == "__main__":
     try:
-        if demo is not None:
-            server_port = int(
-                os.getenv("PORT") or os.getenv("GRADIO_SERVER_PORT") or settings.ui_port or 7860
-            )
-            demo.launch(server_name="0.0.0.0", server_port=server_port)
-        else:
-            fastapi_app = create_app(orchestrator)
-            uvicorn.run(
-                fastapi_app,
-                host=settings.ui_host,
-                port=settings.ui_port,
-                log_level="info",
-            )
+        fastapi_app = create_app(orchestrator)
+        server_port = int(
+            os.getenv("PORT") or os.getenv("GRADIO_SERVER_PORT") or settings.ui_port or 7860
+        )
+        app_to_run = fastapi_app
+        if demo is not None and gr is not None:
+            try:
+                app_to_run = gr.mount_gradio_app(fastapi_app, demo, path="/gradio")
+                logger.info("Mounted Gradio app at /gradio; root / serves Obsidian Velocity Cockpit.")
+            except Exception as e:
+                logger.warning("Could not mount Gradio onto FastAPI app: %s; serving FastAPI directly", e)
+                app_to_run = fastapi_app
+
+        uvicorn.run(
+            app_to_run,
+            host="0.0.0.0",
+            port=server_port,
+            log_level="info",
+        )
     finally:
         orchestrator.stop()

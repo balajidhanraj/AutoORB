@@ -172,28 +172,21 @@ class RiskManager:
     def calculate_dynamic_lots(
         self,
         index_name: str,
-        option_ltp: float,
+        option_ltp: float = 0.0,
         trade_time: Optional[datetime] = None,
     ) -> int:
-        """Dynamic position sizing based on available funds and day-of-week allocation:
-        - Tuesday (expiry alpha): 75% of available funds
-        - Mon / Wed / Thu / Fri: 50% of available funds
-        - Lots = max(1, int(allocated_fund // (option_ltp * lot_size)))
+        """Position sizing based on institutional day rule:
+        - Tuesday (expiry alpha booster): 4 lots for both NIFTY and BANKNIFTY
+        - Mon / Wed / Thu / Fri: 2 lots (BNF - 2 lots, NF - 2 lots)
         """
         spec = INDEX_SPECS.get(index_name)
         if not spec:
             return 1
         now_dt = trade_time or datetime.now(IST)
         is_tuesday = (now_dt.weekday() == 1)
-        alloc_pct = 0.75 if is_tuesday else 0.50
-        fund = self.get_available_fund()
-        alloc_fund = fund * alloc_pct
-        lot_size = spec.lot_size
-        cost_per_lot = float(option_ltp) * float(lot_size)
-        if cost_per_lot <= 0:
-            return spec.default_lots
-        calculated = int(alloc_fund // cost_per_lot)
-        return max(1, calculated)
+        if is_tuesday:
+            return 4
+        return spec.default_lots
 
     def get_weekly_guard_status(self, check_time: Optional[datetime] = None) -> Dict[str, Any]:
         """Return current calendar week loss count and circuit breaker status."""

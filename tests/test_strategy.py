@@ -774,9 +774,9 @@ def test_master_alpha_strategy_pillars(tmp_path: Path) -> None:
     mapper = InstrumentMapper(client)
     rm = RiskManager(settings, client, mapper)
 
-    # 1. Test Dynamic Position Sizing based on available funds:
-    # Tuesday: 75% allocation -> 150,000 / (200 * 65) = 11 lots (715 qty)
-    # Mon-Fri: 50% allocation -> 100,000 / (200 * 65) = 7 lots (455 qty)
+    # 1. Test Day-based Position Sizing rule:
+    # Tuesday: 4 lots (260 qty for NIFTY, 120 qty for BNF)
+    # Mon-Fri: 2 lots (130 qty for NIFTY, 60 qty for BNF)
     tuesday_signal = ORBSignal(
         index_name="NIFTY",
         signal_type="CE",
@@ -789,13 +789,13 @@ def test_master_alpha_strategy_pillars(tmp_path: Path) -> None:
         india_vix=15.0,
     )
     tue_lots = rm.calculate_dynamic_lots("NIFTY", 200.0, tuesday_signal.candle_time)
-    assert tue_lots == 11
+    assert tue_lots == 4
     mon_lots = rm.calculate_dynamic_lots("NIFTY", 200.0, _ist_dt(2026, 11, 16, 10, 30))
-    assert mon_lots == 7
+    assert mon_lots == 2
 
     pos = rm.execute_entry(tuesday_signal, option_ltp=200.0)
     assert pos is not None
-    assert pos.initial_qty == 715
+    assert pos.initial_qty == 260
 
     # 2. Test Weekly Circuit Breaker
     # Close first trade with a loss
