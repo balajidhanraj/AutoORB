@@ -856,24 +856,27 @@ demo = build_gradio_demo()
 
 if __name__ == "__main__":
     try:
-        fastapi_app = create_app(orchestrator)
         server_port = int(
             os.getenv("PORT") or os.getenv("GRADIO_SERVER_PORT") or settings.ui_port or 7860
         )
-        app_to_run = fastapi_app
-        if demo is not None and gr is not None:
-            try:
-                app_to_run = gr.mount_gradio_app(fastapi_app, demo, path="/gradio")
-                logger.info("Mounted Gradio app at /gradio; root / serves Obsidian Velocity Cockpit.")
-            except Exception as e:
-                logger.warning("Could not mount Gradio onto FastAPI app: %s; serving FastAPI directly", e)
-                app_to_run = fastapi_app
+        if demo is not None:
+            import inspect
 
-        uvicorn.run(
-            app_to_run,
-            host="0.0.0.0",
-            port=server_port,
-            log_level="info",
-        )
+            launch_kwargs: Dict[str, Any] = {
+                "server_name": "0.0.0.0",
+                "server_port": server_port,
+            }
+            sig = inspect.signature(demo.launch)
+            if "ssr_mode" in sig.parameters:
+                launch_kwargs["ssr_mode"] = False
+            demo.launch(**launch_kwargs)
+        else:
+            fastapi_app = create_app(orchestrator)
+            uvicorn.run(
+                fastapi_app,
+                host=settings.ui_host,
+                port=settings.ui_port,
+                log_level="info",
+            )
     finally:
         orchestrator.stop()
