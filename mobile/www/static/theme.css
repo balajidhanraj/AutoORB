@@ -62,6 +62,63 @@
   --c-amber: #ffb703;
   --c-glass-bg: rgba(10, 14, 23, 0.86);
   --c-glass-border: rgba(255, 255, 255, 0.08);
+
+  /* Responsive Typography Scale (calibrated for 15" laptops by default) */
+  --fs-display-lg: 1.75rem;
+  --fs-display-mobile: 1.375rem;
+  --fs-headline-md: 1.0625rem;
+  --fs-title-sm: 0.875rem;
+  --fs-body-md: 0.8125rem;
+  --fs-body-sm: 0.75rem;
+  --fs-mono-lg: 0.9375rem;
+  --fs-mono-md: 0.8125rem;
+  --fs-mono-sm: 0.6875rem;
+  --fs-label-caps: 0.625rem;
+  --ls-label-caps: 0.06em;
+}
+
+@media (min-width: 1600px) {
+  :root {
+    --fs-display-lg: 2.125rem;
+    --fs-headline-md: 1.25rem;
+    --fs-title-sm: 0.9375rem;
+    --fs-body-md: 0.875rem;
+    --fs-body-sm: 0.78125rem;
+    --fs-mono-lg: 1rem;
+    --fs-mono-md: 0.84375rem;
+    --fs-mono-sm: 0.71875rem;
+    --fs-label-caps: 0.65625rem;
+  }
+}
+
+@media (max-width: 480px) {
+  :root {
+    --fs-display-mobile: 1.3125rem;
+    --fs-headline-md: 1rem;
+    --fs-title-sm: 0.84375rem;
+    --fs-body-md: 0.8125rem;
+    --fs-body-sm: 0.71875rem;
+    --fs-mono-lg: 0.875rem;
+    --fs-mono-md: 0.78125rem;
+    --fs-mono-sm: 0.6875rem;
+    --fs-label-caps: 0.59375rem;
+    --ls-label-caps: 0.05em;
+  }
+}
+
+@media (max-width: 380px) {
+  :root {
+    --fs-display-mobile: 1.1875rem;
+    --fs-headline-md: 0.9375rem;
+    --fs-title-sm: 0.8125rem;
+    --fs-body-md: 0.78125rem;
+    --fs-body-sm: 0.6875rem;
+    --fs-mono-lg: 0.8125rem;
+    --fs-mono-md: 0.75rem;
+    --fs-mono-sm: 0.65625rem;
+    --fs-label-caps: 0.5625rem;
+    --ls-label-caps: 0.04em;
+  }
 }
 
 [data-theme="light"] {
@@ -132,14 +189,32 @@
   html, body {
     margin: 0;
     padding: 0;
+    max-width: 100%;
+    overflow-x: clip;
     background-color: rgb(var(--rgb-background));
     color: rgb(var(--rgb-on-surface));
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+    font-optical-sizing: auto;
+    -webkit-font-smoothing: antialiased;
   }
   body {
     overscroll-behavior: none;
     -webkit-tap-highlight-color: transparent;
   }
 }
+
+/* Fallback typography sizing so semantic font-* classes always scale cleanly on laptops & phones */
+.font-display-lg { font-size: var(--fs-display-lg); line-height: 1.15; letter-spacing: -0.025em; }
+.font-display-lg-mobile { font-size: var(--fs-display-mobile); line-height: 1.18; letter-spacing: -0.02em; }
+.font-headline-md { font-size: var(--fs-headline-md); line-height: 1.25; letter-spacing: -0.01em; }
+.font-title-sm { font-size: var(--fs-title-sm); line-height: 1.32; }
+.font-body-md { font-size: var(--fs-body-md); line-height: 1.45; }
+.font-body-sm { font-size: var(--fs-body-sm); line-height: 1.4; }
+.font-data-mono-lg { font-size: var(--fs-mono-lg); line-height: 1.25; letter-spacing: -0.02em; }
+.font-data-mono-md { font-size: var(--fs-mono-md); line-height: 1.3; letter-spacing: -0.01em; }
+.font-data-mono-sm { font-size: var(--fs-mono-sm); line-height: 1.35; }
+.font-label-caps { font-size: var(--fs-label-caps); line-height: 1.2; letter-spacing: var(--ls-label-caps); }
 
 .tabular-nums {
   font-variant-numeric: tabular-nums;
@@ -173,7 +248,16 @@
 }
 
 .pb-safe {
-  padding-bottom: env(safe-area-inset-bottom, 0px);
+  padding-bottom: max(env(safe-area-inset-bottom, 0px), 8px);
+}
+
+.m-main-safe {
+  padding-top: calc(3.5rem + env(safe-area-inset-top, 0px));
+  padding-bottom: calc(4.75rem + max(env(safe-area-inset-bottom, 0px), 8px));
+}
+
+.sheet-safe {
+  padding-bottom: calc(1rem + max(env(safe-area-inset-bottom, 0px), 12px));
 }
 
 .no-scrollbar::-webkit-scrollbar {

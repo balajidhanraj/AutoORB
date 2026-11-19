@@ -451,7 +451,13 @@ def create_app(orchestrator: Any) -> FastAPI:
 
     @app.get("/health")
     def health() -> JSONResponse:
-        return JSONResponse(content={"status": "ok", "mode": orchestrator.settings.mode})
+        return JSONResponse(
+            content={
+                "status": "ok",
+                "mode": orchestrator.settings.mode,
+                "env": os.getenv("APP_ENV", "development"),
+            }
+        )
 
     app.state.handlers = {
         "index": index,

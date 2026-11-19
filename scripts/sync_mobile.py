@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import html as html_lib
+import os
 import shutil
 from pathlib import Path
 
@@ -12,10 +14,24 @@ DEST_WWW = ROOT_DIR / "mobile" / "www"
 DEST_STATIC = DEST_WWW / "static"
 
 
-def sync_mobile_assets() -> Path:
+def sync_mobile_assets(
+    api_base: str | None = None,
+    prod_url: str | None = None,
+    dev_url: str | None = None,
+) -> Path:
     """Copy and adapt the mobile PWA shell & static assets into mobile/www."""
     if not SRC_HTML.exists():
         raise FileNotFoundError(f"Missing source template: {SRC_HTML}")
+
+    resolved_prod = (
+        prod_url if prod_url is not None else os.getenv("PROD_API_URL", "https://balajidhanraj-shoonya-orb.hf.space")
+    ).strip().rstrip("/")
+    resolved_dev = (
+        dev_url if dev_url is not None else os.getenv("DEV_API_URL", "https://balajidhanraj-shoonya-orb.hf.space")
+    ).strip().rstrip("/")
+    resolved_base = (
+        api_base if api_base is not None else os.getenv("ANDROID_API_BASE", resolved_prod)
+    ).strip().rstrip("/")
 
     DEST_WWW.mkdir(parents=True, exist_ok=True)
     if DEST_STATIC.exists():
@@ -23,6 +39,19 @@ def sync_mobile_assets() -> Path:
     shutil.copytree(SRC_STATIC, DEST_STATIC)
 
     html = SRC_HTML.read_text(encoding="utf-8")
+    # Inject default VPS Prod / Dev backend URLs for native Capacitor APK builds
+    html = html.replace(
+        '<meta name="autoorb-api-base" content=""/>',
+        f'<meta name="autoorb-api-base" content="{html_lib.escape(resolved_base, quote=True)}"/>',
+    )
+    html = html.replace(
+        '<meta name="autoorb-prod-api" content=""/>',
+        f'<meta name="autoorb-prod-api" content="{html_lib.escape(resolved_prod, quote=True)}"/>',
+    )
+    html = html.replace(
+        '<meta name="autoorb-dev-api" content=""/>',
+        f'<meta name="autoorb-dev-api" content="{html_lib.escape(resolved_dev, quote=True)}"/>',
+    )
     # Rewrite root-relative /static/ references so Capacitor WebView resolves local bundle files cleanly
     html = html.replace('href="/static/', 'href="./static/').replace('src="/static/', 'src="./static/')
     out_html = DEST_WWW / "index.html"

@@ -4,14 +4,17 @@
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Shoonya Automated ORB Terminal — Obsidian Velocity</title>
+  <link rel="icon" type="image/png" sizes="64x64" href="/static/favicon.png"/>
+  <link rel="icon" type="image/png" sizes="192x192" href="/static/icon-192.png"/>
   <link rel="icon" type="image/svg+xml" href="/static/icon.svg"/>
+  <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png"/>
   <link rel="preconnect" href="https://fonts.googleapis.com"/>
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
-  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet"/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet"/>
   <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"/>
-  <link rel="stylesheet" href="/static/theme.css?v=5"/>
+  <link rel="stylesheet" href="/static/theme.css?v=9"/>
   <script src="https://cdn.tailwindcss.com"></script>
-  <script src="/static/api_client.js?v=5"></script>
+  <script src="/static/api_client.js?v=9"></script>
   <script>
     if (window.tailwind && window.AUTOORB_TAILWIND_CONFIG) {
       window.tailwind.config = window.AUTOORB_TAILWIND_CONFIG;
@@ -20,410 +23,113 @@
 </head>
 <body class="bg-background font-body-md text-on-surface antialiased selection:bg-primary-container selection:text-on-primary-fixed min-h-screen">
 
-  <!-- PUBLIC DESKTOP LANDING PAGE (Shown when signed out / after logout or close login) -->
-  <section id="desk-landing-screen" class="min-h-screen w-full flex flex-col bg-surface text-on-surface">
-    <!-- Persistent Landing Glass Bar -->
-    <div class="sticky top-0 left-0 right-0 z-40 glass-header shadow-[0_2px_16px_rgba(0,0,0,0.45)]">
-      <div class="h-16 max-w-7xl mx-auto px-margin-desktop flex items-center justify-between gap-space-md">
-        <div class="flex items-center gap-space-md shrink-0">
-          <div class="flex items-center gap-space-xs">
-            <div class="w-8 h-8 rounded bg-primary-container flex items-center justify-center text-on-primary-fixed shadow-[0_0_12px_rgba(0,245,212,0.35)]">
-              <span class="material-symbols-outlined text-[18px] font-bold">terminal</span>
-            </div>
-            <span class="font-data-mono-md text-data-mono-md text-on-surface font-semibold tracking-tight">SHOONYA AUTOORB // OBSIDIAN VELOCITY</span>
-          </div>
-          <div class="hidden xl:flex items-center gap-space-xs px-2 py-0.5 rounded-full bg-surface-container-high">
-            <span class="w-1.5 h-1.5 rounded-full bg-primary-container animate-pulse"></span>
-            <span class="font-label-caps text-label-caps text-on-surface-variant uppercase">5-GATE ENGINE // LIVE</span>
-          </div>
+  <!-- PUBLIC DESKTOP LANDING PAGE (Minimal single-screen Obsidian Velocity portal; shown when signed out) -->
+  <section id="desk-landing-screen" class="min-h-[100dvh] w-full flex flex-col justify-between bg-surface text-on-surface relative overflow-hidden">
+    <!-- Subtle Ambient Glow -->
+    <div class="pointer-events-none absolute -top-40 left-1/2 -translate-x-1/2 w-[560px] h-[340px] rounded-full bg-primary-container/10 blur-[120px]"></div>
+
+    <!-- Minimal Glass Top Bar -->
+    <div class="sticky top-0 left-0 right-0 z-40 glass-header">
+      <div class="h-14 max-w-[1440px] mx-auto px-4 lg:px-6 flex items-center justify-between gap-3">
+        <div class="flex items-center gap-2.5 min-w-0">
+          <img src="/static/icon-192.png" alt="AutoORB" class="w-8 h-8 rounded-lg object-cover shadow-[0_0_12px_rgba(0,245,212,0.3)] shrink-0"/>
+          <span class="font-headline-md text-[16px] font-bold tracking-tight text-on-surface">AutoORB</span>
+          <span class="hidden sm:inline font-label-caps text-on-surface-variant uppercase tracking-widest">Shoonya ORB</span>
         </div>
 
-        <nav class="hidden lg:flex items-center gap-1 px-1.5 py-1 rounded-full bg-surface-container-low glass-panel">
-          <a href="#dl-strategy" class="px-space-md py-1.5 rounded-full font-body-sm text-body-sm bg-surface-container-highest text-on-surface font-medium transition-colors">Strategy Blueprint</a>
-          <a href="#dl-gates" class="px-space-md py-1.5 rounded-full font-body-sm text-body-sm text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-colors">5-Gate Engine</a>
-          <a href="#dl-backtest" class="px-space-md py-1.5 rounded-full font-body-sm text-body-sm text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-colors">Backtest Alpha</a>
-          <a href="#dl-security" class="px-space-md py-1.5 rounded-full font-body-sm text-body-sm text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-colors">Security &amp; Vault</a>
-          <a href="/app" class="px-space-md py-1.5 rounded-full font-body-sm text-body-sm text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-colors">Mobile App</a>
-        </nav>
-
-        <div class="flex items-center gap-space-sm shrink-0">
-          <button id="dl-theme-btn" type="button" class="flex items-center gap-1.5 px-space-sm py-1.5 rounded-full bg-surface-container-low glass-panel text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors cursor-pointer" title="Toggle Dark/Light Theme">
-            <span id="dl-theme-icon" class="material-symbols-outlined text-[16px]">light_mode</span>
-            <span id="dl-theme-lbl" class="font-label-caps text-label-caps">DARK</span>
+        <div class="flex items-center gap-2 shrink-0">
+          <button id="dl-theme-btn" type="button" class="flex items-center gap-1 px-2.5 py-1.5 rounded-full bg-surface-container-low glass-panel text-on-surface-variant hover:text-on-surface transition-colors cursor-pointer" title="Toggle Dark/Light Theme">
+            <span id="dl-theme-icon" class="material-symbols-outlined text-[15px]">light_mode</span>
+            <span id="dl-theme-lbl" class="font-label-caps">DARK</span>
           </button>
-          <button type="button" onclick="openModal('modal-auth')" class="hidden sm:inline-block px-space-sm py-1.5 font-body-sm text-body-sm text-on-surface-variant hover:text-on-surface transition-colors cursor-pointer">Sign In</button>
-          <button type="button" onclick="openModal('modal-auth')" class="flex items-center gap-1.5 px-space-md py-2 rounded-lg bg-primary-container text-on-primary-container font-label-caps text-label-caps uppercase tracking-wider font-bold shadow-[0_0_14px_rgba(0,245,212,0.35)] hover:opacity-90 transition-all cursor-pointer">
-            <span class="material-symbols-outlined text-[16px]">bolt</span>
-            <span>Launch Terminal</span>
+          <a href="/app" class="hidden sm:inline-flex items-center gap-1 px-2.5 py-1.5 rounded-full bg-surface-container-low glass-panel text-on-surface-variant hover:text-on-surface font-body-sm transition-colors">
+            <span class="material-symbols-outlined text-[15px]">smartphone</span>
+            <span>Mobile App</span>
+          </a>
+          <button type="button" onclick="openModal('modal-auth')" class="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-primary-container text-on-primary-container font-label-caps uppercase tracking-wider font-bold shadow-[0_0_14px_rgba(0,245,212,0.3)] hover:opacity-90 transition-all cursor-pointer">
+            <span>Sign In</span>
+            <span class="material-symbols-outlined text-[15px]">arrow_forward</span>
           </button>
         </div>
       </div>
     </div>
 
-    <!-- Top Telemetry Ribbon -->
-    <div class="w-full bg-surface-container-lowest border-b border-outline-variant/25 px-margin-desktop py-space-xs">
-      <div class="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-space-sm font-data-mono-sm text-data-mono-sm">
-        <div class="flex items-center gap-space-md text-on-surface-variant">
-          <span class="flex items-center gap-1.5 text-profit font-semibold">
-            <span class="w-2 h-2 rounded-full bg-primary-container animate-pulse"></span>
-            FEED: NSE_NFO // ZERO-DISCRETION ORB
-          </span>
-          <span class="hidden md:inline">|</span>
-          <span class="hidden md:inline text-on-surface">NIFTY 50 <span class="text-profit font-medium">(NSE:NIFTY)</span></span>
-          <span class="hidden lg:inline text-on-surface">BANKNIFTY <span class="text-profit font-medium">(NSE:BANKNIFTY)</span></span>
-          <span class="hidden xl:inline text-on-surface">FINVASIA <span class="text-profit font-medium">ZERO BROKERAGE</span></span>
+    <!-- Centered Aesthetic Hero -->
+    <div class="flex-1 flex items-center justify-center px-4 py-8 relative z-10">
+      <div class="max-w-2xl w-full text-center flex flex-col items-center gap-5">
+        <div class="w-16 h-16 rounded-2xl p-0.5 bg-gradient-to-br from-primary-container/50 to-transparent shadow-[0_0_32px_rgba(0,245,212,0.22)]">
+          <img src="/static/icon-192.png" alt="AutoORB Logo" class="w-full h-full rounded-[14px] object-cover"/>
         </div>
-        <div class="flex items-center gap-space-md text-on-surface-variant">
-          <span class="flex items-center gap-1 text-on-surface">
-            <span class="material-symbols-outlined text-[14px] text-profit">speed</span>
-            TICK-TO-TRADE: <strong class="text-profit font-semibold">18.4ms</strong>
-          </span>
-          <span class="hidden sm:inline">|</span>
-          <span class="hidden sm:inline text-on-surface-variant">GATE PROTOCOL: <span class="text-profit font-medium">ACTIVE [5/5]</span></span>
+
+        <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-surface-container-low glass-panel">
+          <span class="w-1.5 h-1.5 rounded-full bg-primary-container animate-pulse"></span>
+          <span class="font-label-caps text-profit uppercase font-bold tracking-wider">SHOONYA AUTOORB &bull; 5-GATE ENGINE</span>
         </div>
-      </div>
-    </div>
 
-    <!-- SECTION 1: SPLIT 2-COLUMN HERO -->
-    <div id="dl-strategy" class="relative w-full px-margin-desktop py-12 overflow-hidden bg-gradient-to-b from-surface via-surface-container-low/60 to-surface">
-      <div class="absolute -top-40 -left-40 w-96 h-96 rounded-full bg-primary-container/10 blur-[120px] pointer-events-none"></div>
-      <div class="absolute top-1/2 -right-40 w-96 h-96 rounded-full bg-secondary-container/10 blur-[140px] pointer-events-none"></div>
-
-      <div class="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-space-xl items-center relative z-10">
-        <!-- Left Column -->
-        <div class="lg:col-span-6 space-y-6">
-          <div class="inline-flex items-center gap-2 px-space-md py-1.5 rounded-full bg-surface-container-high glass-panel">
-            <span class="relative flex h-2 w-2">
-              <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary-container opacity-75"></span>
-              <span class="relative inline-flex rounded-full h-2 w-2 bg-primary-container"></span>
-            </span>
-            <span class="font-label-caps text-label-caps text-profit uppercase font-bold tracking-wider">5-GATE INSTITUTIONAL ENGINE // LIVE ON FINVASIA SHOONYA</span>
-          </div>
-
-          <h1 class="font-display-lg text-[36px] sm:text-[42px] leading-[1.1] font-bold text-on-surface tracking-tight">
-            Zero-Discretion Algorithmic Execution for <span class="text-profit underline decoration-primary-container/40 decoration-wavy underline-offset-8">Index Derivatives.</span>
+        <div class="space-y-2.5">
+          <h1 class="font-display-lg text-[32px] xl:text-[40px] leading-[1.1] font-bold text-on-surface tracking-tight">
+            Precision ORB Execution.
           </h1>
-
-          <p class="font-body-md text-body-md text-on-surface-variant max-w-xl leading-relaxed">
-            Automate Opening Range Breakouts across NIFTY &amp; BANKNIFTY with strict 5-gate confluence verification, WebSocket tick precision, automated half-risk ratchet stop loss, and encrypted multi-user session security.
+          <p class="font-body-md text-on-surface-variant max-w-lg mx-auto leading-relaxed">
+            Automated NIFTY &amp; BANKNIFTY Opening Range Breakouts on Finvasia Shoonya with disciplined risk guardrails.
           </p>
+        </div>
 
-          <div class="flex flex-wrap items-center gap-space-md pt-space-xs">
-            <button type="button" onclick="openModal('modal-auth')" class="flex items-center gap-2 px-6 py-3 rounded-lg bg-primary-container text-on-primary-container font-label-caps text-label-caps uppercase tracking-wider font-bold shadow-[0_4px_24px_rgba(0,245,212,0.35)] hover:opacity-90 transition-all cursor-pointer">
-              <span class="material-symbols-outlined text-[18px]">terminal</span>
-              <span>Launch Live Terminal &rarr;</span>
-            </button>
-            <a href="/download/apk" class="flex items-center gap-2 px-5 py-3 rounded-lg bg-surface-container-high hover:bg-surface-bright text-on-surface font-label-caps text-label-caps uppercase tracking-wider font-medium transition-colors glass-panel">
-              <span class="material-symbols-outlined text-[18px] text-profit">android</span>
-              <span>Download Android APK</span>
-            </a>
-            <a href="/app" class="flex items-center gap-1.5 px-4 py-3 rounded-lg bg-surface-container hover:bg-surface-container-high text-on-surface-variant hover:text-on-surface font-label-caps text-label-caps uppercase tracking-wider transition-colors glass-panel">
-              <span class="material-symbols-outlined text-[16px]">smartphone</span>
-              <span>Mobile Web UI</span>
-            </a>
+        <div class="flex flex-wrap items-center justify-center gap-2.5 pt-1">
+          <button type="button" onclick="openModal('modal-auth')" class="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary-container text-on-primary-container font-title-sm font-bold shadow-[0_4px_22px_rgba(0,245,212,0.32)] hover:opacity-90 transition-all cursor-pointer">
+            <span>Sign In to Terminal</span>
+            <span class="material-symbols-outlined text-[18px]">arrow_forward</span>
+          </button>
+          <a href="/download/apk" class="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-surface-container-low glass-panel hover:bg-surface-container text-on-surface font-title-sm font-semibold transition-colors">
+            <span class="material-symbols-outlined text-[17px] text-profit">android</span>
+            <span>Download APK</span>
+          </a>
+          <button type="button" onclick="openModal('modal-guide')" class="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-surface-container-low glass-panel hover:bg-surface-container text-on-surface-variant hover:text-on-surface font-title-sm transition-colors cursor-pointer">
+            <span class="material-symbols-outlined text-[17px]">menu_book</span>
+            <span>Strategy Guide</span>
+          </button>
+        </div>
+
+        <!-- Clean 4-Metric Glass Strip -->
+        <div class="w-full grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-2 tabular-nums">
+          <div class="p-3 rounded-xl bg-surface-container-low/90 glass-panel text-left">
+            <span class="font-label-caps text-on-surface-variant block">180D RETURN</span>
+            <span id="dl-bt-pnl" class="font-headline-md text-[19px] font-bold text-profit mt-0.5 block">+142.8%</span>
           </div>
-
-          <div class="pt-space-sm grid grid-cols-2 sm:grid-cols-4 gap-space-sm">
-            <div class="p-space-sm rounded-lg bg-surface-container-low glass-panel">
-              <div class="font-data-mono-sm text-data-mono-sm text-profit font-bold">&#8377;0 Brokerage</div>
-              <div class="font-body-sm text-body-sm text-on-surface-variant">API via Shoonya</div>
-            </div>
-            <div class="p-space-sm rounded-lg bg-surface-container-low glass-panel">
-              <div class="font-data-mono-sm text-data-mono-sm text-profit font-bold">Sub-20ms</div>
-              <div class="font-body-sm text-body-sm text-on-surface-variant">WebSocket Feed</div>
-            </div>
-            <div class="p-space-sm rounded-lg bg-surface-container-low glass-panel">
-              <div class="font-data-mono-sm text-data-mono-sm text-profit font-bold">5-Gate ORB</div>
-              <div class="font-body-sm text-body-sm text-on-surface-variant">Quant Verified</div>
-            </div>
-            <div class="p-space-sm rounded-lg bg-surface-container-low glass-panel">
-              <div class="font-data-mono-sm text-data-mono-sm text-profit font-bold">0% Discretion</div>
-              <div class="font-body-sm text-body-sm text-on-surface-variant">Pure Deterministic</div>
-            </div>
+          <div class="p-3 rounded-xl bg-surface-container-low/90 glass-panel text-left">
+            <span class="font-label-caps text-on-surface-variant block">WIN RATE</span>
+            <span id="dl-bt-wr" class="font-headline-md text-[19px] font-bold text-on-surface mt-0.5 block">68.4%</span>
+          </div>
+          <div class="p-3 rounded-xl bg-surface-container-low/90 glass-panel text-left">
+            <span class="font-label-caps text-on-surface-variant block">PROFIT FACTOR</span>
+            <span id="dl-bt-pf" class="font-headline-md text-[19px] font-bold text-on-surface mt-0.5 block">2.14</span>
+          </div>
+          <div class="p-3 rounded-xl bg-surface-container-low/90 glass-panel text-left">
+            <span class="font-label-caps text-on-surface-variant block">BROKERAGE</span>
+            <span class="font-headline-md text-[19px] font-bold text-profit mt-0.5 block">&#8377;0</span>
           </div>
         </div>
 
-        <!-- Right Column: Interactive ORB Breakout Preview Cockpit -->
-        <div class="lg:col-span-6">
-          <div class="p-space-lg rounded-2xl bg-surface-container glass-panel shadow-2xl space-y-space-md relative backdrop-blur-md overflow-hidden">
-            <div class="flex items-center justify-between pb-space-sm bg-surface-container-high -mx-space-lg -mt-space-lg px-space-lg pt-space-sm rounded-t-2xl border-b border-outline-variant/25">
-              <div class="flex items-center gap-space-xs">
-                <span class="w-2.5 h-2.5 rounded-full bg-secondary-container inline-block"></span>
-                <span class="w-2.5 h-2.5 rounded-full bg-tertiary-fixed-dim inline-block"></span>
-                <span class="w-2.5 h-2.5 rounded-full bg-primary-container inline-block"></span>
-                <span class="font-data-mono-sm text-data-mono-sm text-on-surface font-semibold ml-2">NIFTY 50 [ORB // CE BREAKOUT PREVIEW]</span>
-              </div>
-              <div class="flex items-center gap-1.5 px-2 py-0.5 rounded bg-primary-container/15 text-profit font-data-mono-sm text-data-mono-sm">
-                <span class="w-1.5 h-1.5 rounded-full bg-primary-container animate-ping"></span>
-                <span>ARMED: 09:30 IST</span>
-              </div>
-            </div>
-
-            <div class="p-space-md rounded-xl bg-surface-container-lowest glass-panel space-y-space-xs">
-              <div class="flex items-center justify-between font-label-caps text-label-caps text-on-surface-variant">
-                <span>15-MIN OPENING RANGE (09:15 - 09:30)</span>
-                <span class="text-profit font-bold">CORRIDOR: 0.34% &bull; OPTIMAL</span>
-              </div>
-              <div class="grid grid-cols-3 gap-space-sm pt-space-xs">
-                <div class="p-space-xs bg-surface-container-low rounded">
-                  <span class="font-label-caps text-label-caps text-on-surface-variant block">ORH (15M HIGH)</span>
-                  <span class="font-data-mono-lg text-data-mono-lg text-on-surface font-bold tabular-nums">24,182.00</span>
-                </div>
-                <div class="p-space-xs bg-surface-container-low rounded">
-                  <span class="font-label-caps text-label-caps text-on-surface-variant block">ORL (15M LOW)</span>
-                  <span class="font-data-mono-lg text-data-mono-lg text-on-surface font-bold tabular-nums">24,098.50</span>
-                </div>
-                <div class="p-space-xs bg-primary-container/20 rounded">
-                  <span class="font-label-caps text-label-caps text-profit block">BREAKOUT SPOT</span>
-                  <span class="font-data-mono-lg text-data-mono-lg text-profit font-bold flex items-center gap-1 tabular-nums">
-                    24,188.40 <span class="material-symbols-outlined text-[15px]">arrow_upward</span>
-                  </span>
-                </div>
-              </div>
-              <div class="pt-2">
-                <div class="w-full h-2 rounded-full bg-surface-container-high relative overflow-hidden">
-                  <div class="absolute left-[28%] right-[28%] top-0 bottom-0 bg-primary-container/20"></div>
-                  <div class="absolute left-[74%] top-0 bottom-0 w-3 h-full bg-primary-container shadow-[0_0_8px_rgba(0,245,212,0.8)]"></div>
-                </div>
-                <div class="flex justify-between font-data-mono-sm text-data-mono-sm text-on-surface-variant mt-1">
-                  <span>ORL 24,098.50</span>
-                  <span class="text-profit font-semibold">BREACH +6.40 pts</span>
-                  <span>ORH 24,182.00</span>
-                </div>
-              </div>
-            </div>
-
-            <div class="grid grid-cols-3 gap-space-xs font-data-mono-sm text-data-mono-sm">
-              <div class="p-space-sm rounded bg-surface-container-lowest glass-panel flex flex-col justify-between">
-                <span class="text-on-surface-variant">VOL SPIKE (20-EMA)</span>
-                <div class="flex items-center justify-between mt-1">
-                  <span class="text-on-surface font-bold">1.82x</span>
-                  <span class="text-profit text-[10px] bg-primary-container/15 px-1.5 py-0.5 rounded font-bold">PASS</span>
-                </div>
-              </div>
-              <div class="p-space-sm rounded bg-surface-container-lowest glass-panel flex flex-col justify-between">
-                <span class="text-on-surface-variant">VWAP &amp; PDC ALIGN</span>
-                <div class="flex items-center justify-between mt-1">
-                  <span class="text-on-surface font-bold">&gt; VWAP</span>
-                  <span class="text-profit text-[10px] bg-primary-container/15 px-1.5 py-0.5 rounded font-bold">PASS</span>
-                </div>
-              </div>
-              <div class="p-space-sm rounded bg-surface-container-lowest glass-panel flex flex-col justify-between">
-                <span class="text-on-surface-variant">WILDER RSI(14)</span>
-                <div class="flex items-center justify-between mt-1">
-                  <span class="text-on-surface font-bold">68.40</span>
-                  <span class="text-profit text-[10px] bg-primary-container/15 px-1.5 py-0.5 rounded font-bold">PASS</span>
-                </div>
-              </div>
-            </div>
-
-            <div class="p-space-md rounded-xl bg-surface-container-low glass-panel space-y-space-xs">
-              <div class="flex items-center justify-between font-label-caps text-label-caps">
-                <span class="text-on-surface-variant">HALF-RISK BRACKET // 50% TARGET RATCHET</span>
-                <span class="text-profit font-bold">R-MULTIPLE EXPANSION (+1.95R)</span>
-              </div>
-              <div class="grid grid-cols-4 gap-2 pt-1 font-data-mono-sm text-data-mono-sm tabular-nums">
-                <div class="p-2 rounded bg-surface-container-lowest"><div class="text-on-surface-variant text-[10px]">ENTRY</div><div class="text-on-surface font-bold">&#8377;124.50</div></div>
-                <div class="p-2 rounded bg-surface-container-lowest"><div class="text-on-surface-variant text-[10px]">CURRENT LTP</div><div class="text-profit font-bold">&#8377;148.80</div></div>
-                <div class="p-2 rounded bg-surface-container-lowest"><div class="text-on-surface-variant text-[10px]">TRAIL SL</div><div class="text-amber-tactical font-bold">&#8377;138.00</div></div>
-                <div class="p-2 rounded bg-surface-container-lowest"><div class="text-on-surface-variant text-[10px]">TARGET 1</div><div class="text-on-surface font-bold">&#8377;165.00</div></div>
-              </div>
-              <svg class="w-full h-11 text-profit mt-1" fill="none" preserveAspectRatio="none" viewBox="0 0 300 48">
-                <path d="M0 40 L30 38 L60 35 L90 32 L120 36 L150 25 L180 20 L210 24 L240 12 L270 8 L300 4" stroke="currentColor" stroke-linecap="round" stroke-width="2"></path>
-                <path d="M0 40 L30 38 L60 35 L90 32 L120 36 L150 25 L180 20 L210 24 L240 12 L270 8 L300 4 L300 48 L0 48 Z" fill="currentColor" fill-opacity="0.1"></path>
-              </svg>
-            </div>
-
-            <div class="flex items-center justify-between pt-space-xs font-data-mono-sm text-data-mono-sm text-on-surface-variant">
-              <span class="flex items-center gap-1"><span class="material-symbols-outlined text-[14px] text-profit">security</span>AES-256 Vault Protected</span>
-              <span class="text-loss font-semibold flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">cancel</span>Emergency Kill-Switch Ready</span>
-            </div>
-          </div>
+        <!-- Subtle Capability Micro-Badges -->
+        <div class="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 font-data-mono-sm text-on-surface-variant opacity-85">
+          <span class="flex items-center gap-1"><span class="material-symbols-outlined text-[14px] text-profit">verified</span>5-Gate Confluence</span>
+          <span class="flex items-center gap-1"><span class="material-symbols-outlined text-[14px] text-profit">lock</span>AES-256 Vault</span>
+          <span class="flex items-center gap-1"><span class="material-symbols-outlined text-[14px] text-loss">power_settings_new</span>Instant Kill-Switch</span>
         </div>
       </div>
     </div>
 
-    <!-- SECTION 2: 180-DAY BACKTEST QUANTITATIVE KPI STRIP -->
-    <div id="dl-backtest" class="w-full bg-surface-container-lowest border-y border-outline-variant/25 px-margin-desktop py-8">
-      <div class="max-w-7xl mx-auto">
-        <div class="flex flex-col md:flex-row md:items-center justify-between gap-space-sm mb-space-md">
-          <div>
-            <span class="font-label-caps text-label-caps text-profit uppercase font-bold tracking-wider">QUANTITATIVE RIGOR // REPLICABLE IN-SAMPLE AUDIT</span>
-            <h2 class="font-headline-md text-headline-md text-on-surface">180-Day Verified Backtest Performance Metrics</h2>
-          </div>
-          <div class="flex items-center gap-space-xs font-data-mono-sm text-data-mono-sm text-on-surface-variant">
-            <span class="material-symbols-outlined text-[16px] text-profit">verified</span>
-            <span id="dl-bt-subtitle">NIFTY &amp; BANKNIFTY ORB Quantitative Engine</span>
-          </div>
-        </div>
-        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-space-sm tabular-nums">
-          <div class="p-space-md rounded-xl bg-surface-container-low glass-panel">
-            <span class="font-label-caps text-label-caps text-on-surface-variant block">TOTAL NET RETURN</span>
-            <div id="dl-bt-pnl" class="font-display-lg text-[26px] font-bold text-profit tracking-tight mt-1">+142.8%</div>
-            <span class="font-body-sm text-body-sm text-on-surface-variant block mt-1">180-Day Sample</span>
-          </div>
-          <div class="p-space-md rounded-xl bg-surface-container-low glass-panel">
-            <span class="font-label-caps text-label-caps text-on-surface-variant block">PROFIT FACTOR</span>
-            <div id="dl-bt-pf" class="font-display-lg text-[26px] font-bold text-on-surface tracking-tight mt-1">2.14</div>
-            <span class="font-body-sm text-body-sm text-on-surface-variant block mt-1">Gross Win / Loss</span>
-          </div>
-          <div class="p-space-md rounded-xl bg-surface-container-low glass-panel">
-            <span class="font-label-caps text-label-caps text-on-surface-variant block">MAX DRAWDOWN</span>
-            <div id="dl-bt-dd" class="font-display-lg text-[26px] font-bold text-loss tracking-tight mt-1">-4.8%</div>
-            <span class="font-body-sm text-body-sm text-on-surface-variant block mt-1">Hard-Stop Fencing</span>
-          </div>
-          <div class="p-space-md rounded-xl bg-surface-container-low glass-panel">
-            <span class="font-label-caps text-label-caps text-on-surface-variant block">WIN RATE</span>
-            <div id="dl-bt-wr" class="font-display-lg text-[26px] font-bold text-on-surface tracking-tight mt-1">68.4%</div>
-            <span id="dl-bt-cnt" class="font-body-sm text-body-sm text-on-surface-variant block mt-1">Backtest Trades</span>
-          </div>
-          <div class="p-space-md rounded-xl bg-surface-container-low glass-panel">
-            <span class="font-label-caps text-label-caps text-on-surface-variant block">RISK RATIO</span>
-            <div class="font-display-lg text-[26px] font-bold text-on-surface tracking-tight mt-1">1:2.0</div>
-            <span class="font-body-sm text-body-sm text-on-surface-variant block mt-1">R-Multiple Asymmetric</span>
-          </div>
-          <div class="p-space-md rounded-xl bg-surface-container-low glass-panel">
-            <span class="font-label-caps text-label-caps text-on-surface-variant block">DAILY LOSS FENCE</span>
-            <div class="font-display-lg text-[26px] font-bold text-loss tracking-tight mt-1">-&#8377;5,000</div>
-            <span class="font-body-sm text-body-sm text-on-surface-variant block mt-1">Auto Circuit Guard</span>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- SECTION 3: 5-GATE INSTITUTIONAL PIPELINE ARCHITECTURE -->
-    <div id="dl-gates" class="w-full px-margin-desktop py-12 bg-surface">
-      <div class="max-w-7xl mx-auto space-y-space-lg">
-        <div class="space-y-space-xs text-center max-w-3xl mx-auto">
-          <span class="font-label-caps text-label-caps text-profit uppercase font-bold tracking-wider">DETERMINISTIC CONFLUENCE ENGINE</span>
-          <h2 class="font-display-lg text-[30px] font-bold text-on-surface tracking-tight">The 5-Gate Execution Pipeline</h2>
-          <p class="font-body-md text-body-md text-on-surface-variant">No trade leaves the Obsidian Velocity engine without satisfying all 5 chronological validation gates.</p>
-        </div>
-        <div class="grid grid-cols-1 md:grid-cols-5 gap-space-sm pt-space-sm">
-          <div class="p-space-md rounded-xl bg-surface-container-low glass-panel flex flex-col justify-between space-y-space-md hover:bg-surface-container transition-all">
-            <div class="space-y-space-sm">
-              <div class="flex items-center justify-between"><span class="font-label-caps text-label-caps text-profit uppercase font-bold">GATE 01</span><span class="font-data-mono-sm text-on-surface-variant">09:15&ndash;09:30</span></div>
-              <h3 class="font-title-sm text-title-sm text-on-surface font-semibold">Opening Range Box</h3>
-              <p class="font-body-sm text-body-sm text-on-surface-variant leading-relaxed">Captures exact high/low corridor and rejects sluggish compression or overextended gap days.</p>
-            </div>
-            <div class="font-data-mono-sm text-profit flex items-center gap-1"><span class="material-symbols-outlined text-[15px]">check_circle</span><span>Range Validity</span></div>
-          </div>
-          <div class="p-space-md rounded-xl bg-surface-container-low glass-panel flex flex-col justify-between space-y-space-md hover:bg-surface-container transition-all">
-            <div class="space-y-space-sm">
-              <div class="flex items-center justify-between"><span class="font-label-caps text-label-caps text-profit uppercase font-bold">GATE 02</span><span class="font-data-mono-sm text-on-surface-variant">Breakout Tick</span></div>
-              <h3 class="font-title-sm text-title-sm text-on-surface font-semibold">Volume &amp; VWAP Confluence</h3>
-              <p class="font-body-sm text-body-sm text-on-surface-variant leading-relaxed">Requires candle close beyond ORH/ORL with volume expansion and Intraday VWAP &amp; PDC alignment.</p>
-            </div>
-            <div class="font-data-mono-sm text-profit flex items-center gap-1"><span class="material-symbols-outlined text-[15px]">check_circle</span><span>Liquidity Surge</span></div>
-          </div>
-          <div class="p-space-md rounded-xl bg-surface-container-low glass-panel flex flex-col justify-between space-y-space-md hover:bg-surface-container transition-all">
-            <div class="space-y-space-sm">
-              <div class="flex items-center justify-between"><span class="font-label-caps text-label-caps text-profit uppercase font-bold">GATE 03</span><span class="font-data-mono-sm text-on-surface-variant">Momentum Filter</span></div>
-              <h3 class="font-title-sm text-title-sm text-on-surface font-semibold">Wilder RSI &amp; Regime</h3>
-              <p class="font-body-sm text-body-sm text-on-surface-variant leading-relaxed">Verifies India VIX regime and directional RSI momentum before selecting optimal delta strikes.</p>
-            </div>
-            <div class="font-data-mono-sm text-profit flex items-center gap-1"><span class="material-symbols-outlined text-[15px]">check_circle</span><span>Chop Rejection</span></div>
-          </div>
-          <div class="p-space-md rounded-xl bg-surface-container-low glass-panel flex flex-col justify-between space-y-space-md hover:bg-surface-container transition-all">
-            <div class="space-y-space-sm">
-              <div class="flex items-center justify-between"><span class="font-label-caps text-label-caps text-profit uppercase font-bold">GATE 04</span><span class="font-data-mono-sm text-on-surface-variant">Bracket Engine</span></div>
-              <h3 class="font-title-sm text-title-sm text-on-surface font-semibold">Half-Risk Recovery</h3>
-              <p class="font-body-sm text-body-sm text-on-surface-variant leading-relaxed">Books 50% at T1 and ratchets stop loss toward breakeven with dynamic step-trailing protection.</p>
-            </div>
-            <div class="font-data-mono-sm text-profit flex items-center gap-1"><span class="material-symbols-outlined text-[15px]">check_circle</span><span>Profit Ratchet</span></div>
-          </div>
-          <div class="p-space-md rounded-xl bg-surface-container-low glass-panel flex flex-col justify-between space-y-space-md hover:bg-surface-container transition-all">
-            <div class="space-y-space-sm">
-              <div class="flex items-center justify-between"><span class="font-label-caps text-label-caps text-loss uppercase font-bold">GATE 05</span><span class="font-data-mono-sm text-on-surface-variant">Safety Circuit</span></div>
-              <h3 class="font-title-sm text-title-sm text-on-surface font-semibold">Kill-Switch &amp; Weekly Guard</h3>
-              <p class="font-body-sm text-body-sm text-on-surface-variant leading-relaxed">Daily loss cap, weekly consecutive loss guard, and instant 1-tap market liquidation on demand.</p>
-            </div>
-            <div class="font-data-mono-sm text-loss flex items-center gap-1"><span class="material-symbols-outlined text-[15px]">shield</span><span>Capital Shield</span></div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- SECTION 4: MULTI-USER SECURITY & ARCHITECTURE BENTO GRID -->
-    <div id="dl-security" class="w-full px-margin-desktop py-12 bg-surface-container-low border-t border-outline-variant/25">
-      <div class="max-w-7xl mx-auto space-y-space-lg">
-        <div class="space-y-space-xs max-w-2xl">
-          <span class="font-label-caps text-label-caps text-profit uppercase font-bold tracking-wider">INFRASTRUCTURE &amp; SECURE EXECUTION</span>
-          <h2 class="font-display-lg text-[30px] font-bold text-on-surface tracking-tight">Engineered for Zero Leakage &amp; Full Auth Isolation</h2>
-          <p class="font-body-md text-body-md text-on-surface-variant">Every session stays gated on this public portal until verified via Email, Google, Facebook, or Mobile OTP.</p>
-        </div>
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-space-md">
-          <div class="p-space-lg rounded-xl bg-surface-container glass-panel flex flex-col justify-between space-y-space-md hover:bg-surface-container-high transition-all">
-            <div class="space-y-space-sm">
-              <div class="w-10 h-10 rounded-lg bg-surface-container-highest flex items-center justify-center text-profit"><span class="material-symbols-outlined text-[24px]">key</span></div>
-              <h3 class="font-title-sm text-title-sm text-on-surface font-bold">Multi-User Authentication Suite</h3>
-              <p class="font-body-sm text-body-sm text-on-surface-variant leading-relaxed">Sign in with Email/Password, Google OAuth, Facebook SSO, or instant Mobile OTP verification with per-user risk preferences.</p>
-            </div>
-            <div class="font-data-mono-sm text-on-surface flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-primary-container"></span>Bearer Token Session Isolation</div>
-          </div>
-          <div class="p-space-lg rounded-xl bg-surface-container glass-panel flex flex-col justify-between space-y-space-md hover:bg-surface-container-high transition-all">
-            <div class="space-y-space-sm">
-              <div class="w-10 h-10 rounded-lg bg-surface-container-highest flex items-center justify-center text-profit"><span class="material-symbols-outlined text-[24px]">enhanced_encryption</span></div>
-              <h3 class="font-title-sm text-title-sm text-on-surface font-bold">Shoonya Broker &amp; TOTP Vault</h3>
-              <p class="font-body-sm text-body-sm text-on-surface-variant leading-relaxed">Seamless per-account Finvasia Shoonya broker credential binding and automated TOTP OAuth login workflow.</p>
-            </div>
-            <div class="font-data-mono-sm text-on-surface flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-primary-container"></span>Multi-Account Ready</div>
-          </div>
-          <div class="p-space-lg rounded-xl bg-surface-container glass-panel flex flex-col justify-between space-y-space-md hover:bg-surface-container-high transition-all">
-            <div class="space-y-space-sm">
-              <div class="w-10 h-10 rounded-lg bg-surface-container-highest flex items-center justify-center text-loss"><span class="material-symbols-outlined text-[24px]">power_settings_new</span></div>
-              <h3 class="font-title-sm text-title-sm text-on-surface font-bold">Emergency Kill-Switch &amp; Clean Exit</h3>
-              <p class="font-body-sm text-body-sm text-on-surface-variant leading-relaxed">One-click market liquidation inside the terminal, plus complete session teardown back to this landing page on logout.</p>
-            </div>
-            <div class="font-data-mono-sm text-loss font-medium flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-secondary-container"></span>Instant Liquidation &amp; Sign-Out Gate</div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- SECTION 5: FINAL CTA HERO BANNER -->
-    <div class="w-full px-margin-desktop py-12 bg-surface relative overflow-hidden">
-      <div class="max-w-7xl mx-auto">
-        <div class="p-8 rounded-2xl bg-surface-container-highest glass-panel shadow-xl relative overflow-hidden text-center md:text-left flex flex-col md:flex-row items-center justify-between gap-space-lg">
-          <div class="absolute -right-20 -bottom-20 w-80 h-80 rounded-full bg-primary-container/15 blur-[90px] pointer-events-none"></div>
-          <div class="space-y-space-xs max-w-2xl relative z-10">
-            <span class="font-label-caps text-label-caps text-profit uppercase font-bold tracking-wider">GET OPERATIONAL IN SECONDS</span>
-            <h2 class="font-display-lg text-[28px] font-bold text-on-surface tracking-tight">Deploy Institutional Precision on Your Shoonya Account Today.</h2>
-            <p class="font-body-md text-body-md text-on-surface-variant">Sign in to unlock the full Obsidian Velocity Workstation, or install the Android APK for mobile trading.</p>
-          </div>
-          <div class="flex flex-col sm:flex-row items-center gap-space-md shrink-0 relative z-10 w-full md:w-auto">
-            <button type="button" onclick="openModal('modal-auth')" class="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3 rounded-lg bg-primary-container text-on-primary-container font-label-caps text-label-caps uppercase tracking-wider font-bold shadow-[0_4px_24px_rgba(0,245,212,0.4)] hover:opacity-90 transition-all cursor-pointer">
-              <span class="material-symbols-outlined text-[18px]">bolt</span>
-              <span>Launch Terminal Now</span>
-            </button>
-            <button type="button" onclick="openModal('modal-guide')" class="w-full sm:w-auto flex items-center justify-center gap-2 px-5 py-3 rounded-lg bg-surface-container-high text-on-surface font-label-caps text-label-caps uppercase tracking-wider font-medium hover:bg-surface-container transition-colors glass-panel cursor-pointer">
-              <span class="material-symbols-outlined text-[18px]">menu_book</span>
-              <span>Strategy Blueprint</span>
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- SEBI RISK DISCLOSURE FOOTER -->
-    <footer class="w-full bg-surface-container-low border-t border-outline-variant/25 mt-auto px-margin-desktop py-8">
-      <div class="max-w-7xl mx-auto space-y-6">
-        <div class="p-space-lg rounded-xl bg-surface-container glass-panel flex items-start gap-space-md">
-          <span class="material-symbols-outlined text-loss text-[22px] shrink-0">warning</span>
-          <div class="space-y-1">
-            <span class="font-label-caps text-label-caps text-loss uppercase font-semibold">SEBI Mandatory Derivative &amp; Algorithmic Risk Disclosure</span>
-            <p class="font-body-sm text-body-sm text-on-surface-variant leading-relaxed">
-              9 out of 10 individual traders in equity Futures and Options Segment incurred net losses. Automated quantitative execution systems carry execution variance, slippage, latency risks, and market-gap volatility. Past backtested performance does not assure future returns.
-            </p>
-          </div>
-        </div>
-        <div class="flex flex-col sm:flex-row items-center justify-between gap-4 font-data-mono-sm text-data-mono-sm text-on-surface-variant">
-          <span class="flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-primary-container"></span>OBSIDIAN VELOCITY TERMINAL // SHOONYA AUTOORB</span>
-          <div class="flex items-center gap-4">
-            <a href="/app" class="hover:text-on-surface transition-colors">Mobile App</a>
-            <a href="/download/apk" class="hover:text-on-surface transition-colors">Android APK</a>
-            <button type="button" onclick="openModal('modal-auth')" class="text-profit hover:underline cursor-pointer">Sign In</button>
-          </div>
+    <!-- Minimal Single-Line Footer -->
+    <footer class="w-full border-t border-outline-variant/20 bg-surface-container-low/60 px-4 lg:px-6 py-3 relative z-10">
+      <div class="max-w-[1440px] mx-auto flex flex-col sm:flex-row items-center justify-between gap-2 font-body-sm text-on-surface-variant">
+        <span class="flex items-center gap-1.5 text-center sm:text-left">
+          <span class="material-symbols-outlined text-[15px] text-loss shrink-0">warning</span>
+          <span>SEBI Notice: Derivatives trading carries high capital risk. Automated execution does not guarantee profit.</span>
+        </span>
+        <div class="flex items-center gap-4 font-data-mono-sm shrink-0">
+          <a href="/app" class="hover:text-on-surface transition-colors">Mobile App</a>
+          <a href="/download/apk" class="hover:text-on-surface transition-colors">Android APK</a>
+          <button type="button" onclick="openModal('modal-auth')" class="text-profit hover:underline cursor-pointer">Sign In</button>
         </div>
       </div>
     </footer>
@@ -431,121 +137,119 @@
 
   <!-- FIXED 2-TIER WORKSTATION HEADER (Hidden until authenticated) -->
   <header id="desk-app-header" class="hidden fixed top-0 left-0 right-0 z-40 glass-header shadow-[0_2px_16px_rgba(0,0,0,0.45)]">
-    <div class="h-28 w-full px-margin-desktop flex flex-col justify-between py-space-xs">
+    <div class="w-full max-w-[1600px] mx-auto px-3 lg:px-4 xl:px-5 flex flex-col justify-between py-1">
       <!-- Row 1: Brand, Telemetry Pills, Live MTM, Action Buttons, User Avatar -->
-      <div class="h-14 flex items-center justify-between gap-space-md">
-        <div class="flex items-center gap-space-md min-w-0">
-          <div class="flex items-center gap-space-xs shrink-0">
-            <div class="w-8 h-8 rounded bg-primary-container flex items-center justify-center text-on-primary-fixed shadow-[0_0_12px_rgba(0,245,212,0.35)]">
-              <span class="material-symbols-outlined text-[20px] font-bold">query_stats</span>
-            </div>
+      <div class="h-11 flex items-center justify-between gap-2 min-w-0">
+        <div class="flex items-center gap-2 min-w-0">
+          <div class="flex items-center gap-2 shrink-0">
+            <img src="/static/icon-192.png" alt="AutoORB" class="w-7 h-7 rounded-lg object-cover shadow-[0_0_10px_rgba(0,245,212,0.3)]"/>
             <div class="flex flex-col">
-              <span class="font-headline-md text-[18px] font-bold tracking-tight text-primary leading-none">SHOONYA</span>
-              <span class="font-label-caps text-label-caps text-on-surface-variant uppercase tracking-widest">ORB Workstation</span>
+              <span class="font-headline-md text-[15px] font-bold tracking-tight text-primary leading-none">SHOONYA</span>
+              <span class="font-label-caps text-on-surface-variant uppercase tracking-wider leading-none mt-0.5">ORB Terminal</span>
             </div>
           </div>
 
-          <div class="hidden xl:flex items-center gap-space-xs px-2 py-1 rounded bg-surface-container-high shrink-0">
-            <span class="font-label-caps text-label-caps text-on-surface-variant">SEBI ID:</span>
-            <span id="hdr-sebi-id" class="font-data-mono-sm text-data-mono-sm text-primary font-bold">--</span>
+          <div class="hidden 2xl:flex items-center gap-1 px-2 py-0.5 rounded bg-surface-container-high shrink-0">
+            <span class="font-label-caps text-on-surface-variant">SEBI ID:</span>
+            <span id="hdr-sebi-id" class="font-data-mono-sm text-primary font-bold">--</span>
           </div>
 
-          <div class="flex items-center gap-1.5 px-2 py-1 rounded bg-surface-container shrink-0">
+          <div class="flex items-center gap-1.5 px-2 py-0.5 rounded bg-surface-container shrink-0">
             <span id="hdr-ws-dot" class="w-2 h-2 rounded-full bg-primary-container animate-pulse"></span>
-            <span id="hdr-ping" class="font-data-mono-sm text-data-mono-sm text-on-surface font-semibold tabular-nums">--ms</span>
-            <span id="hdr-ws-label" class="font-label-caps text-label-caps text-profit uppercase">FEED SYNC</span>
+            <span id="hdr-ping" class="font-data-mono-sm text-on-surface font-semibold tabular-nums">--ms</span>
+            <span id="hdr-ws-label" class="hidden md:inline font-label-caps text-profit uppercase">FEED SYNC</span>
           </div>
 
-          <div class="hidden md:flex px-2 py-1 rounded bg-surface-container-high items-center gap-1.5 shrink-0">
-            <span class="font-label-caps text-label-caps text-on-surface-variant">PHASE</span>
-            <span id="hdr-phase" class="font-data-mono-sm text-data-mono-sm font-bold px-1.5 py-0.5 rounded bg-surface-container-lowest text-profit">STANDBY</span>
+          <div class="hidden md:flex px-2 py-0.5 rounded bg-surface-container-high items-center gap-1.5 shrink-0">
+            <span class="font-label-caps text-on-surface-variant">PHASE</span>
+            <span id="hdr-phase" class="font-data-mono-sm font-bold px-1.5 py-0.5 rounded bg-surface-container-lowest text-profit">STANDBY</span>
           </div>
         </div>
 
-        <div class="flex items-center gap-space-sm shrink-0">
+        <div class="flex items-center gap-1.5 shrink-0">
           <!-- Live Net MTM & Avail Cash Capsule -->
-          <div class="hidden lg:flex items-center gap-space-md px-space-md py-1 rounded bg-surface-container-low glass-panel">
+          <div class="hidden xl:flex items-center gap-3 px-2.5 py-0.5 rounded bg-surface-container-low glass-panel">
             <div class="flex flex-col text-right">
-              <span class="font-label-caps text-label-caps text-on-surface-variant uppercase">LIVE NET MTM</span>
-              <span id="hdr-mtm" class="font-data-mono-lg text-data-mono-lg font-bold text-profit leading-none tabular-nums">₹0.00</span>
+              <span class="font-label-caps text-on-surface-variant uppercase leading-none">NET MTM</span>
+              <span id="hdr-mtm" class="font-data-mono-md font-bold text-profit leading-tight tabular-nums">₹0.00</span>
             </div>
-            <div class="w-px h-7 bg-surface-container-highest"></div>
+            <div class="w-px h-6 bg-surface-container-highest"></div>
             <div class="flex flex-col text-right">
-              <span class="font-label-caps text-label-caps text-on-surface-variant uppercase">AVAIL CASH</span>
-              <span id="hdr-cash" class="font-data-mono-md text-data-mono-md font-semibold text-on-surface leading-none tabular-nums">₹0.00</span>
+              <span class="font-label-caps text-on-surface-variant uppercase leading-none">AVAIL CASH</span>
+              <span id="hdr-cash" class="font-data-mono-sm font-semibold text-on-surface leading-tight tabular-nums">₹0.00</span>
             </div>
           </div>
 
-          <!-- Header Actions -->
-          <div class="flex items-center gap-1.5">
-            <button id="btn-hdr-manual" type="button" class="h-8 px-2.5 rounded bg-surface-container-high hover:bg-surface-bright text-on-surface flex items-center gap-1 transition-colors cursor-pointer">
-              <span class="material-symbols-outlined text-[16px] text-profit">bolt</span>
-              <span class="hidden sm:inline font-label-caps text-label-caps tracking-wider">MANUAL ORDER</span>
+          <!-- Header Actions (Compact for 15" laptops) -->
+          <div class="flex items-center gap-1">
+            <button id="btn-hdr-manual" type="button" class="h-7 px-2 rounded bg-surface-container-high hover:bg-surface-bright text-on-surface flex items-center gap-1 transition-colors cursor-pointer whitespace-nowrap" title="Manual Broker Order">
+              <span class="material-symbols-outlined text-[15px] text-profit">bolt</span>
+              <span class="hidden xl:inline font-label-caps tracking-wide">MANUAL</span>
             </button>
-            <button id="btn-hdr-config" type="button" class="h-8 px-2.5 rounded bg-surface-container-high hover:bg-surface-bright text-on-surface flex items-center gap-1 transition-colors cursor-pointer">
-              <span class="material-symbols-outlined text-[16px] text-on-surface-variant">tune</span>
-              <span class="hidden sm:inline font-label-caps text-label-caps tracking-wider">STRATEGY CONFIG</span>
+            <button id="btn-hdr-config" type="button" class="h-7 px-2 rounded bg-surface-container-high hover:bg-surface-bright text-on-surface flex items-center gap-1 transition-colors cursor-pointer whitespace-nowrap" title="Strategy Config">
+              <span class="material-symbols-outlined text-[15px] text-on-surface-variant">tune</span>
+              <span class="hidden xl:inline font-label-caps tracking-wide">CONFIG</span>
             </button>
-            <button id="btn-hdr-guide" type="button" class="h-8 px-2.5 rounded bg-surface-container-high hover:bg-surface-bright text-on-surface flex items-center gap-1 transition-colors cursor-pointer" title="Strategy & User Guide">
-              <span class="material-symbols-outlined text-[16px] text-amber-tactical">menu_book</span>
-              <span class="hidden xl:inline font-label-caps text-label-caps tracking-wider">GUIDE</span>
+            <button id="btn-hdr-guide" type="button" class="h-7 px-2 rounded bg-surface-container-high hover:bg-surface-bright text-on-surface flex items-center gap-1 transition-colors cursor-pointer whitespace-nowrap" title="Strategy & User Guide">
+              <span class="material-symbols-outlined text-[15px] text-amber-tactical">menu_book</span>
+              <span class="hidden 2xl:inline font-label-caps tracking-wide">GUIDE</span>
             </button>
-            <button id="btn-hdr-broker" type="button" class="h-8 px-2 rounded bg-surface-container hover:bg-surface-high flex items-center gap-1 cursor-pointer" title="Broker Session & Multi-Account">
+            <button id="btn-hdr-broker" type="button" class="h-7 px-2 rounded bg-surface-container hover:bg-surface-high flex items-center gap-1 cursor-pointer whitespace-nowrap" title="Broker Session & Multi-Account">
               <span id="hdr-broker-dot" class="w-1.5 h-1.5 rounded-full bg-amber-tactical"></span>
-              <span id="hdr-broker-label" class="font-label-caps text-label-caps text-primary">SHOONYA AUTH</span>
+              <span id="hdr-broker-label" class="font-label-caps text-primary">SHOONYA</span>
             </button>
-            <button id="btn-hdr-theme" type="button" class="w-8 h-8 rounded bg-surface-container hover:bg-surface-high text-on-surface-variant hover:text-on-surface flex items-center justify-center transition-colors cursor-pointer" title="Toggle Dark/Light Theme">
-              <span id="hdr-theme-icon" class="material-symbols-outlined text-[17px]">light_mode</span>
+            <button id="btn-hdr-theme" type="button" class="w-7 h-7 rounded bg-surface-container hover:bg-surface-high text-on-surface-variant hover:text-on-surface flex items-center justify-center transition-colors cursor-pointer" title="Toggle Dark/Light Theme">
+              <span id="hdr-theme-icon" class="material-symbols-outlined text-[16px]">light_mode</span>
             </button>
-            <button id="btn-hdr-kill" type="button" class="h-8 px-2.5 rounded bg-secondary-container hover:bg-error-container text-on-secondary-container hover:text-on-error-container flex items-center gap-1 shadow-[0_0_12px_rgba(212,0,75,0.4)] transition-all font-bold cursor-pointer">
-              <span class="material-symbols-outlined text-[16px]">power_settings_new</span>
-              <span class="hidden sm:inline font-label-caps text-label-caps tracking-wider">KILL SWITCH</span>
+            <button id="btn-hdr-kill" type="button" class="h-7 px-2 rounded bg-secondary-container hover:bg-error-container text-on-secondary-container hover:text-on-error-container flex items-center gap-1 shadow-[0_0_10px_rgba(212,0,75,0.35)] transition-all font-bold cursor-pointer whitespace-nowrap" title="Emergency Kill Switch">
+              <span class="material-symbols-outlined text-[15px]">power_settings_new</span>
+              <span class="hidden xl:inline font-label-caps tracking-wide">KILL</span>
             </button>
           </div>
 
-          <button id="btn-hdr-user" type="button" class="h-8 px-2 rounded-full bg-primary/15 border border-primary/30 text-primary flex items-center gap-1.5 hover:bg-primary/25 transition-colors cursor-pointer" title="Account & Multi-User Auth">
-            <span class="material-symbols-outlined text-[18px]">person</span>
-            <span id="hdr-user-label" class="hidden xl:inline font-label-caps text-label-caps">SIGN IN</span>
+          <button id="btn-hdr-user" type="button" class="h-7 px-2 rounded-full bg-primary/15 border border-primary/30 text-primary flex items-center gap-1 hover:bg-primary/25 transition-colors cursor-pointer whitespace-nowrap" title="Account & Multi-User Auth">
+            <span class="material-symbols-outlined text-[16px]">person</span>
+            <span id="hdr-user-label" class="hidden 2xl:inline font-label-caps">SIGN IN</span>
           </button>
-          <button id="btn-hdr-logout" type="button" onclick="signOutUser()" class="h-8 px-2.5 rounded-full bg-secondary-container/25 border border-secondary/30 text-loss flex items-center gap-1 hover:bg-secondary-container/40 transition-colors cursor-pointer" title="Sign Out to Landing Page">
-            <span class="material-symbols-outlined text-[16px]">logout</span>
-            <span class="hidden xl:inline font-label-caps text-label-caps">LOGOUT</span>
+          <button id="btn-hdr-logout" type="button" onclick="signOutUser()" class="h-7 px-2 rounded-full bg-secondary-container/25 border border-secondary/30 text-loss flex items-center gap-1 hover:bg-secondary-container/40 transition-colors cursor-pointer whitespace-nowrap" title="Sign Out to Landing Page">
+            <span class="material-symbols-outlined text-[15px]">logout</span>
+            <span class="hidden 2xl:inline font-label-caps">LOGOUT</span>
           </button>
         </div>
       </div>
 
       <!-- Row 2: 4 Workspace Navigation Tabs & Live Index Summary -->
-      <div class="h-11 flex items-center justify-between border-t border-surface-container-high">
-        <nav id="desktop-nav" class="flex items-center gap-space-xs h-full">
-          <button data-tab="radar" type="button" class="desk-tab h-full px-space-md flex items-center gap-1.5 font-body-sm text-body-sm bg-surface-container-high text-primary font-bold border-b-2 border-primary-container transition-colors tracking-wide cursor-pointer">
-            <span class="material-symbols-outlined text-[16px]">radar</span>
+      <div class="h-9 flex items-center justify-between border-t border-surface-container-high gap-2">
+        <nav id="desktop-nav" class="flex items-center gap-1 h-full overflow-x-auto no-scrollbar">
+          <button data-tab="radar" type="button" class="desk-tab h-full px-3 flex items-center gap-1.5 font-body-sm text-body-sm bg-surface-container-high text-primary font-bold border-b-2 border-primary-container transition-colors tracking-wide cursor-pointer whitespace-nowrap">
+            <span class="material-symbols-outlined text-[15px]">radar</span>
             <span>Radar &amp; Signals</span>
           </button>
-          <button data-tab="positions" type="button" class="desk-tab h-full px-space-md flex items-center gap-1.5 font-body-sm text-body-sm text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low transition-colors tracking-wide cursor-pointer">
-            <span class="material-symbols-outlined text-[16px]">account_balance_wallet</span>
+          <button data-tab="positions" type="button" class="desk-tab h-full px-3 flex items-center gap-1.5 font-body-sm text-body-sm text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low transition-colors tracking-wide cursor-pointer whitespace-nowrap">
+            <span class="material-symbols-outlined text-[15px]">account_balance_wallet</span>
             <span>Positions &amp; Books</span>
             <span id="nav-pos-badge" class="hidden px-1.5 py-0.5 rounded-full bg-primary-container text-on-primary-fixed font-label-caps text-[9px] font-bold">0</span>
           </button>
-          <button data-tab="logs" type="button" class="desk-tab h-full px-space-md flex items-center gap-1.5 font-body-sm text-body-sm text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low transition-colors tracking-wide cursor-pointer">
-            <span class="material-symbols-outlined text-[16px]">terminal</span>
+          <button data-tab="logs" type="button" class="desk-tab h-full px-3 flex items-center gap-1.5 font-body-sm text-body-sm text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low transition-colors tracking-wide cursor-pointer whitespace-nowrap">
+            <span class="material-symbols-outlined text-[15px]">terminal</span>
             <span>Terminal Logs</span>
           </button>
-          <button data-tab="analytics" type="button" class="desk-tab h-full px-space-md flex items-center gap-1.5 font-body-sm text-body-sm text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low transition-colors tracking-wide cursor-pointer">
-            <span class="material-symbols-outlined text-[16px]">analytics</span>
+          <button data-tab="analytics" type="button" class="desk-tab h-full px-3 flex items-center gap-1.5 font-body-sm text-body-sm text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low transition-colors tracking-wide cursor-pointer whitespace-nowrap">
+            <span class="material-symbols-outlined text-[15px]">analytics</span>
             <span>Analytics &amp; Backtest</span>
           </button>
         </nav>
 
-        <div class="hidden md:flex items-center gap-space-md">
-          <div class="flex items-center gap-space-xs">
-            <span class="font-label-caps text-label-caps text-on-surface-variant uppercase">ORB RANGE:</span>
-            <span id="hdr-index-range" class="font-data-mono-sm text-data-mono-sm text-on-surface font-semibold tabular-nums">NIFTY --</span>
+        <div class="hidden md:flex items-center gap-3 shrink-0">
+          <div class="flex items-center gap-1">
+            <span class="font-label-caps text-on-surface-variant uppercase">ORB:</span>
+            <span id="hdr-index-range" class="font-data-mono-sm text-on-surface font-semibold tabular-nums">NIFTY --</span>
           </div>
-          <div class="flex items-center gap-1.5">
-            <span class="font-label-caps text-label-caps text-on-surface-variant uppercase">MODE:</span>
-            <button id="hdr-mode-pill" type="button" class="px-2 py-0.5 rounded bg-surface-container-high font-label-caps text-label-caps font-bold text-profit cursor-pointer hover:opacity-80">PAPER</button>
+          <div class="flex items-center gap-1">
+            <span class="font-label-caps text-on-surface-variant uppercase">MODE:</span>
+            <button id="hdr-mode-pill" type="button" class="px-1.5 py-0.5 rounded bg-surface-container-high font-label-caps font-bold text-profit cursor-pointer hover:opacity-80">PAPER</button>
           </div>
-          <a href="/app" class="px-2 py-0.5 rounded bg-surface-container hover:bg-surface-high font-label-caps text-label-caps text-on-surface-variant hover:text-on-surface flex items-center gap-1">
+          <a href="/app" class="px-2 py-0.5 rounded bg-surface-container hover:bg-surface-high font-label-caps text-on-surface-variant hover:text-on-surface flex items-center gap-1 whitespace-nowrap">
             <span class="material-symbols-outlined text-[13px]">smartphone</span>
             <span>MOBILE UI</span>
           </a>
@@ -555,12 +259,12 @@
   </header>
 
   <!-- MAIN WORKSPACE (Hidden until authenticated) -->
-  <main id="desk-app-main" class="hidden w-full pt-32 pb-12 px-margin-desktop max-w-[1680px] mx-auto">
+  <main id="desk-app-main" class="hidden w-full pt-[98px] pb-8 px-3 lg:px-4 xl:px-5 max-w-[1440px] mx-auto">
 
     <!-- ==================== TAB 1: RADAR & SIGNALS ==================== -->
-    <section id="view-radar" class="desk-view flex flex-col gap-space-lg">
+    <section id="view-radar" class="desk-view flex flex-col gap-3.5">
       <!-- Top Telemetry Ribbon -->
-      <div class="w-full bg-surface-container-low glass-panel rounded-xl p-space-md shadow-xl flex flex-col xl:flex-row items-stretch xl:items-center justify-between gap-space-md relative overflow-hidden">
+      <div class="w-full bg-surface-container-low glass-panel rounded-xl p-3 shadow-xl flex flex-col xl:flex-row items-stretch xl:items-center justify-between gap-3 relative overflow-hidden">
         <div class="absolute -right-16 -top-16 w-56 h-56 rounded-full bg-primary-container/5 blur-3xl pointer-events-none"></div>
 
         <!-- Cluster A & B -->
@@ -847,7 +551,7 @@
           </div>
           <span class="font-label-caps text-label-caps text-profit">STREAMING ACTIVE</span>
         </div>
-        <div id="desk-terminal-body" class="p-4 font-data-mono-sm text-data-mono-sm h-[480px] overflow-y-auto thin-scroll space-y-1 select-text"></div>
+        <div id="desk-terminal-body" class="p-3 font-data-mono-sm text-data-mono-sm h-[clamp(240px,calc(100vh-300px),480px)] overflow-y-auto thin-scroll space-y-1 select-text"></div>
         <form id="desk-cli-form" class="flex items-center gap-2 px-4 py-2 bg-surface-container-low border-t border-outline-variant/30">
           <span class="font-data-mono-sm text-profit font-bold">orb&gt;</span>
           <input id="desk-cli-input" type="text" placeholder="Type CLI command: :help, :status, :refresh, :clear, :mode, :oauth, :reset" class="flex-1 bg-transparent font-data-mono-sm text-data-mono-sm text-on-surface focus:outline-none"/>
@@ -1485,19 +1189,19 @@
             ? `ORH ${r.dist_to_orh > 0 ? '+' : ''}${r.dist_to_orh}`
             : '--';
 
-          return `<div class="bg-surface-container-low glass-panel rounded-xl p-space-md shadow-xl flex flex-col gap-space-md relative overflow-hidden">
+          return `<div class="bg-surface-container-low glass-panel rounded-xl p-3.5 shadow-xl flex flex-col gap-3 relative overflow-hidden">
             <div class="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r ${accentBar}"></div>
-            <div class="flex items-start justify-between">
-              <div>
-                <div class="flex items-center gap-2">
+            <div class="flex items-start justify-between gap-2">
+              <div class="min-w-0">
+                <div class="flex items-center gap-1.5 flex-wrap">
                   <h2 class="font-headline-md text-headline-md font-bold text-on-surface">${esc(idx)}</h2>
                   <span class="px-1.5 py-0.5 rounded bg-surface-container-high text-on-surface-variant font-label-caps text-label-caps">NSE SPOT</span>
                   <span class="px-1.5 py-0.5 rounded bg-primary-container/15 text-profit font-label-caps text-label-caps font-bold">${stateBadge}</span>
                 </div>
-                <span class="font-label-caps text-label-caps text-on-surface-variant mt-0.5 block">LOT ${r.lot_size || '--'} &bull; TOTAL ${r.total_qty || '--'} QTY &bull; EST MARGIN ${A.fmtINR(r.est_margin || 0, 0)}</span>
+                <span class="font-label-caps text-label-caps text-on-surface-variant mt-0.5 block truncate">LOT ${r.lot_size || '--'} &bull; TOTAL ${r.total_qty || '--'} QTY &bull; EST MARGIN ${A.fmtINR(r.est_margin || 0, 0)}</span>
               </div>
-              <div class="text-right">
-                <span class="font-data-mono-lg text-[20px] font-bold ${isBear ? 'text-loss' : 'text-profit'} tabular-nums">${A.fmtNum(ltp, 2)}</span>
+              <div class="text-right shrink-0">
+                <span class="font-data-mono-lg text-[17px] xl:text-[19px] font-bold ${isBear ? 'text-loss' : 'text-profit'} tabular-nums">${A.fmtNum(ltp, 2)}</span>
                 <span class="font-data-mono-sm text-on-surface-variant block">${esc(info.last_signal || 'NO SIGNAL')}</span>
               </div>
             </div>
@@ -1579,7 +1283,7 @@
         document.getElementById('pos-ist-clock').textContent = snap.ist_time || '--';
         const pNet = document.getElementById('pos-net-pnl');
         pNet.textContent = A.fmtSignedINR(mtm);
-        pNet.className = `font-display-lg text-display-lg font-bold tracking-tight tabular-nums ${mtm >= 0 ? 'text-profit' : 'text-loss'}`;
+        pNet.className = `font-display-lg text-[24px] xl:text-[28px] font-bold tracking-tight tabular-nums ${mtm >= 0 ? 'text-profit' : 'text-loss'}`;
         document.getElementById('pos-realized-pnl').textContent = A.fmtSignedINR(realized);
         document.getElementById('pos-unrealized-pnl').textContent = A.fmtSignedINR(unrealized);
 
@@ -1598,26 +1302,26 @@
 
         const cont = document.getElementById('pos-active-container');
         if (!positions.length) {
-          cont.innerHTML = '<div class="py-10 text-center text-on-surface-variant bg-surface-container-lowest/50 rounded-xl">No active strategy bracket positions right now. Trigger an entry or wait for an ORB 5-gate signal.</div>';
+          cont.innerHTML = '<div class="py-8 text-center text-on-surface-variant bg-surface-container-lowest/50 rounded-xl">No active strategy bracket positions right now. Trigger an entry or wait for an ORB 5-gate signal.</div>';
         } else {
-          cont.innerHTML = `<table class="w-full text-left border-collapse font-data-mono-sm tabular-nums">
+          cont.innerHTML = `<table class="w-full text-left border-collapse font-data-mono-sm tabular-nums whitespace-nowrap">
             <thead><tr class="border-b border-outline-variant/40 text-on-surface-variant font-label-caps">
               <th class="py-2 pr-3">Contract</th><th class="py-2 pr-3">State</th><th class="py-2 pr-3">Qty</th><th class="py-2 pr-3">Entry</th><th class="py-2 pr-3">LTP</th><th class="py-2 pr-3">BE / T1</th><th class="py-2 pr-3">Trail SL</th><th class="py-2 pr-3">MTM</th><th class="py-2 text-right">Actions</th>
             </tr></thead>
             <tbody>${positions.map(p => {
               const pMtm = Number(p.realized_pnl || 0) + Number(p.unrealized_pnl || 0);
               return `<tr class="border-b border-outline-variant/20 hover:bg-surface-container/60">
-                <td class="py-3 pr-3 font-bold text-on-surface">${esc(p.tradingsymbol)} <span class="text-profit text-[10px]">(${esc(p.index_name)})</span></td>
-                <td class="py-3 pr-3"><span class="px-2 py-0.5 rounded bg-primary-container/15 text-profit font-label-caps">${esc(p.state)}</span></td>
-                <td class="py-3 pr-3">${p.remaining_qty}/${p.initial_qty}</td>
-                <td class="py-3 pr-3">₹${Number(p.entry_avg_price).toFixed(2)}</td>
-                <td class="py-3 pr-3 font-bold text-profit">₹${Number(p.last_ltp).toFixed(2)}</td>
-                <td class="py-3 pr-3">₹${Number(p.breakeven_target).toFixed(1)} / ₹${Number(p.target1_price).toFixed(1)}</td>
-                <td class="py-3 pr-3 text-loss font-bold">₹${Number(p.sl_trigger_price).toFixed(2)}</td>
-                <td class="py-3 pr-3 font-bold ${pMtm >= 0 ? 'text-profit' : 'text-loss'}">${A.fmtSignedINR(pMtm)}</td>
-                <td class="py-3 text-right space-x-1">
-                  <button onclick="openSlModal('${esc(p.index_name)}','${esc(p.tradingsymbol)}',${p.sl_trigger_price},${p.entry_avg_price},${p.last_ltp})" type="button" class="px-2.5 py-1 rounded bg-surface-container-high hover:bg-surface-bright text-on-surface font-label-caps cursor-pointer">ADJUST SL</button>
-                  <button onclick="exitPos('${esc(p.index_name)}')" type="button" class="px-2.5 py-1 rounded bg-secondary-container text-on-secondary-container font-label-caps font-bold cursor-pointer">EXIT</button>
+                <td class="py-2.5 pr-3 font-bold text-on-surface">${esc(p.tradingsymbol)} <span class="text-profit text-[10px]">(${esc(p.index_name)})</span></td>
+                <td class="py-2.5 pr-3"><span class="px-2 py-0.5 rounded bg-primary-container/15 text-profit font-label-caps">${esc(p.state)}</span></td>
+                <td class="py-2.5 pr-3">${p.remaining_qty}/${p.initial_qty}</td>
+                <td class="py-2.5 pr-3">₹${Number(p.entry_avg_price).toFixed(2)}</td>
+                <td class="py-2.5 pr-3 font-bold text-profit">₹${Number(p.last_ltp).toFixed(2)}</td>
+                <td class="py-2.5 pr-3">₹${Number(p.breakeven_target).toFixed(1)} / ₹${Number(p.target1_price).toFixed(1)}</td>
+                <td class="py-2.5 pr-3 text-loss font-bold">₹${Number(p.sl_trigger_price).toFixed(2)}</td>
+                <td class="py-2.5 pr-3 font-bold ${pMtm >= 0 ? 'text-profit' : 'text-loss'}">${A.fmtSignedINR(pMtm)}</td>
+                <td class="py-2.5 text-right space-x-1">
+                  <button onclick="openSlModal('${esc(p.index_name)}','${esc(p.tradingsymbol)}',${p.sl_trigger_price},${p.entry_avg_price},${p.last_ltp})" type="button" class="px-2 py-1 rounded bg-surface-container-high hover:bg-surface-bright text-on-surface font-label-caps cursor-pointer">ADJUST SL</button>
+                  <button onclick="exitPos('${esc(p.index_name)}')" type="button" class="px-2 py-1 rounded bg-secondary-container text-on-secondary-container font-label-caps font-bold cursor-pointer">EXIT</button>
                 </td>
               </tr>`;
             }).join('')}</tbody>
@@ -2081,11 +1785,10 @@
           });
           const wr = (wins / trades.length) * 100;
           const pf = grossLoss > 0 ? (grossWin / grossLoss) : wins;
-          document.getElementById('dl-bt-pnl').textContent = A.fmtSignedINR(net);
-          document.getElementById('dl-bt-pf').textContent = Number(pf).toFixed(2);
-          document.getElementById('dl-bt-dd').textContent = maxDd > 0 ? `-${A.fmtINR(maxDd, 0)}` : '₹0';
-          document.getElementById('dl-bt-wr').textContent = `${wr.toFixed(1)}%`;
-          document.getElementById('dl-bt-cnt').textContent = `${wins} Wins / ${trades.length - wins} Losses (${trades.length})`;
+          const setTxt = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+          setTxt('dl-bt-pnl', A.fmtSignedINR(net));
+          setTxt('dl-bt-pf', Number(pf).toFixed(2));
+          setTxt('dl-bt-wr', `${wr.toFixed(1)}%`);
         } catch (_e) {}
       }
 

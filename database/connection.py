@@ -10,18 +10,36 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 from database.models import Base
 
-# Supports SQLite by default or PostgreSQL (Supabase / Neon / RDS) via DATABASE_URL
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///data/autoorb.db")
+def normalize_database_url(raw_url: str) -> str:
+    """Normalize PostgreSQL URLs to use asyncpg driver for async SQLAlchemy."""
+    cleaned = (raw_url or "").strip()
+    if cleaned.startswith("postgres://"):
+        return "postgresql+asyncpg://" + cleaned[len("postgres://") :]
+    if cleaned.startswith("postgresql://"):
+        return "postgresql+asyncpg://" + cleaned[len("postgresql://") :]
+    return cleaned
+
+
+# Supports SQLite by default or PostgreSQL (VPS / Supabase / Neon / RDS) via DATABASE_URL
+DATABASE_URL = normalize_database_url(
+    os.getenv("DATABASE_URL", "sqlite+aiosqlite:///data/autoorb.db")
+)
 
 # Ensure sqlite data directory exists
 if "sqlite" in DATABASE_URL:
     Path("data").mkdir(exist_ok=True)
 
-engine = create_async_engine(
-    DATABASE_URL,
-    echo=False,
-    future=True,
-)
+_engine_kwargs: dict = {"echo": False, "future": True}
+if "sqlite" not in DATABASE_URL:
+    _engine_kwargs.update(
+        {
+            "pool_pre_ping": True,
+            "pool_size": 5,
+            "max_overflow": 10,
+        }
+    )
+
+engine = create_async_engine(DATABASE_URL, **_engine_kwargs)
 
 AsyncSessionLocal = async_sessionmaker(
     bind=engine,

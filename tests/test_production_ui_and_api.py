@@ -16,10 +16,11 @@ if str(ROOT_DIR) not in sys.path:
 
 from broker.instrument_mapper import InstrumentContract
 from config.settings import AppSettings
-from database.connection import get_db
+from database.connection import get_db, normalize_database_url
 from database.models import Base
 from engine.risk_manager import ActivePosition, PositionState
 from main import TradingSystemOrchestrator
+import scripts.sync_mobile as sync_mobile_mod
 from scripts.sync_mobile import sync_mobile_assets
 from ui.dashboard import create_app
 
@@ -64,8 +65,10 @@ def test_desktop_mobile_and_static_assets(tmp_path: Path) -> None:
             assert home.status_code == 200
             html = home.text
             assert "Shoonya Automated ORB Terminal" in html
-            assert "/static/theme.css?v=5" in html
-            assert "/static/api_client.js?v=5" in html
+            assert "/static/theme.css?v=9" in html
+            assert "/static/api_client.js?v=9" in html
+            assert "/static/icon-192.png" in html
+            assert "Inter" in html
             for marker in (
                 "desk-landing-screen",
                 "desk-app-header",
@@ -85,8 +88,12 @@ def test_desktop_mobile_and_static_assets(tmp_path: Path) -> None:
                 mres = client.get(mobile_path)
                 assert mres.status_code == 200
                 mhtml = mres.text
-                assert "/static/theme.css?v=5" in mhtml
-                assert "/static/api_client.js?v=5" in mhtml
+                assert "/static/theme.css?v=9" in mhtml
+                assert "/static/api_client.js?v=9" in mhtml
+                assert "/static/icon-192.png" in mhtml
+                assert "m-main-safe" in mhtml
+                assert "sheet-safe" in mhtml
+                assert "100dvh" in mhtml
                 for marker in (
                     "m-landing-screen",
                     "showLandingScreen",
@@ -97,6 +104,10 @@ def test_desktop_mobile_and_static_assets(tmp_path: Path) -> None:
                     "showLoginScreen",
                     "enterAppShell",
                     "ma-api-base",
+                    "ma-btn-preset-prod",
+                    "ma-btn-preset-dev",
+                    "mc-btn-preset-prod",
+                    "mc-btn-preset-dev",
                     "mtab-radar",
                     "mtab-positions",
                     "mtab-logs",
@@ -115,13 +126,33 @@ def test_desktop_mobile_and_static_assets(tmp_path: Path) -> None:
                 "/static/manifest.json",
                 "/static/sw.js",
                 "/static/icon.svg",
+                "/static/icon-192.png",
+                "/static/icon-512.png",
+                "/static/icon-maskable-512.png",
+                "/static/apple-touch-icon.png",
+                "/static/favicon.png",
             ):
                 sres = client.get(static_path)
                 assert sres.status_code == 200, f"{static_path} returned {sres.status_code}"
+                if static_path == "/static/theme.css":
+                    for css_tok in ("--fs-body-md", "--fs-label-caps", "text-size-adjust", "m-main-safe", "sheet-safe"):
+                        assert css_tok in sres.text
+                if static_path == "/static/manifest.json":
+                    manifest_json = sres.json()
+                    icon_srcs = {i["src"]: i for i in manifest_json["icons"]}
+                    assert icon_srcs["/static/icon-192.png"]["sizes"] == "192x192"
+                    assert icon_srcs["/static/icon-512.png"]["sizes"] == "512x512"
+                    assert icon_srcs["/static/icon-maskable-512.png"]["purpose"] == "maskable"
                 if static_path == "/static/api_client.js":
                     assert "normalizeLogEntry" in sres.text
                     assert "renderLogRowHtml" in sres.text
                     assert "formatLogsForCopy" in sres.text
+                    assert "getPresetUrls" in sres.text
+                    assert "getDefaultApiBase" in sres.text
+                    assert "isPlaceholderUrl" in sres.text
+                    assert "probeHealth" in sres.text
+                    assert "if (!isNativeCapacitor())" in sres.text
+                    assert "Inter" in sres.text
 
             logs_res = client.get("/api/logs")
             assert logs_res.status_code == 200
@@ -261,10 +292,104 @@ def test_mobile_sync_output() -> None:
     assert out_html.exists()
     css_file = out_html.parent / "static" / "theme.css"
     assert css_file.exists()
+    css_text = css_file.read_text(encoding="utf-8")
+    for token in ("--fs-body-md", "--fs-label-caps", "text-size-adjust", "m-main-safe", "sheet-safe"):
+        assert token in css_text
+    assert (out_html.parent / "static" / "icon-192.png").exists()
     content = out_html.read_text(encoding="utf-8")
     assert "m-landing-screen" in content
     assert "showLandingScreen" in content
-    assert "./static/theme.css?v=5" in content
-    assert "./static/api_client.js?v=5" in content
+    assert "./static/theme.css?v=9" in content
+    assert "./static/api_client.js?v=9" in content
+    assert "./static/icon-192.png" in content
+    assert '<meta name="autoorb-api-base" content="https://' in content
+    assert "yourdomain.com" not in content
     assert 'href="/static/' not in content
     assert 'src="/static/' not in content
+
+
+def test_android_launcher_and_splash_resources() -> None:
+    res_dir = ROOT_DIR / "mobile" / "android" / "app" / "src" / "main" / "res"
+    static_dir = ROOT_DIR / "ui" / "static"
+    png_sig = b"\x89PNG\r\n\x1a\n"
+
+    for asset_root in (static_dir, res_dir):
+        for png_file in asset_root.rglob("*.png"):
+            raw = png_file.read_bytes()
+            assert raw.startswith(png_sig), f"Invalid PNG header: {png_file}"
+            assert len(raw) < 100_000, f"PNG exceeds 100KB limit ({len(raw)} bytes): {png_file}"
+
+    for density in ("mdpi", "hdpi", "xhdpi", "xxhdpi", "xxxhdpi"):
+        for fname in ("ic_launcher.png", "ic_launcher_round.png", "ic_launcher_foreground.png"):
+            fpath = res_dir / f"mipmap-{density}" / fname
+            assert fpath.exists(), f"Missing {fpath}"
+            raw = fpath.read_bytes()
+            assert len(raw) > 200 and raw.startswith(png_sig), f"Invalid PNG: {fpath}"
+
+    splash_xxxhdpi = res_dir / "drawable-port-xxxhdpi" / "splash.png"
+    assert splash_xxxhdpi.exists()
+    assert splash_xxxhdpi.read_bytes().startswith(png_sig)
+
+    mono_xml = res_dir / "drawable" / "ic_launcher_monochrome.xml"
+    assert mono_xml.exists() and "<vector" in mono_xml.read_text(encoding="utf-8")
+
+    for anydpi in ("ic_launcher.xml", "ic_launcher_round.xml"):
+        xml_txt = (res_dir / "mipmap-anydpi-v26" / anydpi).read_text(encoding="utf-8")
+        assert "@drawable/ic_launcher_monochrome" in xml_txt
+        assert "@mipmap/ic_launcher_foreground" in xml_txt
+
+    bg_xml = (res_dir / "values" / "ic_launcher_background.xml").read_text(encoding="utf-8")
+    assert "#FFFFFF" not in bg_xml.upper() and "#" in bg_xml
+
+
+def test_mobile_sync_injects_custom_vps_urls(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(sync_mobile_mod, "DEST_WWW", tmp_path)
+    monkeypatch.setattr(sync_mobile_mod, "DEST_STATIC", tmp_path / "static")
+    out_html = sync_mobile_assets(
+        api_base="https://dev.example.com/",
+        prod_url="https://app.example.com/",
+        dev_url="https://dev.example.com/",
+    )
+    content = out_html.read_text(encoding="utf-8")
+    assert '<meta name="autoorb-api-base" content="https://dev.example.com"/>' in content
+    assert '<meta name="autoorb-prod-api" content="https://app.example.com"/>' in content
+    assert '<meta name="autoorb-dev-api" content="https://dev.example.com"/>' in content
+
+
+def test_multi_env_vps_artifacts_and_db_normalization(tmp_path: Path) -> None:
+    assert normalize_database_url("postgres://u:p@h:5432/db") == "postgresql+asyncpg://u:p@h:5432/db"
+    assert normalize_database_url("postgresql://u:p@h:5432/db") == "postgresql+asyncpg://u:p@h:5432/db"
+    assert normalize_database_url("sqlite+aiosqlite:///data/autoorb.db") == "sqlite+aiosqlite:///data/autoorb.db"
+
+    _orch, app, engine = _build_test_client(tmp_path)
+    try:
+        with TestClient(app) as client:
+            hres = client.get("/health")
+            assert hres.status_code == 200
+            assert hres.json()["status"] == "ok"
+            assert "env" in hres.json()
+    finally:
+        asyncio.run(engine.dispose())
+
+    expected_files = (
+        ROOT_DIR / "docker-compose.vps.yml",
+        ROOT_DIR / ".env.prod.example",
+        ROOT_DIR / ".env.dev.example",
+        ROOT_DIR / "deploy" / ".env.vps.example",
+        ROOT_DIR / "deploy" / "Caddyfile",
+        ROOT_DIR / "deploy" / "postgres-init.sql",
+        ROOT_DIR / "deploy" / "setup_vps_multi_env.sh",
+        ROOT_DIR / "deploy" / "VPS_MULTI_ENV_GUIDE.md",
+        ROOT_DIR / ".github" / "workflows" / "deploy_vps.yml",
+    )
+    for path in expected_files:
+        assert path.exists(), f"Missing VPS deployment artifact: {path}"
+
+    compose_txt = (ROOT_DIR / "docker-compose.vps.yml").read_text(encoding="utf-8")
+    for key in ("postgres:", "autoorb-prod:", "autoorb-dev:", "caddy:"):
+        assert key in compose_txt
+
+    caddy_txt = (ROOT_DIR / "deploy" / "Caddyfile").read_text(encoding="utf-8")
+    assert "reverse_proxy autoorb-prod:8000" in caddy_txt
+    assert "reverse_proxy autoorb-dev:8000" in caddy_txt
+

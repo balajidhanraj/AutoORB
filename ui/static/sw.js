@@ -1,45 +1,41 @@
-const CACHE_NAME = 'autoorb-shell-v5';
+const CACHE_NAME = 'autoorb-shell-v9';
 const SHELL_ASSETS = [
   '/app',
-  '/static/theme.css?v=5',
-  '/static/api_client.js?v=5',
+  '/static/theme.css?v=9',
+  '/static/api_client.js?v=9',
   '/static/manifest.json',
-  '/static/icon.svg'
+  '/static/icon.svg',
+  '/static/icon-192.png',
+  '/static/icon-512.png'
 ];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(SHELL_ASSETS)).catch(() => null)
+    caches.open(CACHE_NAME).then((cache) => cache.addAll(SHELL_ASSETS)).then(() => self.skipWaiting())
   );
-  self.skipWaiting();
 });
 
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((keys) =>
       Promise.all(keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k)))
-    )
+    ).then(() => self.clients.claim())
   );
-  self.clients.claim();
 });
 
 self.addEventListener('fetch', (event) => {
-  const url = new URL(event.request.url);
-  if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/download/')) {
-    return;
-  }
-  if (event.request.method !== 'GET') {
-    return;
-  }
+  const req = event.request;
+  if (req.method !== 'GET') return;
+  const url = new URL(req.url);
+  if (url.pathname.startsWith('/api/') || url.pathname === '/health') return;
+
   event.respondWith(
-    fetch(event.request)
+    fetch(req)
       .then((res) => {
-        if (res && res.status === 200 && url.origin === self.location.origin) {
-          const clone = res.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
-        }
+        const copy = res.clone();
+        caches.open(CACHE_NAME).then((cache) => cache.put(req, copy)).catch(() => null);
         return res;
       })
-      .catch(() => caches.match(event.request))
+      .catch(() => caches.match(req))
   );
 });

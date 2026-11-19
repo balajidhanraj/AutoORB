@@ -4,7 +4,27 @@
 (function (global) {
   'use strict';
 
-  const DEFAULT_ANDROID_API_BASE = 'http://192.168.0.109:8000';
+  function readMetaUrl(name) {
+    try {
+      const el = document.querySelector(`meta[name="${name}"]`);
+      return el ? (el.getAttribute('content') || '').trim().replace(/\/+$/, '') : '';
+    } catch (_e) {
+      return '';
+    }
+  }
+
+  const FALLBACK_CLOUD_API_BASE = 'https://balajidhanraj-shoonya-orb.hf.space';
+
+  function isPlaceholderUrl(url) {
+    return /(^|\/\/|\.)yourdomain\.com(\/|$|:)/i.test(String(url || ''));
+  }
+
+  function getDefaultApiBase() {
+    const metaBase = readMetaUrl('autoorb-api-base');
+    return (metaBase && !isPlaceholderUrl(metaBase)) ? metaBase : FALLBACK_CLOUD_API_BASE;
+  }
+
+  const DEFAULT_ANDROID_API_BASE = getDefaultApiBase();
 
   // Shared Tailwind CSS configuration referencing CSS RGB variables in theme.css
   global.AUTOORB_TAILWIND_CONFIG = {
@@ -83,10 +103,10 @@
           'display-lg': ['Space Grotesk', 'sans-serif'],
           'display-lg-mobile': ['Space Grotesk', 'sans-serif'],
           'headline-md': ['Space Grotesk', 'sans-serif'],
-          body: ['Geist', 'Inter', 'sans-serif'],
-          'body-md': ['Geist', 'Inter', 'sans-serif'],
-          'body-sm': ['Geist', 'Inter', 'sans-serif'],
-          'title-sm': ['Geist', 'Inter', 'sans-serif'],
+          body: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
+          'body-md': ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
+          'body-sm': ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
+          'title-sm': ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
           label: ['JetBrains Mono', 'monospace'],
           'label-caps': ['JetBrains Mono', 'monospace'],
           'data-mono-lg': ['JetBrains Mono', 'monospace'],
@@ -94,16 +114,16 @@
           'data-mono-sm': ['JetBrains Mono', 'monospace']
         },
         fontSize: {
-          'display-lg': ['36px', { lineHeight: '44px', letterSpacing: '-0.03em', fontWeight: '700' }],
-          'display-lg-mobile': ['28px', { lineHeight: '34px', letterSpacing: '-0.02em', fontWeight: '700' }],
-          'headline-md': ['22px', { lineHeight: '28px', letterSpacing: '-0.01em', fontWeight: '600' }],
-          'title-sm': ['16px', { lineHeight: '22px', letterSpacing: '0em', fontWeight: '600' }],
-          'body-md': ['14px', { lineHeight: '20px', letterSpacing: '0.01em', fontWeight: '400' }],
-          'body-sm': ['12px', { lineHeight: '16px', letterSpacing: '0.01em', fontWeight: '400' }],
-          'data-mono-lg': ['16px', { lineHeight: '20px', letterSpacing: '-0.02em', fontWeight: '500' }],
-          'data-mono-md': ['13px', { lineHeight: '16px', letterSpacing: '-0.01em', fontWeight: '500' }],
-          'data-mono-sm': ['11px', { lineHeight: '14px', letterSpacing: '0em', fontWeight: '400' }],
-          'label-caps': ['10px', { lineHeight: '12px', letterSpacing: '0.08em', fontWeight: '600' }]
+          'display-lg': ['var(--fs-display-lg)', { lineHeight: '1.15', letterSpacing: '-0.025em', fontWeight: '700' }],
+          'display-lg-mobile': ['var(--fs-display-mobile)', { lineHeight: '1.18', letterSpacing: '-0.02em', fontWeight: '700' }],
+          'headline-md': ['var(--fs-headline-md)', { lineHeight: '1.25', letterSpacing: '-0.01em', fontWeight: '600' }],
+          'title-sm': ['var(--fs-title-sm)', { lineHeight: '1.32', letterSpacing: '0em', fontWeight: '600' }],
+          'body-md': ['var(--fs-body-md)', { lineHeight: '1.45', letterSpacing: '0em', fontWeight: '400' }],
+          'body-sm': ['var(--fs-body-sm)', { lineHeight: '1.4', letterSpacing: '0em', fontWeight: '400' }],
+          'data-mono-lg': ['var(--fs-mono-lg)', { lineHeight: '1.25', letterSpacing: '-0.02em', fontWeight: '500' }],
+          'data-mono-md': ['var(--fs-mono-md)', { lineHeight: '1.3', letterSpacing: '-0.01em', fontWeight: '500' }],
+          'data-mono-sm': ['var(--fs-mono-sm)', { lineHeight: '1.35', letterSpacing: '0em', fontWeight: '400' }],
+          'label-caps': ['var(--fs-label-caps)', { lineHeight: '1.2', letterSpacing: 'var(--ls-label-caps)', fontWeight: '600' }]
         }
       }
     }
@@ -125,11 +145,24 @@
     }
   }
 
+  function getPresetUrls() {
+    const metaProd = readMetaUrl('autoorb-prod-api');
+    const metaDev = readMetaUrl('autoorb-dev-api');
+    return {
+      prod: (metaProd && !isPlaceholderUrl(metaProd)) ? metaProd : FALLBACK_CLOUD_API_BASE,
+      dev: (metaDev && !isPlaceholderUrl(metaDev)) ? metaDev : FALLBACK_CLOUD_API_BASE
+    };
+  }
+
   function getApiBase() {
-    const saved = (localStorage.getItem('autoorb_api_base') || '').trim().replace(/\/+$/, '');
+    let saved = (localStorage.getItem('autoorb_api_base') || '').trim().replace(/\/+$/, '');
+    if (saved && isPlaceholderUrl(saved)) {
+      localStorage.removeItem('autoorb_api_base');
+      saved = '';
+    }
+    if (!isNativeCapacitor()) return '';
     if (saved) return saved;
-    if (isNativeCapacitor()) return DEFAULT_ANDROID_API_BASE;
-    return '';
+    return getDefaultApiBase();
   }
 
   function setApiBase(url) {
@@ -179,6 +212,28 @@
     lastPingMs: null
   };
 
+  async function probeHealth(candidateBase) {
+    const clean = (candidateBase || '').trim().replace(/\/+$/, '');
+    const url = `${clean}/health`;
+    let res;
+    try {
+      res = await fetch(url, { headers: { Accept: 'application/json' } });
+    } catch (_err) {
+      const targetDesc = clean || (global.location && global.location.origin) || 'local server';
+      throw new Error(`Cannot reach ${targetDesc}/health`);
+    }
+    const contentType = res.headers.get('content-type') || '';
+    const data = contentType.includes('application/json') ? await res.json() : await res.text();
+    if (!res.ok) {
+      const msg = (data && (data.detail || data.message || data.error)) || `HTTP ${res.status}`;
+      const err = new Error(msg);
+      err.status = res.status;
+      err.data = data;
+      throw err;
+    }
+    return data;
+  }
+
   async function request(path, options = {}) {
     const base = getApiBase();
     const url = path.startsWith('http') ? path : `${base}${path}`;
@@ -192,7 +247,13 @@
     }
 
     const t0 = performance.now();
-    const res = await fetch(url, Object.assign({}, options, { headers }));
+    let res;
+    try {
+      res = await fetch(url, Object.assign({}, options, { headers }));
+    } catch (_err) {
+      const targetDesc = url.startsWith('http') ? url : `${global.location.origin}${url}`;
+      throw new Error(`Cannot reach server (${targetDesc}). Verify AutoORB backend is running.`);
+    }
     state.lastPingMs = Math.max(1, Math.round(performance.now() - t0));
 
     const contentType = res.headers.get('content-type') || '';
@@ -402,10 +463,10 @@
       : '';
     const badgeText = norm.logger ? norm.logger.toUpperCase() : norm.level;
     const badgePart = badgeText
-      ? `<span class="${badgeClr} px-1.5 py-0.5 rounded text-[10px] font-semibold shrink-0">[${escapeHtml(badgeText)}]</span>`
+      ? `<span class="${badgeClr} px-1.5 py-0.5 rounded text-[9.5px] leading-snug font-semibold shrink-0">[${escapeHtml(badgeText)}]</span>`
       : '';
     const msgCls = truncate ? `${msgClr} truncate` : `${msgClr} break-words min-w-0 flex-1`;
-    return `<div class="flex items-start gap-1.5 py-0.5 leading-relaxed">${tsPart}${badgePart}<span class="${msgCls}">${escapeHtml(norm.message)}</span></div>`;
+    return `<div class="flex items-start gap-1.5 py-0.5 leading-snug text-data-mono-sm">${tsPart}${badgePart}<span class="${msgCls}">${escapeHtml(norm.message)}</span></div>`;
   }
 
   function formatLogsForCopy(entries) {
@@ -416,6 +477,10 @@
 
   global.AutoORB = {
     DEFAULT_ANDROID_API_BASE,
+    isPlaceholderUrl,
+    probeHealth,
+    getDefaultApiBase,
+    getPresetUrls,
     isNativeCapacitor,
     getApiBase,
     setApiBase,

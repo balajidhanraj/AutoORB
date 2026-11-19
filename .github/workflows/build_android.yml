@@ -2,8 +2,13 @@ name: Build AutoORB Android App (APK & AAB)
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, dev ]
   workflow_dispatch:
+    inputs:
+      api_base:
+        description: "Optional backend HTTPS URL baked into APK (overrides PROD/DEV_API_URL)"
+        required: false
+        default: ""
 
 jobs:
   build:
@@ -25,6 +30,26 @@ jobs:
           distribution: 'zulu'
           java-version: '17'
 
+      - name: Resolve Backend URL for Target Environment
+        id: envurl
+        run: |
+          PROD_URL="${{ vars.PROD_API_URL }}"
+          DEV_URL="${{ vars.DEV_API_URL }}"
+          if [ -z "$PROD_URL" ]; then PROD_URL="https://balajidhanraj-shoonya-orb.hf.space"; fi
+          if [ -z "$DEV_URL" ]; then DEV_URL="https://balajidhanraj-shoonya-orb.hf.space"; fi
+
+          if [ -n "${{ github.event.inputs.api_base }}" ]; then
+            API_BASE="${{ github.event.inputs.api_base }}"
+          elif [ "${{ github.ref }}" = "refs/heads/dev" ]; then
+            API_BASE="$DEV_URL"
+          else
+            API_BASE="$PROD_URL"
+          fi
+
+          echo "PROD_API_URL=$PROD_URL" >> "$GITHUB_ENV"
+          echo "DEV_API_URL=$DEV_URL" >> "$GITHUB_ENV"
+          echo "ANDROID_API_BASE=$API_BASE" >> "$GITHUB_ENV"
+
       - name: Sync Web Assets & Install Mobile Dependencies
         run: |
           python3 scripts/sync_mobile.py
@@ -39,21 +64,31 @@ jobs:
           ./gradlew assembleDebug --stacktrace
 
       - name: Build Release AAB (Google Play Store Bundle)
+        if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
         run: |
           cd mobile/android
           ./gradlew bundleRelease --stacktrace
 
-      - name: Upload Debug APK Artifact
+      - name: Upload Debug APK Artifact (Prod)
+        if: github.ref != 'refs/heads/dev'
         uses: actions/upload-artifact@v4
         with:
           name: AutoORB-debug-apk
           path: mobile/android/app/build/outputs/apk/debug/app-debug.apk
           retention-days: 14
 
+      - name: Upload Debug APK Artifact (Dev)
+        if: github.ref == 'refs/heads/dev'
+        uses: actions/upload-artifact@v4
+        with:
+          name: AutoORB-dev-debug-apk
+          path: mobile/android/app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 14
+
       - name: Upload Play Store AAB Bundle
+        if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
         uses: actions/upload-artifact@v4
         with:
           name: AutoORB-playstore-aab
           path: mobile/android/app/build/outputs/bundle/release/app-release.aab
           retention-days: 14
-

@@ -1,0 +1,134 @@
+name: Test & Deploy AutoORB to VPS (Prod / Dev)
+
+on:
+  push:
+    branches: [ main, dev ]
+  workflow_dispatch:
+    inputs:
+      target_env:
+        description: "Environment to deploy"
+        required: true
+        default: dev
+        type: choice
+        options:
+          - dev
+          - prod
+          - all
+
+concurrency:
+  group: vps-deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  test:
+    name: Run Pytest Verification Suite
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run automated tests
+        run: pytest -q
+
+  deploy:
+    name: Deploy Updated Containers to VPS
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev'
+    steps:
+      - name: Determine deployment targets
+        id: target
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "env=${{ github.event.inputs.target_env }}" >> "$GITHUB_OUTPUT"
+          elif [ "${{ github.ref }}" = "refs/heads/main" ]; then
+            echo "env=prod" >> "$GITHUB_OUTPUT"
+          else
+            echo "env=dev" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Deploy via SSH to VPS
+        uses: appleboy/ssh-action@v1.0.3
+        env:
+          DEPLOY_ENV: ${{ steps.target.outputs.env }}
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_PORT || 22 }}
+          envs: DEPLOY_ENV
+          script: |
+            set -euo pipefail
+            BASE_DIR="/opt/autoorb"
+            COMPOSE_FILE="$BASE_DIR/prod/docker-compose.vps.yml"
+            VPS_ENV="$BASE_DIR/.env.vps"
+
+            deploy_prod() {
+              echo ">>> Deploying PRODUCTION from main..."
+              git -C "$BASE_DIR/prod" fetch origin main
+              git -C "$BASE_DIR/prod" checkout main
+              git -C "$BASE_DIR/prod" pull --ff-only origin main
+              docker compose -f "$COMPOSE_FILE" --env-file "$VPS_ENV" up -d postgres caddy
+              docker compose -f "$COMPOSE_FILE" --env-file "$VPS_ENV" up -d --build --no-deps autoorb-prod
+              for i in $(seq 1 20); do
+                if curl -fsS http://127.0.0.1:8000/health; then
+                  echo ""
+                  return 0
+                fi
+                sleep 2
+              done
+              echo "Production health check failed!" >&2
+              docker logs --tail 60 autoorb-prod
+              return 1
+            }
+
+            deploy_dev() {
+              echo ">>> Deploying DEV from dev..."
+              if [ ! -d "$BASE_DIR/dev/.git" ]; then
+                git clone -b dev "$(git -C "$BASE_DIR/prod" remote get-url origin)" "$BASE_DIR/dev"
+              else
+                git -C "$BASE_DIR/dev" fetch origin dev
+                git -C "$BASE_DIR/dev" checkout dev
+                git -C "$BASE_DIR/dev" pull --ff-only origin dev
+              fi
+              docker compose -f "$COMPOSE_FILE" --env-file "$VPS_ENV" up -d postgres caddy
+              docker compose -f "$COMPOSE_FILE" --env-file "$VPS_ENV" up -d --build --no-deps autoorb-dev
+              for i in $(seq 1 20); do
+                if curl -fsS http://127.0.0.1:8001/health; then
+                  echo ""
+                  return 0
+                fi
+                sleep 2
+              done
+              echo "Dev health check failed!" >&2
+              docker logs --tail 60 autoorb-dev
+              return 1
+            }
+
+            case "$DEPLOY_ENV" in
+              prod)
+                deploy_prod
+                ;;
+              dev)
+                deploy_dev
+                ;;
+              all)
+                deploy_prod
+                deploy_dev
+                ;;
+              *)
+                echo "Unknown DEPLOY_ENV: $DEPLOY_ENV" >&2
+                exit 1
+                ;;
+            esac
+
+            docker image prune -f

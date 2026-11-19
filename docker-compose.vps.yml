@@ -1,0 +1,118 @@
+networks:
+  autoorb-net:
+    driver: bridge
+
+volumes:
+  pgdata:
+  caddy_data:
+  caddy_config:
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: autoorb-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-autoorb}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-CHANGE_ME_STRONG_PG_PASS}
+      POSTGRES_DB: autoorb_prod
+      TZ: Asia/Kolkata
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./deploy/postgres-init.sql:/docker-entrypoint-initdb.d/01-init-dbs.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-autoorb} -d autoorb_prod"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - autoorb-net
+
+  autoorb-prod:
+    build:
+      context: ${PROD_BUILD_CONTEXT:-.}
+      dockerfile: Dockerfile
+    image: autoorb:prod
+    container_name: autoorb-prod
+    restart: unless-stopped
+    env_file:
+      - ${PROD_ENV_FILE:-.env.prod}
+    environment:
+      TZ: Asia/Kolkata
+      HEADLESS_BROWSER: "true"
+      APP_ENV: production
+      UI_HOST: "0.0.0.0"
+      UI_PORT: "8000"
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - ${DATA_ROOT:-./volumes}/prod/data:/app/data
+      - ${DATA_ROOT:-./volumes}/prod/logs:/app/logs
+      - ${DATA_ROOT:-./volumes}/prod/builds:/app/builds
+    depends_on:
+      postgres:
+        condition: service_healthy
+    shm_size: "512m"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    networks:
+      - autoorb-net
+
+  autoorb-dev:
+    build:
+      context: ${DEV_BUILD_CONTEXT:-.}
+      dockerfile: Dockerfile
+    image: autoorb:dev
+    container_name: autoorb-dev
+    restart: unless-stopped
+    env_file:
+      - ${DEV_ENV_FILE:-.env.dev}
+    environment:
+      TZ: Asia/Kolkata
+      HEADLESS_BROWSER: "true"
+      APP_ENV: development
+      MODE: PAPER
+      UI_HOST: "0.0.0.0"
+      UI_PORT: "8000"
+    ports:
+      - "127.0.0.1:8001:8000"
+    volumes:
+      - ${DATA_ROOT:-./volumes}/dev/data:/app/data
+      - ${DATA_ROOT:-./volumes}/dev/logs:/app/logs
+      - ${DATA_ROOT:-./volumes}/dev/builds:/app/builds
+    depends_on:
+      postgres:
+        condition: service_healthy
+    shm_size: "512m"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    networks:
+      - autoorb-net
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: autoorb-caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      PROD_DOMAIN: ${PROD_DOMAIN:-app.yourdomain.com}
+      DEV_DOMAIN: ${DEV_DOMAIN:-dev.yourdomain.com}
+      ACME_EMAIL: ${ACME_EMAIL:-admin@yourdomain.com}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - autoorb-prod
+      - autoorb-dev
+    networks:
+      - autoorb-net

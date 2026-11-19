@@ -1,0 +1,23 @@
+{
+	email {$ACME_EMAIL:admin@yourdomain.com}
+}
+
+{$PROD_DOMAIN:app.yourdomain.com} {
+	encode zstd gzip
+	header {
+		X-Content-Type-Options nosniff
+		X-Frame-Options SAMEORIGIN
+		Referrer-Policy strict-origin-when-cross-origin
+	}
+	reverse_proxy autoorb-prod:8000
+}
+
+{$DEV_DOMAIN:dev.yourdomain.com} {
+	encode zstd gzip
+	header {
+		X-Content-Type-Options nosniff
+		X-Robots-Tag "noindex, nofollow"
+		X-AutoORB-Env dev
+	}
+	reverse_proxy autoorb-dev:8000
+}
