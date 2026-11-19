@@ -1,8 +1,8 @@
-const CACHE_NAME = 'autoorb-shell-v10';
+const CACHE_NAME = 'autoorb-shell-v11';
 const SHELL_ASSETS = [
   '/app',
-  '/static/theme.css?v=10',
-  '/static/api_client.js?v=10',
+  '/static/theme.css?v=11',
+  '/static/api_client.js?v=11',
   '/static/manifest.json',
   '/static/icon.svg',
   '/static/icon-192.png',

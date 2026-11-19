@@ -7,6 +7,7 @@
   <meta name="autoorb-api-base" content=""/>
   <meta name="autoorb-prod-api" content=""/>
   <meta name="autoorb-dev-api" content=""/>
+  <meta name="autoorb-local-api" content=""/>
   <meta name="apple-mobile-web-app-capable" content="yes"/>
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
   <title>AutoORB Mobile Terminal — Obsidian Velocity</title>
@@ -19,9 +20,9 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet"/>
   <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"/>
-  <link rel="stylesheet" href="/static/theme.css?v=10"/>
+  <link rel="stylesheet" href="/static/theme.css?v=11"/>
   <script src="https://cdn.tailwindcss.com"></script>
-  <script src="/static/api_client.js?v=10"></script>
+  <script src="/static/api_client.js?v=11"></script>
   <script>
     if (window.tailwind && window.AUTOORB_TAILWIND_CONFIG) {
       window.tailwind.config = window.AUTOORB_TAILWIND_CONFIG;
@@ -186,13 +187,14 @@
           <span id="ma-srv-status" class="text-profit font-bold shrink-0">AUTO</span>
         </summary>
         <div class="pt-2 space-y-2">
-          <p class="font-body-sm text-on-surface-variant">Optional: pick Prod/Dev VPS domain or set a LAN URL before signing in.</p>
-          <div class="flex gap-2">
-            <button id="ma-btn-preset-prod" type="button" class="flex-1 py-1.5 rounded-lg bg-surface-container-high hover:bg-surface-bright font-label-caps text-profit font-bold cursor-pointer">USE PROD HTTPS</button>
-            <button id="ma-btn-preset-dev" type="button" class="flex-1 py-1.5 rounded-lg bg-surface-container-high hover:bg-surface-bright font-label-caps text-amber-tactical font-bold cursor-pointer">USE DEV HTTPS</button>
+          <p class="font-body-sm text-on-surface-variant">Optional: pick Local Wi-Fi PC, Cloud Prod, or Dev VPS before signing in.</p>
+          <div class="grid grid-cols-3 gap-1.5">
+            <button id="ma-btn-preset-local" type="button" class="py-1.5 px-1 rounded-lg bg-surface-container-high hover:bg-surface-bright font-label-caps text-primary font-bold cursor-pointer truncate">LOCAL WIFI</button>
+            <button id="ma-btn-preset-prod" type="button" class="py-1.5 px-1 rounded-lg bg-surface-container-high hover:bg-surface-bright font-label-caps text-profit font-bold cursor-pointer truncate">USE PROD HTTPS</button>
+            <button id="ma-btn-preset-dev" type="button" class="py-1.5 px-1 rounded-lg bg-surface-container-high hover:bg-surface-bright font-label-caps text-amber-tactical font-bold cursor-pointer truncate">USE DEV HTTPS</button>
           </div>
           <div class="flex gap-2">
-            <input id="ma-api-base" type="url" placeholder="https://balajidhanraj-shoonya-orb.hf.space (or http://LAN-IP:8000)" class="min-w-0 w-full flex-1 p-2 rounded-lg bg-surface-container-lowest border border-outline-variant/50 font-data-mono-sm text-on-surface"/>
+            <input id="ma-api-base" type="text" placeholder="http://192.168.0.109:8000 or https://..." class="min-w-0 w-full flex-1 p-2 rounded-lg bg-surface-container-lowest border border-outline-variant/50 font-data-mono-sm text-on-surface"/>
             <button id="ma-btn-save-server" type="button" class="px-3 py-2 rounded-lg bg-primary-container text-on-primary-fixed font-label-caps font-bold cursor-pointer shrink-0">TEST &amp; SAVE</button>
           </div>
         </div>
@@ -496,13 +498,14 @@
           <span class="font-title-sm text-on-surface font-bold flex items-center gap-1.5 min-w-0 truncate"><span class="material-symbols-outlined text-[17px] text-profit shrink-0">dns</span>Backend Server URL</span>
           <span id="mc-srv-status" class="font-label-caps text-profit shrink-0">CONNECTED</span>
         </div>
-        <p class="font-body-sm text-on-surface-variant">Switch between Production VPS, Dev VPS, or set a custom LAN/Cloud URL for APK sync.</p>
-        <div class="flex gap-2">
-          <button id="mc-btn-preset-prod" type="button" class="flex-1 py-1.5 rounded-lg bg-surface-container-high hover:bg-surface-bright font-label-caps text-profit font-bold cursor-pointer">USE PROD HTTPS</button>
-          <button id="mc-btn-preset-dev" type="button" class="flex-1 py-1.5 rounded-lg bg-surface-container-high hover:bg-surface-bright font-label-caps text-amber-tactical font-bold cursor-pointer">USE DEV HTTPS</button>
+        <p class="font-body-sm text-on-surface-variant">Switch between Local Wi-Fi PC, Production VPS, or Dev VPS for APK sync.</p>
+        <div class="grid grid-cols-3 gap-1.5">
+          <button id="mc-btn-preset-local" type="button" class="py-1.5 px-1 rounded-lg bg-surface-container-high hover:bg-surface-bright font-label-caps text-primary font-bold cursor-pointer truncate">LOCAL WIFI</button>
+          <button id="mc-btn-preset-prod" type="button" class="py-1.5 px-1 rounded-lg bg-surface-container-high hover:bg-surface-bright font-label-caps text-profit font-bold cursor-pointer truncate">USE PROD HTTPS</button>
+          <button id="mc-btn-preset-dev" type="button" class="py-1.5 px-1 rounded-lg bg-surface-container-high hover:bg-surface-bright font-label-caps text-amber-tactical font-bold cursor-pointer truncate">USE DEV HTTPS</button>
         </div>
         <div class="flex gap-2">
-          <input id="mc-api-base" type="url" placeholder="https://balajidhanraj-shoonya-orb.hf.space (or http://LAN-IP:8000)" class="min-w-0 w-full flex-1 p-2 rounded-lg bg-surface-container-lowest border border-outline-variant/50 font-data-mono-sm text-on-surface"/>
+          <input id="mc-api-base" type="text" placeholder="http://192.168.0.109:8000 or https://..." class="min-w-0 w-full flex-1 p-2 rounded-lg bg-surface-container-lowest border border-outline-variant/50 font-data-mono-sm text-on-surface"/>
           <button id="mc-btn-save-server" type="button" class="px-3 py-2 rounded-lg bg-primary-container text-on-primary-fixed font-label-caps font-bold cursor-pointer shrink-0">TEST &amp; SAVE</button>
         </div>
       </div>
@@ -1161,18 +1164,21 @@
           return;
         }
 
-        const url = inputEl.value.trim().replace(/\/+$/, '');
-        try {
-          const h = await A.probeHealth(url);
+        const rawInput = inputEl.value.trim();
+        const url = A.normalizeServerUrl ? A.normalizeServerUrl(rawInput) : rawInput.replace(/\/+$/, '');
+        if (url) {
           A.setApiBase(url);
           syncServerInputsUi();
+        }
+        try {
+          const h = await A.probeHealth(url);
           const envTag = h && h.env ? `/${String(h.env).toUpperCase()}` : '';
           statusEl.textContent = `OK (${h.mode}${envTag})`;
-          A.showToast('Backend connected & saved!');
+          A.showToast(`Connected to ${url || 'server'}!`);
           if (A.getToken()) await pollMobile();
         } catch (_e) {
-          statusEl.textContent = 'UNREACHABLE';
-          A.showToast(`Cannot reach ${url || 'server'} — kept previous server`, 'error');
+          statusEl.textContent = 'SAVED (OFFLINE)';
+          A.showToast(`Saved ${url || 'URL'} — server not responding yet. Tap LOCAL WIFI for laptop (192.168.0.109:8000).`, 'warn');
         }
       }
       function applyServerPreset(which, inputEl, statusEl) {
@@ -1182,24 +1188,42 @@
         }
         const presets = A.getPresetUrls ? A.getPresetUrls() : {
           prod: 'https://balajidhanraj-shoonya-orb.hf.space',
-          dev: 'https://balajidhanraj-shoonya-orb.hf.space'
+          dev: 'https://balajidhanraj-shoonya-orb.hf.space',
+          local: 'http://192.168.0.109:8000'
         };
-        inputEl.value = which === 'dev' ? presets.dev : presets.prod;
+        inputEl.value = which === 'local' ? presets.local : (which === 'dev' ? presets.dev : presets.prod);
         testAndSaveServerUrl(inputEl, statusEl);
       }
       syncServerInputsUi();
+      if (A.isNativeCapacitor() && A.autoConnectNativeBackend) {
+        A.autoConnectNativeBackend().then((res) => {
+          syncServerInputsUi();
+          if (res && res.health) {
+            const envTag = res.health.env ? `/${String(res.health.env).toUpperCase()}` : '';
+            const lbl = `OK (${res.health.mode}${envTag})`;
+            const maStat = document.getElementById('ma-srv-status');
+            const mcStat = document.getElementById('mc-srv-status');
+            if (maStat) maStat.textContent = lbl;
+            if (mcStat) mcStat.textContent = lbl;
+          }
+        }).catch(() => null);
+      }
       document.getElementById('mc-btn-save-server').addEventListener('click', () =>
         testAndSaveServerUrl(document.getElementById('mc-api-base'), document.getElementById('mc-srv-status'))
       );
       document.getElementById('ma-btn-save-server').addEventListener('click', () =>
         testAndSaveServerUrl(document.getElementById('ma-api-base'), document.getElementById('ma-srv-status'))
       );
+      const mcLocalBtn = document.getElementById('mc-btn-preset-local');
       const mcProdBtn = document.getElementById('mc-btn-preset-prod');
       const mcDevBtn = document.getElementById('mc-btn-preset-dev');
+      const maLocalBtn = document.getElementById('ma-btn-preset-local');
       const maProdBtn = document.getElementById('ma-btn-preset-prod');
       const maDevBtn = document.getElementById('ma-btn-preset-dev');
+      if (mcLocalBtn) mcLocalBtn.addEventListener('click', () => applyServerPreset('local', document.getElementById('mc-api-base'), document.getElementById('mc-srv-status')));
       if (mcProdBtn) mcProdBtn.addEventListener('click', () => applyServerPreset('prod', document.getElementById('mc-api-base'), document.getElementById('mc-srv-status')));
       if (mcDevBtn) mcDevBtn.addEventListener('click', () => applyServerPreset('dev', document.getElementById('mc-api-base'), document.getElementById('mc-srv-status')));
+      if (maLocalBtn) maLocalBtn.addEventListener('click', () => applyServerPreset('local', document.getElementById('ma-api-base'), document.getElementById('ma-srv-status')));
       if (maProdBtn) maProdBtn.addEventListener('click', () => applyServerPreset('prod', document.getElementById('ma-api-base'), document.getElementById('ma-srv-status')));
       if (maDevBtn) maDevBtn.addEventListener('click', () => applyServerPreset('dev', document.getElementById('ma-api-base'), document.getElementById('ma-srv-status')));
 

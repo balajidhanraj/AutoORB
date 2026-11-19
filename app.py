@@ -855,11 +855,6 @@ def build_gradio_demo() -> Any:
 
 demo = build_gradio_demo()
 fastapi_app = create_app(orchestrator)
-if demo is not None and gr is not None and hasattr(gr, "mount_gradio_app"):
-    try:
-        fastapi_app = gr.mount_gradio_app(fastapi_app, demo, path="/gradio")
-    except Exception:
-        pass
 
 
 if __name__ == "__main__":

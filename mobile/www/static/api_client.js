@@ -14,6 +14,7 @@
   }
 
   const FALLBACK_CLOUD_API_BASE = 'https://balajidhanraj-shoonya-orb.hf.space';
+  const FALLBACK_LOCAL_API_BASE = 'http://192.168.0.109:8000';
 
   function isPlaceholderUrl(url) {
     return /(^|\/\/|\.)yourdomain\.com(\/|$|:)/i.test(String(url || ''));
@@ -156,10 +157,34 @@
   function getPresetUrls() {
     const metaProd = readMetaUrl('autoorb-prod-api');
     const metaDev = readMetaUrl('autoorb-dev-api');
+    const metaLocal = readMetaUrl('autoorb-local-api');
     return {
       prod: (metaProd && !isPlaceholderUrl(metaProd)) ? metaProd : FALLBACK_CLOUD_API_BASE,
-      dev: (metaDev && !isPlaceholderUrl(metaDev)) ? metaDev : FALLBACK_CLOUD_API_BASE
+      dev: (metaDev && !isPlaceholderUrl(metaDev)) ? metaDev : FALLBACK_CLOUD_API_BASE,
+      local: (metaLocal && !isPlaceholderUrl(metaLocal)) ? metaLocal : FALLBACK_LOCAL_API_BASE
     };
+  }
+
+  function normalizeServerUrl(rawUrl) {
+    let clean = String(rawUrl || '').trim().replace(/\/+$/, '');
+    if (!clean) return '';
+    if (!/^https?:\/\//i.test(clean)) {
+      const isPrivateOrLocal = /^(localhost|127\.\d+\.\d+\.\d+|10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+)(:\d+)?(\/.*)?$/i.test(clean);
+      clean = `${isPrivateOrLocal ? 'http' : 'https'}://${clean}`;
+    }
+    try {
+      const u = new URL(clean);
+      const isBarePrivateIp = /^(10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+)$/.test(u.hostname);
+      if (isBarePrivateIp && !u.port && u.protocol === 'http:') {
+        u.port = '8000';
+      }
+      if (isNativeCapacitor() && (u.hostname === 'localhost' || u.hostname === '127.0.0.1')) {
+        return getPresetUrls().local;
+      }
+      return u.origin + (u.pathname === '/' ? '' : u.pathname.replace(/\/+$/, ''));
+    } catch (_e) {
+      return clean;
+    }
   }
 
   function getApiBase() {
@@ -169,13 +194,13 @@
       saved = '';
     }
     if (!isNativeCapacitor()) return '';
-    if (saved) return saved;
+    if (saved) return normalizeServerUrl(saved);
     return getDefaultApiBase();
   }
 
   function setApiBase(url) {
-    const clean = (url || '').trim().replace(/\/+$/, '');
-    if (!clean) {
+    const clean = normalizeServerUrl(url);
+    if (!clean || isPlaceholderUrl(clean)) {
       localStorage.removeItem('autoorb_api_base');
     } else {
       localStorage.setItem('autoorb_api_base', clean);
@@ -221,11 +246,17 @@
   };
 
   async function probeHealth(candidateBase) {
-    const clean = (candidateBase || '').trim().replace(/\/+$/, '');
+    const clean = normalizeServerUrl(candidateBase);
     const url = `${clean}/health`;
     let res;
     try {
-      res = await fetch(url, { headers: { Accept: 'application/json' } });
+      const ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+      const timer = ctrl ? setTimeout(() => ctrl.abort(), 4500) : null;
+      res = await fetch(url, {
+        headers: { Accept: 'application/json' },
+        signal: ctrl ? ctrl.signal : undefined
+      });
+      if (timer) clearTimeout(timer);
     } catch (_err) {
       const targetDesc = clean || (global.location && global.location.origin) || 'local server';
       throw new Error(`Cannot reach ${targetDesc}/health`);
@@ -246,6 +277,28 @@
       throw err;
     }
     return data;
+  }
+
+  async function autoConnectNativeBackend() {
+    if (!isNativeCapacitor()) return { url: '', health: null };
+    const current = getApiBase();
+    try {
+      const h = await probeHealth(current);
+      return { url: current, health: h };
+    } catch (_e) {
+      const presets = getPresetUrls();
+      const candidates = [presets.local, presets.prod, presets.dev].filter(
+        (u, idx, arr) => u && u !== current && arr.indexOf(u) === idx
+      );
+      for (const cand of candidates) {
+        try {
+          const h = await probeHealth(cand);
+          setApiBase(cand);
+          return { url: cand, health: h };
+        } catch (_err) {}
+      }
+      return { url: current, health: null };
+    }
   }
 
   async function request(path, options = {}) {
@@ -498,7 +551,9 @@
   global.AutoORB = {
     DEFAULT_ANDROID_API_BASE,
     isPlaceholderUrl,
+    normalizeServerUrl,
     probeHealth,
+    autoConnectNativeBackend,
     getDefaultApiBase,
     getPresetUrls,
     isNativeCapacitor,

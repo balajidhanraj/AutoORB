@@ -3,10 +3,9 @@ title: Shoonya Automated ORB Terminal
 emoji: 📈
 colorFrom: blue
 colorTo: indigo
-sdk: gradio
-app_file: app.py
+sdk: docker
+app_port: 8000
 short_description: Automated NSE Options 15m ORB + VWAP + RSI Terminal
-python_version: "3.12"
 startup_duration_timeout: 30m
 ---
 
