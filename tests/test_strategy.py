@@ -461,6 +461,36 @@ def test_dynamic_max_daily_loss(tmp_path: Path) -> None:
     assert rm.get_dynamic_max_daily_loss(mon_dt) == 10000.0
 
 
+def test_auto_square_off_all_and_exit_position(tmp_path: Path) -> None:
+    settings = _make_settings(tmp_path, mode="PAPER")
+    client = ShoonyaClient(settings)
+    mapper = InstrumentMapper(client)
+    rm = RiskManager(settings, client, mapper)
+
+    signal = ORBSignal(
+        index_name="NIFTY",
+        signal_type="CE",
+        candle_time=_ist_dt(2026, 11, 16, 9, 35),
+        spot_close=24580.0,
+        orh=24540.0,
+        orl=24495.0,
+        vwap=24530.0,
+        rsi=68.0,
+        india_vix=15.0,
+    )
+    pos = rm.execute_entry(signal, option_ltp=250.0)
+    assert pos is not None
+    assert "NIFTY" in rm.positions
+
+    # Test auto square off (which runs at 15:15 IST)
+    rm.auto_square_off_all(reason="EOD_1515_SQUAREOFF")
+    assert "NIFTY" not in rm.positions
+    assert rm.halted is True
+    assert rm.halt_reason == PositionState.COMPLETED_FOR_DAY.value
+    assert len(rm.completed_trades) == 1
+    assert rm.completed_trades[0].exit_reason == "EOD_1515_SQUAREOFF"
+
+
 # ---------------------------------------------------------------------------
 # 6. FastAPI Web Dashboard Endpoint Tests
 # ---------------------------------------------------------------------------

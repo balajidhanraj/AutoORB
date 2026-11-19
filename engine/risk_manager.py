@@ -34,6 +34,9 @@ class PositionState(str, Enum):
     EXITING = "EXITING"
     HALTED_DAILY_LOSS = "HALTED_DAILY_LOSS"
     COMPLETED_FOR_DAY = "COMPLETED_FOR_DAY"
+    # Aliases for backward compatibility
+    ENTERED = "OPEN_FULL"
+    PARTIAL_EXIT = "OPEN_PARTIAL_TRAILING"
 
 
 @dataclass
@@ -746,17 +749,52 @@ class RiskManager:
                 self.notifier.send_async(f"🚨 CRITICAL KILL SWITCH: {reason}")
             return True
 
+    def _exit_position_locked(self, pos: ActivePosition, reason: str) -> None:
+        """Cancel working SL order and execute market exit for remaining quantity."""
+        if pos.state == PositionState.ENTERING:
+            self.client.cancel_order(pos.entry_order_id)
+            self.positions.pop(pos.index_name, None)
+            return
+
+        if pos.sl_order_id:
+            try:
+                self.client.cancel_order(pos.sl_order_id)
+            except Exception as e:
+                logger.warning("Error cancelling SL order %s: %s", pos.sl_order_id, e)
+
+        token_key = f"{pos.contract.exchange}|{pos.contract.token}"
+        ltp = self.client.get_ltp(token_key) or pos.last_ltp or pos.entry_avg_price
+        aggr_limit = round(max(0.05, float(ltp) - 5.0), 1)
+        prd_type = getattr(pos, "product_type", getattr(INDEX_SPECS.get(pos.index_name), "product_type", "M"))
+        resp = self.client.place_order(
+            buy_or_sell="S",
+            exchange=pos.contract.exchange,
+            tradingsymbol=pos.contract.tradingsymbol,
+            quantity=pos.remaining_qty,
+            price_type="MKT",
+            price=aggr_limit,
+            product_type=prd_type,
+            retention="DAY",
+            discloseqty=0,
+            remarks=self.settings.sebi_algo_id,
+        )
+        exit_px = float(ltp)
+        if isinstance(resp, dict) and resp.get("stat") == "Ok":
+            oid = str(resp.get("norenordno"))
+            status_info = self.client.get_order_status(oid)
+            if status_info and float(status_info.get("avgprc") or 0) > 0:
+                exit_px = float(status_info["avgprc"])
+        self._close_position_record_locked(pos, exit_px, reason)
+
+    _exit_position_market = _exit_position_locked
+
     def exit_position(self, index_name: str, reason: str = "MANUAL_EXIT") -> bool:
         """Exit an active position for a specific index or commodity."""
         with self._lock:
             pos = self.positions.get(index_name)
             if pos is None:
                 return False
-            if pos.state == PositionState.ENTERING:
-                self.client.cancel_order(pos.entry_order_id)
-                self.positions.pop(index_name, None)
-            elif pos.state in (PositionState.ENTERED, PositionState.PARTIAL_EXIT):
-                self._exit_position_market(pos, reason)
+            self._exit_position_locked(pos, reason)
             logger.info("Manually exited position for %s (%s)", index_name, reason)
             return True
 
@@ -771,59 +809,18 @@ class RiskManager:
                 self.notifier.send_async(f"🛑 EMERGENCY KILL SWITCH: {reason}")
 
     def auto_square_off_all(self, reason: str = "EOD_1515_SQUAREOFF") -> None:
-        """Mandatory square-off of open positions and pending orders."""
+        """Mandatory square-off of open positions and pending orders at 15:15 IST."""
         with self._lock:
-            # If MCX commodity is traded, only square-off NSE positions at 15:15; MCX squares off at 23:15
-            has_mcx = any(getattr(s, "spot_exchange", "") == "MCX" for s in INDEX_SPECS.values())
-            is_1515 = "1515" in reason
             for index_name, pos in list(self.positions.items()):
-                spec = INDEX_SPECS.get(index_name)
-                if is_1515 and spec and spec.spot_exchange == "MCX":
-                    continue  # Keep MCX position open until evening square-off
-                if pos.state == PositionState.ENTERING:
-                    self.client.cancel_order(pos.entry_order_id)
-                    self.positions.pop(index_name, None)
-                elif pos.state in (PositionState.ENTERED, PositionState.PARTIAL_EXIT):
-                    self._exit_position_market(pos, reason)
+                self._exit_position_locked(pos, reason)
 
-            if not has_mcx or not is_1515:
-                self.halted = True
-                self.halt_reason = PositionState.COMPLETED_FOR_DAY.value
+            self.halted = True
+            self.halt_reason = PositionState.COMPLETED_FOR_DAY.value
             logger.info("Auto square-off completed (%s)", reason)
 
     def _liquidate_all_locked(self, exit_reason: str) -> None:
         for index_name, pos in list(self.positions.items()):
-            if pos.state == PositionState.ENTERING:
-                self.client.cancel_order(pos.entry_order_id)
-                self.positions.pop(index_name, None)
-                continue
-
-            if pos.sl_order_id:
-                self.client.cancel_order(pos.sl_order_id)
-
-            token_key = f"{pos.contract.exchange}|{pos.contract.token}"
-            ltp = self.client.get_ltp(token_key) or pos.last_ltp or pos.entry_avg_price
-            aggr_limit = round(max(0.05, float(ltp) - 5.0), 1)
-            prd_type = getattr(pos, "product_type", getattr(INDEX_SPECS.get(pos.index_name), "product_type", "M"))
-            resp = self.client.place_order(
-                buy_or_sell="S",
-                exchange=pos.contract.exchange,
-                tradingsymbol=pos.contract.tradingsymbol,
-                quantity=pos.remaining_qty,
-                price_type="MKT",
-                price=aggr_limit,
-                product_type=prd_type,
-                retention="DAY",
-                discloseqty=0,
-                remarks=self.settings.sebi_algo_id,
-            )
-            exit_px = float(ltp)
-            if isinstance(resp, dict) and resp.get("stat") == "Ok":
-                oid = str(resp.get("norenordno"))
-                status_info = self.client.get_order_status(oid)
-                if status_info and float(status_info.get("avgprc") or 0) > 0:
-                    exit_px = float(status_info["avgprc"])
-            self._close_position_record_locked(pos, exit_px, exit_reason)
+            self._exit_position_locked(pos, exit_reason)
 
     def reconcile_positions(self) -> List[str]:
         """Reconcile broker netqty against internal positions every 10 seconds."""
