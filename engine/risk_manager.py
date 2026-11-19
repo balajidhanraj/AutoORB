@@ -798,6 +798,43 @@ class RiskManager:
             logger.info("Manually exited position for %s (%s)", index_name, reason)
             return True
 
+    def modify_position_sl(self, index_name: str, new_sl_price: float) -> Tuple[bool, str]:
+        """Manually adjust the active SL-LMT trigger price for an open position."""
+        idx = index_name.strip().upper()
+        if new_sl_price <= 0:
+            return False, "SL trigger price must be greater than zero."
+
+        with self._lock:
+            pos = self.positions.get(idx)
+            if pos is None:
+                return False, f"No active position found for '{idx}'."
+
+            spec = INDEX_SPECS[pos.index_name]
+            new_trig = round(float(new_sl_price), 1)
+            new_lim = round(max(0.05, new_trig - spec.sl_buffer_pts), 1)
+
+            if pos.sl_order_id:
+                resp = self.client.modify_order(
+                    orderno=pos.sl_order_id,
+                    exchange=pos.contract.exchange,
+                    tradingsymbol=pos.contract.tradingsymbol,
+                    newquantity=pos.remaining_qty,
+                    newprice_type="SL-LMT",
+                    newprice=new_lim,
+                    newtrigger_price=new_trig,
+                )
+                if (
+                    self.settings.mode == "LIVE"
+                    and (not isinstance(resp, dict) or resp.get("stat") != "Ok")
+                ):
+                    return False, f"Broker SL modify failed: {resp}"
+
+            pos.sl_trigger_price = new_trig
+            pos.sl_limit_price = new_lim
+            msg = f"Updated SL for {pos.contract.tradingsymbol} to ₹{new_trig:.2f}"
+            logger.info(msg)
+            return True, msg
+
     def emergency_kill_switch(self, reason: str = "MANUAL_UI_KILL_SWITCH") -> None:
         """Immediately cancel pending orders, exit all positions, and halt trading."""
         with self._lock:

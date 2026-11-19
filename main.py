@@ -609,6 +609,10 @@ class TradingSystemOrchestrator:
             return True, msg
         return False, f"No active position found for '{idx}'."
 
+    def modify_position_sl(self, index_name: str, new_sl_price: float) -> Tuple[bool, str]:
+        """Manually modify the stop-loss trigger price for an active position."""
+        return self.risk_manager.modify_position_sl(index_name, new_sl_price)
+
     def toggle_mode(self, force_clear_paper: bool = True) -> Tuple[bool, str]:
         with self._lock:
             if self.risk_manager.positions:

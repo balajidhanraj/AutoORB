@@ -1,0 +1,234 @@
+/* Obsidian Velocity Terminal — Shared Design System (Dark default + Light toggle) */
+
+:root {
+  color-scheme: dark;
+
+  --rgb-background: 15 19 28;
+  --rgb-surface: 15 19 28;
+  --rgb-surface-dim: 15 19 28;
+  --rgb-surface-bright: 53 57 67;
+  --rgb-surface-container-lowest: 10 14 23;
+  --rgb-surface-container-low: 24 27 37;
+  --rgb-surface-container: 28 31 41;
+  --rgb-surface-container-high: 38 42 52;
+  --rgb-surface-container-highest: 49 53 63;
+  --rgb-surface-variant: 49 53 63;
+
+  --rgb-on-surface: 223 226 239;
+  --rgb-on-background: 223 226 239;
+  --rgb-on-surface-variant: 185 202 196;
+  --rgb-inverse-surface: 223 226 239;
+  --rgb-inverse-on-surface: 44 48 58;
+
+  --rgb-outline: 131 148 143;
+  --rgb-outline-variant: 58 74 70;
+  --rgb-surface-tint: 0 223 193;
+
+  --rgb-primary: 215 255 243;
+  --rgb-on-primary: 0 56 47;
+  --rgb-primary-container: 0 245 212;
+  --rgb-on-primary-container: 0 32 26;
+  --rgb-inverse-primary: 0 107 91;
+  --rgb-primary-fixed: 38 254 220;
+  --rgb-primary-fixed-dim: 0 223 193;
+  --rgb-on-primary-fixed: 0 32 26;
+  --rgb-on-primary-fixed-variant: 0 81 68;
+
+  --rgb-secondary: 255 178 186;
+  --rgb-on-secondary: 103 0 32;
+  --rgb-secondary-container: 212 0 75;
+  --rgb-on-secondary-container: 255 230 232;
+  --rgb-secondary-fixed: 255 217 220;
+  --rgb-secondary-fixed-dim: 255 178 186;
+  --rgb-on-secondary-fixed: 64 0 17;
+  --rgb-on-secondary-fixed-variant: 145 0 48;
+
+  --rgb-tertiary: 255 245 235;
+  --rgb-on-tertiary: 66 44 0;
+  --rgb-tertiary-container: 255 212 139;
+  --rgb-on-tertiary-container: 126 88 0;
+  --rgb-tertiary-fixed: 255 222 169;
+  --rgb-tertiary-fixed-dim: 255 186 39;
+  --rgb-on-tertiary-fixed: 39 25 0;
+  --rgb-on-tertiary-fixed-variant: 94 65 0;
+
+  --rgb-error: 255 180 171;
+  --rgb-on-error: 105 0 5;
+  --rgb-error-container: 147 0 10;
+  --rgb-on-error-container: 255 218 214;
+
+  --c-profit: #00f5d4;
+  --c-loss: #ff5b7f;
+  --c-amber: #ffb703;
+  --c-glass-bg: rgba(10, 14, 23, 0.86);
+  --c-glass-border: rgba(255, 255, 255, 0.08);
+}
+
+[data-theme="light"] {
+  color-scheme: light;
+
+  --rgb-background: 250 249 255;
+  --rgb-surface: 250 249 255;
+  --rgb-surface-dim: 215 217 231;
+  --rgb-surface-bright: 250 249 255;
+  --rgb-surface-container-lowest: 255 255 255;
+  --rgb-surface-container-low: 241 243 255;
+  --rgb-surface-container: 235 237 251;
+  --rgb-surface-container-high: 229 232 245;
+  --rgb-surface-container-highest: 223 226 239;
+  --rgb-surface-variant: 223 226 239;
+
+  --rgb-on-surface: 24 27 37;
+  --rgb-on-background: 24 27 37;
+  --rgb-on-surface-variant: 58 74 70;
+  --rgb-inverse-surface: 44 48 58;
+  --rgb-inverse-on-surface: 238 240 254;
+
+  --rgb-outline: 106 123 118;
+  --rgb-outline-variant: 185 202 196;
+  --rgb-surface-tint: 0 107 91;
+
+  --rgb-primary: 0 107 91;
+  --rgb-on-primary: 255 255 255;
+  --rgb-primary-container: 0 245 212;
+  --rgb-on-primary-container: 0 32 26;
+  --rgb-inverse-primary: 0 223 193;
+  --rgb-primary-fixed: 0 107 91;
+  --rgb-primary-fixed-dim: 0 140 120;
+  --rgb-on-primary-fixed: 0 32 26;
+  --rgb-on-primary-fixed-variant: 0 81 68;
+
+  --rgb-secondary: 185 0 64;
+  --rgb-on-secondary: 255 255 255;
+  --rgb-secondary-container: 227 23 84;
+  --rgb-on-secondary-container: 255 251 255;
+  --rgb-secondary-fixed: 255 217 220;
+  --rgb-secondary-fixed-dim: 255 178 186;
+  --rgb-on-secondary-fixed: 64 0 17;
+  --rgb-on-secondary-fixed-variant: 145 0 48;
+
+  --rgb-tertiary: 125 88 0;
+  --rgb-on-tertiary: 255 255 255;
+  --rgb-tertiary-container: 255 212 139;
+  --rgb-on-tertiary-container: 126 88 0;
+  --rgb-tertiary-fixed: 125 88 0;
+  --rgb-tertiary-fixed-dim: 217 148 0;
+  --rgb-on-tertiary-fixed: 39 25 0;
+  --rgb-on-tertiary-fixed-variant: 94 65 0;
+
+  --rgb-error: 186 26 26;
+  --rgb-on-error: 255 255 255;
+  --rgb-error-container: 255 218 214;
+  --rgb-on-error-container: 147 0 10;
+
+  --c-profit: #007a67;
+  --c-loss: #c81048;
+  --c-amber: #b37400;
+  --c-glass-bg: rgba(255, 255, 255, 0.88);
+  --c-glass-border: rgba(24, 27, 37, 0.08);
+}
+
+@layer base {
+  html, body {
+    margin: 0;
+    padding: 0;
+    background-color: rgb(var(--rgb-background));
+    color: rgb(var(--rgb-on-surface));
+  }
+  body {
+    overscroll-behavior: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+.text-profit {
+  color: var(--c-profit);
+}
+
+.text-loss {
+  color: var(--c-loss);
+}
+
+.text-amber-tactical {
+  color: var(--c-amber);
+}
+
+.glass-header {
+  background: var(--c-glass-bg);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-bottom: 1px solid var(--c-glass-border);
+}
+
+.glass-panel {
+  border: 1px solid var(--c-glass-border);
+}
+
+.pt-safe {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Tactile thin scrollbar for logs & tables */
+.thin-scroll::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.thin-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.thin-scroll::-webkit-scrollbar-thumb {
+  background: rgba(131, 148, 143, 0.3);
+  border-radius: 9999px;
+}
+
+@keyframes pulseUp {
+  0% { background-color: rgba(0, 245, 212, 0.25); }
+  100% { background-color: transparent; }
+}
+@keyframes pulseDown {
+  0% { background-color: rgba(255, 51, 102, 0.25); }
+  100% { background-color: transparent; }
+}
+.pulse-up {
+  animation: pulseUp 0.35s ease-out;
+}
+.pulse-down {
+  animation: pulseDown 0.35s ease-out;
+}
+
+/* Custom Range Input */
+input[type="range"].obsidian-range {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 6px;
+  border-radius: 9999px;
+  background: rgb(var(--rgb-surface-container-highest));
+  outline: none;
+}
+input[type="range"].obsidian-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: rgb(var(--rgb-primary-container));
+  cursor: pointer;
+  border: 2px solid rgb(var(--rgb-surface-container-lowest));
+  box-shadow: 0 0 10px rgba(0, 245, 212, 0.6);
+}

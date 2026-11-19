@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import os
 import random
 from datetime import datetime
 from typing import Any, Dict, Optional
 
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, EmailStr
 from sqlalchemy import select
@@ -57,6 +59,11 @@ class PhoneVerifyOtpRequest(BaseModel):
     phone: str
     otp: str
     name: Optional[str] = None
+
+
+class FirebaseAuthRequest(BaseModel):
+    id_token: str
+    provider: Optional[str] = "firebase"
 
 
 class AuthResponse(BaseModel):
@@ -123,14 +130,36 @@ async def login_user(req: LoginRequest, db: AsyncSession = Depends(get_db)):
 @router.post("/google", response_model=AuthResponse)
 async def google_auth(req: GoogleAuthRequest, db: AsyncSession = Depends(get_db)):
     """Authenticate or register seamlessly via Google SSO."""
-    result = await db.execute(select(User).where(User.email == req.email.lower()))
+    google_client_id = os.getenv("GOOGLE_CLIENT_ID", "").strip()
+    verified_email = req.email.lower()
+    verified_name = req.name
+    verified_avatar = req.avatar_url
+
+    if google_client_id:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.get(
+                "https://oauth2.googleapis.com/tokeninfo",
+                params={"id_token": req.id_token},
+            )
+        if resp.status_code != 200:
+            raise HTTPException(status_code=401, detail="Invalid Google ID token")
+        token_info = resp.json()
+        if token_info.get("aud") != google_client_id:
+            raise HTTPException(status_code=401, detail="Google token audience mismatch")
+        token_email = str(token_info.get("email") or "").lower()
+        if not token_email or token_email != verified_email:
+            raise HTTPException(status_code=401, detail="Google token email mismatch")
+        verified_name = verified_name or token_info.get("name")
+        verified_avatar = verified_avatar or token_info.get("picture")
+
+    result = await db.execute(select(User).where(User.email == verified_email))
     user = result.scalar_one_or_none()
 
     if not user:
         user = User(
-            email=req.email.lower(),
-            name=req.name,
-            avatar_url=req.avatar_url,
+            email=verified_email,
+            name=verified_name,
+            avatar_url=verified_avatar,
             auth_provider="google",
             is_verified=True,
         )
@@ -192,12 +221,13 @@ async def send_phone_otp(req: PhoneSendOtpRequest):
     }
 
     # In production, dispatch via Firebase Auth or Fast2SMS / Twilio
-    # For dev & testing, we also return the OTP in the debug response:
-    return {
+    resp_payload: Dict[str, Any] = {
         "status": "success",
         "message": f"OTP sent successfully to {phone}",
-        "dev_otp": otp,  # Removed in production mode
     }
+    if os.getenv("APP_ENV", "development").lower() != "production":
+        resp_payload["dev_otp"] = otp
+    return resp_payload
 
 
 @router.post("/phone/verify-otp", response_model=AuthResponse)
@@ -272,4 +302,77 @@ async def get_me(user: User = Depends(get_current_user), db: AsyncSession = Depe
             "banknifty_enabled": risk_cfg.banknifty_enabled if risk_cfg else True,
         },
     }
+
+
+@router.post("/firebase", response_model=AuthResponse)
+async def firebase_auth(req: FirebaseAuthRequest, db: AsyncSession = Depends(get_db)):
+    """Verify a Firebase ID token (Google, Facebook, or Phone OTP) and issue a session JWT."""
+    firebase_api_key = os.getenv("FIREBASE_WEB_API_KEY", "").strip()
+    if not firebase_api_key:
+        raise HTTPException(
+            status_code=400,
+            detail="FIREBASE_WEB_API_KEY is not configured on the server.",
+        )
+
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        resp = await client.post(
+            f"https://identitytoolkit.googleapis.com/v1/accounts:lookup?key={firebase_api_key}",
+            json={"idToken": req.id_token},
+        )
+    if resp.status_code != 200:
+        raise HTTPException(status_code=401, detail="Invalid or expired Firebase ID token")
+
+    users_list = resp.json().get("users") or []
+    if not users_list:
+        raise HTTPException(status_code=401, detail="No Firebase user matched token")
+
+    fb_user = users_list[0]
+    fb_uid = str(fb_user.get("localId") or "").strip()
+    fb_email = str(fb_user.get("email") or "").strip().lower() or None
+    fb_phone = str(fb_user.get("phoneNumber") or "").strip() or None
+    fb_name = fb_user.get("displayName") or (fb_email.split("@")[0] if fb_email else f"Trader_{fb_uid[:6]}")
+    fb_avatar = fb_user.get("photoUrl")
+
+    user = None
+    if fb_email:
+        user = (await db.execute(select(User).where(User.email == fb_email))).scalar_one_or_none()
+    if not user and fb_phone:
+        user = (await db.execute(select(User).where(User.phone == fb_phone))).scalar_one_or_none()
+    if not user and fb_uid:
+        user = (await db.execute(select(User).where(User.provider_id == fb_uid))).scalar_one_or_none()
+
+    if not user:
+        user = User(
+            email=fb_email,
+            phone=fb_phone,
+            name=fb_name,
+            avatar_url=fb_avatar,
+            auth_provider=req.provider or "firebase",
+            provider_id=fb_uid,
+            is_verified=True,
+        )
+        db.add(user)
+        await db.commit()
+        await db.refresh(user)
+        await _bootstrap_user_defaults(db, user)
+
+    token = create_access_token({"sub": user.id, "email": user.email or user.phone or fb_uid})
+    return {
+        "access_token": token,
+        "token_type": "bearer",
+        "user": {
+            "id": user.id,
+            "email": user.email,
+            "phone": user.phone,
+            "name": user.name,
+            "avatar_url": user.avatar_url,
+            "provider": user.auth_provider,
+        },
+    }
+
+
+@router.post("/logout")
+async def logout_user():
+    """Acknowledge client session sign-out."""
+    return {"status": "success", "message": "Signed out"}
 

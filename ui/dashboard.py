@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import os
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any, Optional
 
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import HTMLResponse, JSONResponse, Response
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
@@ -62,6 +65,11 @@ class PositionExitRequest(BaseModel):
     index_name: str = "NIFTY"
 
 
+class ModifySlRequest(BaseModel):
+    index_name: str = "NIFTY"
+    sl_trigger_price: float
+
+
 class SetLotsRequest(BaseModel):
     index_name: str = "NIFTY"
     lots: int = 2
@@ -74,16 +82,31 @@ class SetProductTypeRequest(BaseModel):
 
 def create_app(orchestrator: Any) -> FastAPI:
     """Build and return the FastAPI web dashboard application."""
-    app = FastAPI(title="Shoonya ORB Algo Terminal", version="1.0.0")
-    templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
-
-    # Mount multi-tenant production routers
     from api.auth_router import router as auth_router
     from api.broker_router import router as broker_router
     from api.risk_router import router as risk_router
     from api.trades_router import router as trades_router
     from database.connection import init_db
 
+    @asynccontextmanager
+    async def lifespan(_app: FastAPI):
+        await init_db()
+        yield
+
+    app = FastAPI(title="Shoonya ORB Algo Terminal", version="2.0.0", lifespan=lifespan)
+    templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
+
+    raw_origins = os.getenv("CORS_ORIGINS", "*").strip()
+    allow_origins = ["*"] if raw_origins == "*" else [o.strip() for o in raw_origins.split(",") if o.strip()]
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=allow_origins,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
+    # Mount multi-tenant production routers
     app.include_router(auth_router)
     app.include_router(broker_router)
     app.include_router(risk_router)
@@ -91,10 +114,6 @@ def create_app(orchestrator: Any) -> FastAPI:
 
     STATIC_DIR.mkdir(exist_ok=True)
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
-
-    @app.on_event("startup")
-    async def on_app_startup() -> None:
-        await init_db()
 
     @app.get("/", response_class=HTMLResponse)
     def index(request: Request) -> HTMLResponse:
@@ -113,6 +132,17 @@ def create_app(orchestrator: Any) -> FastAPI:
             name="mobile_app.html",
             context={},
         )
+
+    @app.get("/download/apk")
+    def download_apk() -> FileResponse:
+        apk_path = Path(__file__).resolve().parent.parent / "builds" / "app-debug.apk"
+        if apk_path.exists():
+            return FileResponse(
+                path=str(apk_path),
+                filename="AutoORB-debug.apk",
+                media_type="application/vnd.android.package-archive",
+            )
+        raise HTTPException(status_code=404, detail="APK build file not found.")
 
     @app.get("/backtest", response_class=HTMLResponse)
     def backtest_view() -> HTMLResponse:
@@ -370,6 +400,33 @@ def create_app(orchestrator: Any) -> FastAPI:
             }
         )
 
+    @app.post("/api/positions/modify-sl")
+    def api_modify_sl(payload: ModifySlRequest) -> JSONResponse:
+        ok, msg = orchestrator.modify_position_sl(payload.index_name, payload.sl_trigger_price)
+        return JSONResponse(
+            content={
+                "ok": ok,
+                "message": msg,
+                "snapshot": orchestrator.get_status_snapshot(),
+            }
+        )
+
+    @app.get("/api/config/public")
+    def api_public_config() -> JSONResponse:
+        return JSONResponse(
+            content={
+                "app_name": "Shoonya Automated ORB Terminal",
+                "version": "2.0.0",
+                "mode": orchestrator.settings.mode,
+                "sebi_algo_id": orchestrator.settings.sebi_algo_id,
+                "auth_providers": ["email", "google", "facebook", "phone"],
+                "google_oauth_enabled": bool(os.getenv("GOOGLE_CLIENT_ID")),
+                "facebook_oauth_enabled": bool(os.getenv("FACEBOOK_APP_ID")),
+                "firebase_enabled": bool(os.getenv("FIREBASE_WEB_API_KEY")),
+                "env": os.getenv("APP_ENV", "development"),
+            }
+        )
+
     @app.post("/api/settings/lots")
     def api_set_lots(payload: SetLotsRequest) -> JSONResponse:
         ok, msg = orchestrator.set_index_lots(payload.index_name, payload.lots)
@@ -414,6 +471,8 @@ def create_app(orchestrator: Any) -> FastAPI:
         "api_set_product_type": api_set_product_type,
         "api_auto_trigger": api_auto_trigger,
         "api_exit_position": api_exit_position,
+        "api_modify_sl": api_modify_sl,
+        "api_public_config": api_public_config,
         "api_reset_trades": api_reset_trades,
         "health": health,
     }
