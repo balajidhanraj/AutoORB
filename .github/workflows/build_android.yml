@@ -1,0 +1,57 @@
+name: Build AutoORB Android App (APK & AAB)
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build Android APK and Google Play AAB Bundle
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Setup Java JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: Install Mobile Dependencies
+        run: |
+          cd mobile
+          npm ci || npm install
+          npx cap sync android
+
+      - name: Build Debug APK
+        run: |
+          cd mobile/android
+          chmod +x gradlew
+          ./gradlew assembleDebug --stacktrace
+
+      - name: Build Release AAB (Google Play Store Bundle)
+        run: |
+          cd mobile/android
+          ./gradlew bundleRelease --stacktrace
+
+      - name: Upload Debug APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: AutoORB-debug-apk
+          path: mobile/android/app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 14
+
+      - name: Upload Play Store AAB Bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: AutoORB-playstore-aab
+          path: mobile/android/app/build/outputs/bundle/release/app-release.aab
+          retention-days: 14

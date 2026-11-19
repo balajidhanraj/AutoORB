@@ -54,6 +54,8 @@ class CompatibleNorenApi:
     def _resolve_client_id(self) -> str:
         """Resolve Shoonya OAuth client_id (typically <USER_ID>_U, not the 64-char secret)."""
         if self.api_key and self.api_key != self.secret_key and len(self.api_key) != 64:
+            if not self.api_key.endswith("_U") and self.username and self.api_key == self.username:
+                return f"{self.api_key}_U"
             return self.api_key
         if self.username:
             return f"{self.username}_U"

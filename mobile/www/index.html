@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>AutoORB Mobile Terminal</title>
+  <link rel="manifest" href="/static/manifest.json">
+  <meta name="theme-color" content="#070b14">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="apple-touch-icon" href="https://img.icons8.com/fluency/192/bullish.png">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    body { background-color: #070b14; color: #f1f5f9; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; -webkit-tap-highlight-color: transparent; }
+    .glass { background: rgba(15, 23, 42, 0.75); backdrop-filter: blur(12px); border: 1px solid rgba(51, 65, 85, 0.5); }
+    .active-nav { color: #38bdf8 !important; }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+  </style>
+</head>
+<body class="flex flex-col min-h-screen">
+
+  <!-- Header -->
+  <header class="glass sticky top-0 z-50 px-4 py-3 flex items-center justify-between border-b border-slate-800">
+    <div class="flex items-center space-x-2">
+      <div class="w-8 h-8 rounded-lg bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center font-bold text-white shadow-lg shadow-cyan-500/30">
+        <i class="fa-solid fa-chart-line text-sm"></i>
+      </div>
+      <div>
+        <h1 class="text-base font-bold tracking-tight text-white flex items-center gap-1.5">
+          AutoORB <span class="text-[10px] bg-cyan-950 text-cyan-400 border border-cyan-800 px-1.5 py-0.5 rounded font-mono">PRO</span>
+        </h1>
+      </div>
+    </div>
+    <div class="flex items-center space-x-2">
+      <div id="connBadge" class="flex items-center space-x-1.5 text-xs px-2.5 py-1 rounded-full bg-emerald-950/80 border border-emerald-600/60 text-emerald-400">
+        <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+        <span id="connText" class="font-medium">LIVE</span>
+      </div>
+      <button onclick="logout()" class="text-slate-400 hover:text-white p-1.5 rounded-lg bg-slate-800/60 border border-slate-700/60 text-xs">
+        <i class="fa-solid fa-arrow-right-from-bracket"></i>
+      </button>
+    </div>
+  </header>
+
+  <!-- Main View Containers -->
+  <main class="flex-1 p-4 pb-20 max-w-md mx-auto w-full">
+
+    <!-- TAB 1: DASHBOARD / STRATEGY -->
+    <div id="tab-dashboard" class="tab-content active space-y-4">
+      
+      <!-- Market Ticker Cards -->
+      <div class="grid grid-cols-2 gap-3">
+        <div class="glass p-3 rounded-2xl relative overflow-hidden">
+          <div class="text-[11px] text-slate-400 font-medium">NIFTY 50</div>
+          <div id="niftyLtp" class="text-lg font-bold text-white mt-0.5">25,182.40</div>
+          <div class="mt-2 text-[10px] text-slate-400 flex justify-between border-t border-slate-800 pt-1.5">
+            <span>ORH: <b id="niftyOrh" class="text-emerald-400">25,255</b></span>
+            <span>ORL: <b id="niftyOrl" class="text-rose-400">25,104</b></span>
+          </div>
+        </div>
+
+        <div class="glass p-3 rounded-2xl relative overflow-hidden">
+          <div class="text-[11px] text-slate-400 font-medium">BANKNIFTY</div>
+          <div id="bniftyLtp" class="text-lg font-bold text-white mt-0.5">62,110.80</div>
+          <div class="mt-2 text-[10px] text-slate-400 flex justify-between border-t border-slate-800 pt-1.5">
+            <span>ORH: <b id="bniftyOrh" class="text-emerald-400">62,271</b></span>
+            <span>ORL: <b id="bniftyOrl" class="text-rose-400">61,951</b></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Quick Strategy Cockpit -->
+      <div class="glass p-4 rounded-2xl space-y-3">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-semibold uppercase tracking-wider text-slate-400">Auto Trading Engine</span>
+          <label class="relative inline-flex items-center cursor-pointer">
+            <input type="checkbox" id="autoTradingToggle" class="sr-only peer" checked onchange="toggleTrading(this.checked)">
+            <div class="w-9 h-5 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-cyan-500"></div>
+          </label>
+        </div>
+
+        <div class="p-3 bg-slate-900/80 rounded-xl border border-slate-800 flex items-center justify-between text-xs">
+          <div>
+            <div class="text-slate-400 text-[10px]">CURRENT STRATEGY</div>
+            <div class="font-bold text-cyan-300">30-Min Opening Range Breakout</div>
+          </div>
+          <div class="text-right">
+            <div class="text-slate-400 text-[10px]">TIME WINDOW</div>
+            <div class="font-bold text-white">09:15 - 09:45 IST</div>
+          </div>
+        </div>
+
+        <!-- Emergency Kill Switch -->
+        <button onclick="emergencySquareOff()" class="w-full py-2.5 bg-gradient-to-r from-rose-600 to-red-700 hover:from-rose-500 hover:to-red-600 text-white rounded-xl font-bold text-xs shadow-lg shadow-rose-900/30 flex items-center justify-center space-x-2">
+          <i class="fa-solid fa-power-off"></i>
+          <span>EMERGENCY SQUARE OFF ALL POSITIONS</span>
+        </button>
+      </div>
+
+      <!-- Live Positions Card -->
+      <div class="glass p-4 rounded-2xl space-y-3">
+        <div class="flex items-center justify-between">
+          <h2 class="text-xs font-semibold uppercase tracking-wider text-slate-400">Today's Performance</h2>
+          <span id="dayPnl" class="text-xs font-bold text-emerald-400 bg-emerald-950/60 border border-emerald-800 px-2 py-0.5 rounded-full">+₹0.00</span>
+        </div>
+        <div id="positionList" class="space-y-2 text-xs">
+          <div class="text-center py-6 text-slate-500">No active positions open today.</div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- TAB 2: BROKER CONFIG -->
+    <div id="tab-broker" class="tab-content space-y-4">
+      <div class="glass p-4 rounded-2xl space-y-3">
+        <h2 class="text-sm font-bold text-white flex items-center gap-2">
+          <i class="fa-solid fa-link text-cyan-400"></i> Shoonya Finvasia Setup
+        </h2>
+        <p class="text-xs text-slate-400">Connect your zero-brokerage Shoonya account to execute automated trades.</p>
+
+        <form id="brokerForm" onsubmit="saveBroker(event)" class="space-y-3 pt-2 text-xs">
+          <div>
+            <label class="block text-slate-400 mb-1">User ID (Client ID)</label>
+            <input type="text" id="shoonyaUser" required placeholder="e.g. FA53975" class="w-full p-2.5 bg-slate-900 border border-slate-700 rounded-xl text-white outline-none focus:border-cyan-500">
+          </div>
+          <div>
+            <label class="block text-slate-400 mb-1">Password</label>
+            <input type="password" id="shoonyaPwd" required placeholder="••••••••" class="w-full p-2.5 bg-slate-900 border border-slate-700 rounded-xl text-white outline-none focus:border-cyan-500">
+          </div>
+          <div>
+            <label class="block text-slate-400 mb-1">TOTP Secret (QR Code Key)</label>
+            <input type="text" id="shoonyaTotp" required placeholder="32-character base32 secret" class="w-full p-2.5 bg-slate-900 border border-slate-700 rounded-xl text-white outline-none focus:border-cyan-500 font-mono text-[11px]">
+          </div>
+          <div>
+            <label class="block text-slate-400 mb-1">API Key / Client ID</label>
+            <input type="text" id="shoonyaApiKey" placeholder="e.g. FA53975_U" class="w-full p-2.5 bg-slate-900 border border-slate-700 rounded-xl text-white outline-none focus:border-cyan-500">
+          </div>
+          <div>
+            <label class="block text-slate-400 mb-1">API Secret Key</label>
+            <input type="password" id="shoonyaSecret" required placeholder="64-character secret key" class="w-full p-2.5 bg-slate-900 border border-slate-700 rounded-xl text-white outline-none focus:border-cyan-500 font-mono text-[11px]">
+          </div>
+
+          <button type="submit" class="w-full py-2.5 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white rounded-xl font-bold shadow-lg shadow-cyan-500/20">
+            TEST CONNECTION & SAVE
+          </button>
+        </form>
+      </div>
+    </div>
+
+    <!-- TAB 3: RISK SETTINGS -->
+    <div id="tab-risk" class="tab-content space-y-4">
+      <div class="glass p-4 rounded-2xl space-y-4">
+        <h2 class="text-sm font-bold text-white flex items-center gap-2">
+          <i class="fa-solid fa-shield-halved text-cyan-400"></i> Personal Risk Controls
+        </h2>
+        
+        <form id="riskForm" onsubmit="saveRisk(event)" class="space-y-4 text-xs">
+          <div>
+            <label class="block text-slate-400 mb-1">Trading Mode</label>
+            <div class="grid grid-cols-2 gap-2">
+              <button type="button" id="btnPaper" onclick="setMode('PAPER')" class="py-2 rounded-xl border border-cyan-500 bg-cyan-950/60 text-cyan-300 font-bold">PAPER MODE</button>
+              <button type="button" id="btnLive" onclick="setMode('LIVE')" class="py-2 rounded-xl border border-slate-700 bg-slate-900 text-slate-400 font-bold">LIVE REAL BROKER</button>
+            </div>
+          </div>
+
+          <div>
+            <label class="block text-slate-400 mb-1">Max Daily Loss (₹ Stop Trading)</label>
+            <input type="number" id="riskMaxLoss" value="3000" class="w-full p-2.5 bg-slate-900 border border-slate-700 rounded-xl text-white outline-none focus:border-cyan-500 font-bold">
+          </div>
+
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block text-slate-400 mb-1">NIFTY Lots</label>
+              <input type="number" id="riskNiftyLots" value="1" min="1" max="10" class="w-full p-2.5 bg-slate-900 border border-slate-700 rounded-xl text-white outline-none focus:border-cyan-500 font-bold">
+            </div>
+            <div>
+              <label class="block text-slate-400 mb-1">BANKNIFTY Lots</label>
+              <input type="number" id="riskBniftyLots" value="1" min="1" max="10" class="w-full p-2.5 bg-slate-900 border border-slate-700 rounded-xl text-white outline-none focus:border-cyan-500 font-bold">
+            </div>
+          </div>
+
+          <button type="submit" class="w-full py-2.5 bg-cyan-600 hover:bg-cyan-500 text-white rounded-xl font-bold shadow-lg shadow-cyan-600/20">
+            UPDATE RISK SETTINGS
+          </button>
+        </form>
+      </div>
+    </div>
+
+    <!-- TAB 4: AUTH MODAL / VIEW (IF LOGGED OUT) -->
+    <div id="tab-auth" class="tab-content space-y-4">
+      <div class="glass p-5 rounded-2xl space-y-4 text-center">
+        <div class="w-12 h-12 mx-auto rounded-2xl bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center text-white text-xl shadow-xl shadow-cyan-500/30">
+          <i class="fa-solid fa-user-lock"></i>
+        </div>
+        <div>
+          <h2 class="text-base font-bold text-white">Sign In to AutoORB</h2>
+          <p class="text-xs text-slate-400 mt-1">Multi-user Automated Trading Engine</p>
+        </div>
+
+        <div class="space-y-2 pt-2">
+          <!-- Google SSO -->
+          <button onclick="mockGoogleLogin()" class="w-full py-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl text-xs font-semibold flex items-center justify-center space-x-2 text-white">
+            <i class="fa-brands fa-google text-rose-500"></i>
+            <span>Continue with Google</span>
+          </button>
+
+          <!-- Facebook SSO -->
+          <button onclick="mockFacebookLogin()" class="w-full py-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl text-xs font-semibold flex items-center justify-center space-x-2 text-white">
+            <i class="fa-brands fa-facebook text-blue-500"></i>
+            <span>Continue with Facebook</span>
+          </button>
+        </div>
+
+        <div class="flex items-center my-3 text-slate-600 text-xs">
+          <div class="flex-1 border-b border-slate-800"></div>
+          <span class="px-2">OR</span>
+          <div class="flex-1 border-b border-slate-800"></div>
+        </div>
+
+        <!-- Phone OTP Form -->
+        <div id="phoneStep1" class="space-y-2 text-left text-xs">
+          <label class="text-slate-400">Mobile Number (with +91)</label>
+          <div class="flex space-x-2">
+            <input type="tel" id="mobileNumber" placeholder="+919876543210" class="flex-1 p-2.5 bg-slate-900 border border-slate-700 rounded-xl text-white outline-none focus:border-cyan-500 font-mono">
+            <button onclick="sendOtp()" class="px-4 py-2.5 bg-cyan-600 hover:bg-cyan-500 text-white rounded-xl font-bold">SEND OTP</button>
+          </div>
+        </div>
+
+        <div id="phoneStep2" class="space-y-2 text-left text-xs hidden">
+          <label class="text-slate-400">Enter 6-Digit OTP</label>
+          <div class="flex space-x-2">
+            <input type="text" id="otpValue" placeholder="123456" maxlength="6" class="flex-1 p-2.5 bg-slate-900 border border-slate-700 rounded-xl text-white outline-none focus:border-cyan-500 font-mono tracking-widest text-center text-base">
+            <button onclick="verifyOtp()" class="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold">VERIFY</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- Bottom Navigation Bar (Mobile Native Look) -->
+  <nav class="glass fixed bottom-0 left-0 right-0 z-50 border-t border-slate-800 px-6 py-2 flex justify-between items-center max-w-md mx-auto">
+    <button onclick="switchTab('dashboard')" class="nav-item active-nav flex flex-col items-center space-y-1 text-slate-400 text-[10px] font-medium" data-tab="dashboard">
+      <i class="fa-solid fa-chart-pie text-base"></i>
+      <span>Terminal</span>
+    </button>
+    <button onclick="switchTab('broker')" class="nav-item flex flex-col items-center space-y-1 text-slate-400 text-[10px] font-medium" data-tab="broker">
+      <i class="fa-solid fa-building-columns text-base"></i>
+      <span>Broker</span>
+    </button>
+    <button onclick="switchTab('risk')" class="nav-item flex flex-col items-center space-y-1 text-slate-400 text-[10px] font-medium" data-tab="risk">
+      <i class="fa-solid fa-sliders text-base"></i>
+      <span>Risk</span>
+    </button>
+    <button onclick="switchTab('auth')" class="nav-item flex flex-col items-center space-y-1 text-slate-400 text-[10px] font-medium" data-tab="auth">
+      <i class="fa-solid fa-user text-base"></i>
+      <span>Profile</span>
+    </button>
+  </nav>
+
+  <script>
+    const API_BASE = (window.location.protocol === 'file:' || !window.location.origin || window.location.origin === 'null')
+      ? 'http://10.0.2.2:8000'
+      : '';
+    let currentMode = 'PAPER';
+    let authToken = localStorage.getItem('autoorb_token') || '';
+
+    function switchTab(tabId) {
+      document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active-nav'));
+      
+      const tab = document.getElementById(`tab-${tabId}`);
+      if (tab) tab.classList.add('active');
+      const btn = document.querySelector(`[data-tab="${tabId}"]`);
+      if (btn) btn.classList.add('active-nav');
+    }
+
+    async function loadStatus() {
+      try {
+        const res = await fetch(`${API_BASE}/api/status');
+        const data = await res.json();
+        if (data.nifty) {
+          document.getElementById('niftyLtp').innerText = data.nifty.ltp?.toFixed(2) || '25,182.40';
+          document.getElementById('niftyOrh').innerText = data.nifty.orh?.toFixed(1) || '--';
+          document.getElementById('niftyOrl').innerText = data.nifty.orl?.toFixed(1) || '--';
+        }
+        if (data.banknifty) {
+          document.getElementById('bniftyLtp').innerText = data.banknifty.ltp?.toFixed(2) || '62,110.80';
+          document.getElementById('bniftyOrh').innerText = data.banknifty.orh?.toFixed(1) || '--';
+          document.getElementById('bniftyOrl').innerText = data.banknifty.orl?.toFixed(1) || '--';
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    async function sendOtp() {
+      const phone = document.getElementById('mobileNumber').value;
+      const res = await fetch(`${API_BASE}/api/v1/auth/phone/send-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        alert(`OTP sent! (Dev OTP: ${data.dev_otp})`);
+        document.getElementById('phoneStep1').classList.add('hidden');
+        document.getElementById('phoneStep2').classList.remove('hidden');
+        document.getElementById('otpValue').value = data.dev_otp;
+      } else {
+        alert(data.detail || 'Failed to send OTP');
+      }
+    }
+
+    async function verifyOtp() {
+      const phone = document.getElementById('mobileNumber').value;
+      const otp = document.getElementById('otpValue').value;
+      const res = await fetch(`${API_BASE}/api/v1/auth/phone/verify-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone, otp })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        authToken = data.access_token;
+        localStorage.setItem('autoorb_token', authToken);
+        alert('Welcome! Signed in successfully.');
+        switchTab('dashboard');
+      } else {
+        alert(data.detail || 'Invalid OTP');
+      }
+    }
+
+    async function mockGoogleLogin() {
+      const res = await fetch(`${API_BASE}/api/v1/auth/google', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id_token: 'google_token_demo',
+          email: 'trader@gmail.com',
+          name: 'Pro Trader'
+        })
+      });
+      const data = await res.json();
+      authToken = data.access_token;
+      localStorage.setItem('autoorb_token', authToken);
+      alert('Authenticated with Google!');
+      switchTab('dashboard');
+    }
+
+    async function mockFacebookLogin() {
+      const res = await fetch(`${API_BASE}/api/v1/auth/facebook', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          access_token: 'fb_token_demo',
+          user_id: '1092837465',
+          name: 'FB Trader'
+        })
+      });
+      const data = await res.json();
+      authToken = data.access_token;
+      localStorage.setItem('autoorb_token', authToken);
+      alert('Authenticated with Facebook!');
+      switchTab('dashboard');
+    }
+
+    function logout() {
+      localStorage.removeItem('autoorb_token');
+      authToken = '';
+      alert('Logged out.');
+      switchTab('auth');
+    }
+
+    setInterval(loadStatus, 2000);
+    loadStatus();
+  </script>
+</body>
+</html>
+

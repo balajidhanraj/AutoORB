@@ -7,10 +7,12 @@ from typing import Any, Optional
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, Response
+from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 
 TEMPLATES_DIR = Path(__file__).resolve().parent / "templates"
+STATIC_DIR = Path(__file__).resolve().parent / "static"
 
 
 class BrokerConnectRequest(BaseModel):
@@ -75,6 +77,25 @@ def create_app(orchestrator: Any) -> FastAPI:
     app = FastAPI(title="Shoonya ORB Algo Terminal", version="1.0.0")
     templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 
+    # Mount multi-tenant production routers
+    from api.auth_router import router as auth_router
+    from api.broker_router import router as broker_router
+    from api.risk_router import router as risk_router
+    from api.trades_router import router as trades_router
+    from database.connection import init_db
+
+    app.include_router(auth_router)
+    app.include_router(broker_router)
+    app.include_router(risk_router)
+    app.include_router(trades_router)
+
+    STATIC_DIR.mkdir(exist_ok=True)
+    app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+
+    @app.on_event("startup")
+    async def on_app_startup() -> None:
+        await init_db()
+
     @app.get("/", response_class=HTMLResponse)
     def index(request: Request) -> HTMLResponse:
         snapshot = orchestrator.get_status_snapshot()
@@ -82,6 +103,15 @@ def create_app(orchestrator: Any) -> FastAPI:
             request=request,
             name="index.html",
             context={"snapshot": snapshot},
+        )
+
+    @app.get("/app", response_class=HTMLResponse)
+    @app.get("/mobile", response_class=HTMLResponse)
+    def mobile_app_view(request: Request) -> HTMLResponse:
+        return templates.TemplateResponse(
+            request=request,
+            name="mobile_app.html",
+            context={},
         )
 
     @app.get("/backtest", response_class=HTMLResponse)
