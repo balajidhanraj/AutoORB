@@ -19,9 +19,9 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet"/>
   <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"/>
-  <link rel="stylesheet" href="/static/theme.css?v=9"/>
+  <link rel="stylesheet" href="/static/theme.css?v=10"/>
   <script src="https://cdn.tailwindcss.com"></script>
-  <script src="/static/api_client.js?v=9"></script>
+  <script src="/static/api_client.js?v=10"></script>
   <script>
     if (window.tailwind && window.AUTOORB_TAILWIND_CONFIG) {
       window.tailwind.config = window.AUTOORB_TAILWIND_CONFIG;
@@ -716,9 +716,16 @@
       const A = window.AutoORB;
       const esc = A.escapeHtml;
 
-      // Register Service Worker only on HTTP(S) web origins (not file:/capacitor:)
-      if ('serviceWorker' in navigator && /^https?:$/i.test(window.location.protocol)) {
-        navigator.serviceWorker.register('/static/sw.js').catch(() => null);
+      // Register Service Worker only on normal HTTP(S) web browsers; actively unregister inside Capacitor Android APK
+      if ('serviceWorker' in navigator) {
+        if (A.isNativeCapacitor()) {
+          navigator.serviceWorker.getRegistrations().then(regs => regs.forEach(r => r.unregister())).catch(() => null);
+          if (window.caches && caches.keys) {
+            caches.keys().then(keys => keys.forEach(k => caches.delete(k))).catch(() => null);
+          }
+        } else if (/^https?:$/i.test(window.location.protocol)) {
+          navigator.serviceWorker.register('/static/sw.js').catch(() => null);
+        }
       }
 
       let snap = {};

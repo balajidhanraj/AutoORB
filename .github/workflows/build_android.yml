@@ -14,6 +14,8 @@ jobs:
   build:
     name: Build Android APK and Google Play AAB Bundle
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
 
     steps:
       - name: Checkout Repository
@@ -92,3 +94,22 @@ jobs:
           name: AutoORB-playstore-aab
           path: mobile/android/app/build/outputs/bundle/release/app-release.aab
           retention-days: 14
+
+      - name: Prepare Direct Download APK Named Copy
+        if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
+        run: |
+          cp mobile/android/app/build/outputs/apk/debug/app-debug.apk mobile/android/app/build/outputs/apk/debug/AutoORB-debug.apk
+
+      - name: Publish Latest APK to GitHub Releases (latest-apk)
+        if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest-apk
+          name: "AutoORB Latest Android APK"
+          body: "Automated Android debug APK and Play Store AAB bundle built from latest main branch."
+          prerelease: false
+          make_latest: true
+          files: |
+            mobile/android/app/build/outputs/apk/debug/AutoORB-debug.apk
+            mobile/android/app/build/outputs/apk/debug/app-debug.apk
+            mobile/android/app/build/outputs/bundle/release/app-release.aab

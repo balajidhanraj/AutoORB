@@ -9,7 +9,7 @@ from typing import Any, Optional
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
@@ -134,15 +134,20 @@ def create_app(orchestrator: Any) -> FastAPI:
         )
 
     @app.get("/download/apk")
-    def download_apk() -> FileResponse:
+    def download_apk() -> Response:
         apk_path = Path(__file__).resolve().parent.parent / "builds" / "app-debug.apk"
         if apk_path.exists():
             return FileResponse(
                 path=str(apk_path),
                 filename="AutoORB-debug.apk",
                 media_type="application/vnd.android.package-archive",
+                headers={"Cache-Control": "no-store, no-cache, must-revalidate, max-age=0"},
             )
-        raise HTTPException(status_code=404, detail="APK build file not found.")
+        release_url = os.getenv(
+            "APK_DOWNLOAD_URL",
+            "https://github.com/balajidhanraj/AutoORB/releases/download/latest-apk/AutoORB-debug.apk",
+        )
+        return RedirectResponse(url=release_url, status_code=302)
 
     @app.get("/backtest", response_class=HTMLResponse)
     def backtest_view() -> HTMLResponse:

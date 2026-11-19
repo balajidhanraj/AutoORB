@@ -135,10 +135,18 @@
 
   function isNativeCapacitor() {
     try {
+      const loc = global.location || {};
+      const ua = (global.navigator && global.navigator.userAgent) || '';
+      const isAndroidWebView = /;\s*wv\)/i.test(ua) || /Capacitor/i.test(ua);
+      const isCapLocalhost = (loc.hostname === 'localhost' && !loc.port);
       return Boolean(
         (global.Capacitor && typeof global.Capacitor.isNativePlatform === 'function' && global.Capacitor.isNativePlatform()) ||
-        global.location.protocol === 'file:' ||
-        global.location.protocol === 'capacitor:'
+        (global.Capacitor && global.Capacitor.platform === 'android') ||
+        loc.protocol === 'file:' ||
+        loc.protocol === 'capacitor:' ||
+        isAndroidWebView ||
+        isCapLocalhost ||
+        Boolean(readMetaUrl('autoorb-api-base'))
       );
     } catch (_e) {
       return false;
@@ -225,7 +233,13 @@
     const contentType = res.headers.get('content-type') || '';
     const data = contentType.includes('application/json') ? await res.json() : await res.text();
     if (!res.ok) {
-      const msg = (data && (data.detail || data.message || data.error)) || `HTTP ${res.status}`;
+      const targetDesc = url.startsWith('http') ? url : `${global.location.origin}${url}`;
+      const rawMsg = data && typeof data === 'object' && (data.detail || data.message || data.error);
+      const msg = rawMsg
+        ? (res.status === 404 ? `404 Not Found (${targetDesc}): ${rawMsg}` : rawMsg)
+        : (res.status === 404
+            ? `HTTP 404 at ${targetDesc}. Check Server Connection URL in app.`
+            : `HTTP ${res.status}`);
       const err = new Error(msg);
       err.status = res.status;
       err.data = data;
@@ -259,7 +273,13 @@
     const contentType = res.headers.get('content-type') || '';
     const data = contentType.includes('application/json') ? await res.json() : await res.text();
     if (!res.ok) {
-      const msg = (data && (data.detail || data.message || data.error)) || `HTTP ${res.status}`;
+      const targetDesc = url.startsWith('http') ? url : `${global.location.origin}${url}`;
+      const rawMsg = data && typeof data === 'object' && (data.detail || data.message || data.error);
+      const msg = rawMsg
+        ? (res.status === 404 ? `404 Not Found (${targetDesc}): ${rawMsg}` : rawMsg)
+        : (res.status === 404
+            ? `HTTP 404 at ${targetDesc}. Check Server Connection URL in app.`
+            : `HTTP ${res.status}`);
       const err = new Error(msg);
       err.status = res.status;
       err.data = data;

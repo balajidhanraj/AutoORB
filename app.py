@@ -854,6 +854,12 @@ def build_gradio_demo() -> Any:
 
 
 demo = build_gradio_demo()
+fastapi_app = create_app(orchestrator)
+if demo is not None and gr is not None and hasattr(gr, "mount_gradio_app"):
+    try:
+        fastapi_app = gr.mount_gradio_app(fastapi_app, demo, path="/gradio")
+    except Exception:
+        pass
 
 
 if __name__ == "__main__":
@@ -861,24 +867,11 @@ if __name__ == "__main__":
         server_port = int(
             os.getenv("PORT") or os.getenv("GRADIO_SERVER_PORT") or settings.ui_port or 7860
         )
-        if demo is not None:
-            import inspect
-
-            launch_kwargs: Dict[str, Any] = {
-                "server_name": "0.0.0.0",
-                "server_port": server_port,
-            }
-            sig = inspect.signature(demo.launch)
-            if "ssr_mode" in sig.parameters:
-                launch_kwargs["ssr_mode"] = False
-            demo.launch(**launch_kwargs)
-        else:
-            fastapi_app = create_app(orchestrator)
-            uvicorn.run(
-                fastapi_app,
-                host=settings.ui_host,
-                port=settings.ui_port,
-                log_level="info",
-            )
+        uvicorn.run(
+            fastapi_app,
+            host="0.0.0.0",
+            port=server_port,
+            log_level="info",
+        )
     finally:
         orchestrator.stop()

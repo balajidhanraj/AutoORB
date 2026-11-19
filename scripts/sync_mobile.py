@@ -56,6 +56,17 @@ def sync_mobile_assets(
     html = html.replace('href="/static/', 'href="./static/').replace('src="/static/', 'src="./static/')
     out_html = DEST_WWW / "index.html"
     out_html.write_text(html, encoding="utf-8")
+
+    # Create /app/index.html redirect inside mobile/www so any WebView or PWA navigation to /app never 404s
+    app_sub = DEST_WWW / "app"
+    app_sub.mkdir(parents=True, exist_ok=True)
+    (app_sub / "index.html").write_text(
+        '<!DOCTYPE html><html><head><meta charset="utf-8"/>'
+        '<meta http-equiv="refresh" content="0;url=../index.html"/>'
+        "<script>window.location.replace('../index.html');</script>"
+        "</head><body></body></html>",
+        encoding="utf-8",
+    )
     return out_html
 
 

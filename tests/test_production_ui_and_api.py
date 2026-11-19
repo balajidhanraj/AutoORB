@@ -65,8 +65,8 @@ def test_desktop_mobile_and_static_assets(tmp_path: Path) -> None:
             assert home.status_code == 200
             html = home.text
             assert "Shoonya Automated ORB Terminal" in html
-            assert "/static/theme.css?v=9" in html
-            assert "/static/api_client.js?v=9" in html
+            assert "/static/theme.css?v=10" in html
+            assert "/static/api_client.js?v=10" in html
             assert "/static/icon-192.png" in html
             assert "Inter" in html
             for marker in (
@@ -88,8 +88,8 @@ def test_desktop_mobile_and_static_assets(tmp_path: Path) -> None:
                 mres = client.get(mobile_path)
                 assert mres.status_code == 200
                 mhtml = mres.text
-                assert "/static/theme.css?v=9" in mhtml
-                assert "/static/api_client.js?v=9" in mhtml
+                assert "/static/theme.css?v=10" in mhtml
+                assert "/static/api_client.js?v=10" in mhtml
                 assert "/static/icon-192.png" in mhtml
                 assert "m-main-safe" in mhtml
                 assert "sheet-safe" in mhtml
@@ -299,9 +299,10 @@ def test_mobile_sync_output() -> None:
     content = out_html.read_text(encoding="utf-8")
     assert "m-landing-screen" in content
     assert "showLandingScreen" in content
-    assert "./static/theme.css?v=9" in content
-    assert "./static/api_client.js?v=9" in content
+    assert "./static/theme.css?v=10" in content
+    assert "./static/api_client.js?v=10" in content
     assert "./static/icon-192.png" in content
+    assert (out_html.parent / "app" / "index.html").exists()
     assert '<meta name="autoorb-api-base" content="https://' in content
     assert "yourdomain.com" not in content
     assert 'href="/static/' not in content
