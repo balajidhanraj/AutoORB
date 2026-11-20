@@ -209,7 +209,7 @@ def load_settings(env_path: str | Path | None = None) -> AppSettings:
         telegram_bot_token=os.getenv("TELEGRAM_BOT_TOKEN", "").strip(),
         telegram_chat_id=os.getenv("TELEGRAM_CHAT_ID", "").strip(),
         ui_host=os.getenv("UI_HOST", "0.0.0.0").strip(),
-        ui_port=int(os.getenv("UI_PORT", "8000") or 8000),
+        ui_port=int(os.getenv("PORT") or os.getenv("UI_PORT") or 8000),
         ui_pin=os.getenv("UI_PIN", "1234").strip(),
     )
     Path(settings.data_dir).mkdir(parents=True, exist_ok=True)

@@ -1,0 +1,47 @@
+services:
+  - type: web
+    name: autoorb
+    runtime: docker
+    plan: free
+    region: singapore
+    branch: main
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: TZ
+        value: Asia/Kolkata
+      - key: HEADLESS_BROWSER
+        value: "true"
+      - key: MODE
+        value: LIVE
+      - key: CAPITAL
+        value: "200000"
+      - key: MAX_DAILY_LOSS
+        value: "5000"
+      - key: NEON_BRANCH
+        value: production
+      - key: DATABASE_URL
+        sync: false
+      - key: DATABASE_URL_UNPOOLED
+        sync: false
+      - key: NEON_BRANCH_ID
+        sync: false
+      - key: NEON_AUTH_BASE_URL
+        sync: false
+      - key: NEON_AUTH_JWKS_URL
+        sync: false
+      - key: NEON_REALTIME_URL
+        sync: false
+      - key: NEON_REALTIME_SECRET
+        sync: false
+      - key: SHOONYA_USER_ID
+        sync: false
+      - key: SHOONYA_PASSWORD
+        sync: false
+      - key: SHOONYA_TOTP_SECRET
+        sync: false
+      - key: SHOONYA_API_KEY
+        sync: false
+      - key: SHOONYA_SECRET_KEY
+        sync: false
