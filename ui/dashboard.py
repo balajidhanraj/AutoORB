@@ -89,6 +89,14 @@ class SyncBackupIpRequest(BaseModel):
     ip: str = ""
 
 
+class MaxDailyLossRequest(BaseModel):
+    amount: Optional[float] = None
+
+
+class ResetRiskRequest(BaseModel):
+    reset_type: str = "all"
+
+
 def create_app(orchestrator: Any) -> FastAPI:
     """Build and return the FastAPI web dashboard application."""
     from api.auth_router import router as auth_router
@@ -394,6 +402,31 @@ def create_app(orchestrator: Any) -> FastAPI:
     @app.post("/api/trades/reset")
     def api_reset_trades() -> JSONResponse:
         ok, msg = orchestrator.reset_daily_trades()
+        return JSONResponse(
+            content={
+                "ok": ok,
+                "message": msg,
+                "snapshot": orchestrator.get_status_snapshot(),
+            }
+        )
+
+    @app.post("/api/settings/max-daily-loss")
+    def api_set_max_daily_loss(payload: MaxDailyLossRequest) -> JSONResponse:
+        ok, msg = orchestrator.set_max_daily_loss(payload.amount)
+        return JSONResponse(
+            content={
+                "ok": ok,
+                "message": msg,
+                "max_daily_loss": orchestrator.settings.max_daily_loss,
+                "is_custom_max_daily_loss": orchestrator.risk_manager.custom_max_daily_loss is not None,
+                "snapshot": orchestrator.get_status_snapshot(),
+            }
+        )
+
+    @app.post("/api/risk/reset-halt")
+    def api_reset_risk_halt(payload: Optional[ResetRiskRequest] = None) -> JSONResponse:
+        reset_type = payload.reset_type if payload else "all"
+        ok, msg = orchestrator.reset_risk_guardrails(reset_type=reset_type)
         return JSONResponse(
             content={
                 "ok": ok,

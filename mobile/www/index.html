@@ -365,6 +365,20 @@
           <span id="m-risk-dd">0.0% used</span>
           <span id="m-risk-buf">Buffer ₹5,000</span>
         </div>
+        <div class="flex items-center gap-1.5 pt-1">
+          <input id="m-max-loss-inp" type="number" min="500" step="500" placeholder="Modify max loss ₹" class="min-w-0 flex-1 px-2.5 py-1.5 rounded-lg bg-surface-container-lowest border border-outline-variant/50 font-data-mono-sm text-on-surface"/>
+          <button onclick="mApplyMaxDailyLoss('m-max-loss-inp')" type="button" class="px-3 py-1.5 rounded-lg bg-primary-container text-on-primary-fixed font-label-caps font-bold cursor-pointer shrink-0">SET</button>
+          <button onclick="mResetMaxDailyLossAuto()" type="button" class="px-2.5 py-1.5 rounded-lg bg-surface-container-high text-on-surface-variant font-label-caps font-bold cursor-pointer shrink-0">AUTO</button>
+        </div>
+        <div class="space-y-1.5 pt-1.5 border-t border-outline-variant/25">
+          <div id="m-halt-banner" class="hidden px-2 py-1 rounded bg-error-container/25 font-data-mono-sm text-[11px] text-loss truncate"></div>
+          <div class="grid grid-cols-2 gap-1.5">
+            <button onclick="mResetRiskHalt('all')" type="button" class="py-1.5 px-2 rounded-lg bg-primary-container/20 text-profit font-label-caps text-[10px] font-bold cursor-pointer">RESET ALL HALTS</button>
+            <button onclick="mResetRiskHalt('daily_orders')" type="button" class="py-1.5 px-2 rounded-lg bg-surface-container-high text-on-surface-variant font-label-caps text-[10px] font-bold cursor-pointer">DAILY ORDERS</button>
+            <button onclick="mResetRiskHalt('weekly_loss')" type="button" class="py-1.5 px-2 rounded-lg bg-surface-container-high text-on-surface-variant font-label-caps text-[10px] font-bold cursor-pointer">WEEKLY LOSS</button>
+            <button onclick="mResetRiskHalt('daily_mtm')" type="button" class="py-1.5 px-2 rounded-lg bg-surface-container-high text-on-surface-variant font-label-caps text-[10px] font-bold cursor-pointer">DAILY MTM</button>
+          </div>
+        </div>
       </div>
     </section>
 
@@ -497,6 +511,32 @@
         <div class="flex items-center justify-between pt-2 border-t border-outline-variant/30">
           <span class="font-body-sm text-on-surface-variant">Daily Trade Counter: <b id="mc-trade-cnt" class="text-on-surface">0/2</b></span>
           <button id="mc-btn-reset-trades" type="button" class="px-3 py-1 rounded bg-surface-container-high font-label-caps text-profit font-bold cursor-pointer">RESET</button>
+        </div>
+        <div class="pt-2 border-t border-outline-variant/30 space-y-2">
+          <div class="flex items-center justify-between gap-2">
+            <span class="font-body-sm text-on-surface-variant">Daily Max Loss Guardrail</span>
+            <span id="mc-max-loss-disp" class="font-data-mono-sm text-loss font-bold">-₹5,000</span>
+          </div>
+          <div class="grid grid-cols-4 gap-1.5 font-data-mono-sm">
+            <button onclick="mSetMaxLossPreset(3000)" type="button" class="py-1 rounded bg-surface-container-high font-bold cursor-pointer">₹3K</button>
+            <button onclick="mSetMaxLossPreset(5000)" type="button" class="py-1 rounded bg-surface-container-high font-bold cursor-pointer">₹5K</button>
+            <button onclick="mSetMaxLossPreset(10000)" type="button" class="py-1 rounded bg-surface-container-high font-bold cursor-pointer">₹10K</button>
+            <button onclick="mResetMaxDailyLossAuto()" type="button" class="py-1 rounded bg-surface-container-high text-profit font-bold cursor-pointer">AUTO</button>
+          </div>
+          <div class="flex gap-1.5">
+            <input id="mc-max-loss-inp" type="number" min="500" step="500" placeholder="Custom max loss ₹" class="min-w-0 flex-1 px-2.5 py-1.5 rounded-lg bg-surface-container-lowest border border-outline-variant/50 font-data-mono-sm text-on-surface"/>
+            <button onclick="mApplyMaxDailyLoss('mc-max-loss-inp')" type="button" class="px-3 py-1.5 rounded-lg bg-primary-container text-on-primary-fixed font-label-caps font-bold cursor-pointer shrink-0">SET</button>
+          </div>
+          <div class="flex items-center justify-between text-[11px] font-data-mono-sm">
+            <span class="text-on-surface-variant">Weekly Guard: <b id="mc-weekly-guard" class="text-profit">0/2</b></span>
+            <span id="mc-halt-badge" class="font-label-caps text-profit font-bold">SAFE</span>
+          </div>
+          <div class="grid grid-cols-2 gap-1.5">
+            <button onclick="mResetRiskHalt('all')" type="button" class="py-1.5 px-2 rounded-lg bg-primary-container/20 text-profit font-label-caps text-[10px] font-bold cursor-pointer">RESET ALL HALTS</button>
+            <button onclick="mResetRiskHalt('daily_orders')" type="button" class="py-1.5 px-2 rounded-lg bg-surface-container-high text-on-surface-variant font-label-caps text-[10px] font-bold cursor-pointer">DAILY ORDERS</button>
+            <button onclick="mResetRiskHalt('weekly_loss')" type="button" class="py-1.5 px-2 rounded-lg bg-surface-container-high text-on-surface-variant font-label-caps text-[10px] font-bold cursor-pointer">WEEKLY LOSS</button>
+            <button onclick="mResetRiskHalt('daily_mtm')" type="button" class="py-1.5 px-2 rounded-lg bg-surface-container-high text-on-surface-variant font-label-caps text-[10px] font-bold cursor-pointer">DAILY MTM</button>
+          </div>
         </div>
       </div>
 
@@ -962,12 +1002,23 @@
         </div>`).join('') || '<div class="text-center text-on-surface-variant py-4">No Shoonya orders in book.</div>';
 
         const maxLoss = Number(snap.max_daily_loss || 5000);
+        const maxLossTag = snap.is_custom_max_daily_loss ? 'CUSTOM' : 'AUTO';
         const mtm = Number(snap.mtm_pnl || 0);
         const dd = mtm < 0 ? Math.min(100, (Math.abs(mtm) / Math.max(1, maxLoss)) * 100) : 0;
-        document.getElementById('m-risk-cap-txt').textContent = `-${A.fmtINR(maxLoss, 0)} MAX`;
+        document.getElementById('m-risk-cap-txt').textContent = `-${A.fmtINR(maxLoss, 0)} (${maxLossTag})`;
         document.getElementById('m-risk-bar').style.width = `${Math.max(5, 100 - dd)}%`;
         document.getElementById('m-risk-dd').textContent = `${dd.toFixed(1)}% used`;
         document.getElementById('m-risk-buf').textContent = `Buffer ${A.fmtINR(Math.max(0, maxLoss + mtm), 0)}`;
+        const hb = document.getElementById('m-halt-banner');
+        const wgM = snap.weekly_guard || {};
+        if (hb) {
+          if (snap.halted || wgM.is_halted) {
+            hb.textContent = `HALTED: ${snap.halt_reason || wgM.status_text || 'SYSTEM HALTED'}`;
+            hb.classList.remove('hidden');
+          } else {
+            hb.classList.add('hidden');
+          }
+        }
       }
 
       function renderMobileControls() {
@@ -982,6 +1033,19 @@
         document.getElementById('mc-cap-disp').textContent = A.fmtINR(cap, 0);
         document.getElementById('mc-cap-slider').value = cap;
         document.getElementById('mc-trade-cnt').textContent = `${snap.trades_taken || 0}/${snap.max_trades || 2}`;
+        const mcLossDisp = document.getElementById('mc-max-loss-disp');
+        if (mcLossDisp) mcLossDisp.textContent = `-${A.fmtINR(snap.max_daily_loss || 5000, 0)} (${snap.is_custom_max_daily_loss ? 'CUSTOM' : 'AUTO'})`;
+        const wgC = snap.weekly_guard || {};
+        const mcWg = document.getElementById('mc-weekly-guard');
+        if (mcWg) {
+          mcWg.textContent = `${wgC.losses ?? 0}/${wgC.max_losses ?? 2} (${wgC.state || 'ARMED'})`;
+          mcWg.className = wgC.is_halted ? 'text-loss' : 'text-profit';
+        }
+        const mcHb = document.getElementById('mc-halt-badge');
+        if (mcHb) {
+          mcHb.textContent = snap.halted ? 'HALTED' : (wgC.is_halted ? 'WEEKLY HALT' : 'SAFE');
+          mcHb.className = `font-label-caps font-bold ${(snap.halted || wgC.is_halted) ? 'text-loss' : 'text-profit'}`;
+        }
 
         const ms = (snap.schedule && snap.schedule.milestones) || [];
         const fallbackKeys = ['auth', 'cache', 'ws', 'orb_lock', 'scanner', 'squareoff'];
@@ -1185,6 +1249,46 @@
       document.getElementById('mc-btn-reauth').addEventListener('click', async () => { const r = await A.api.oauthLogin(); A.showToast(r.ok ? 'Authenticated' : r.oauth_status); await pollMobile(); });
       document.getElementById('mc-btn-reset-trades').addEventListener('click', async () => { const r = await A.api.resetTrades(); snap = r.snapshot || snap; renderMobile(); A.showToast(r.message); });
       document.getElementById('mc-cap-slider').addEventListener('change', e => setMobileFunds(Number(e.target.value)));
+
+      window.mApplyMaxDailyLoss = async (inputId) => {
+        const el = document.getElementById(inputId);
+        const v = Number(el && el.value);
+        if (!v || v < 500) { A.showToast('Enter a valid amount (minimum ₹500)', 'warn'); return; }
+        try {
+          const r = await A.api.setMaxDailyLoss(v);
+          snap = r.snapshot || snap;
+          if (el) el.value = '';
+          renderMobile();
+          A.showToast(r.message || 'Daily Max Loss Guardrail updated', r.ok ? 'info' : 'warn');
+        } catch (e) { A.showToast(e.message, 'error'); }
+      };
+
+      window.mSetMaxLossPreset = async (amt) => {
+        try {
+          const r = await A.api.setMaxDailyLoss(amt);
+          snap = r.snapshot || snap;
+          renderMobile();
+          A.showToast(r.message || 'Daily Max Loss Guardrail updated');
+        } catch (e) { A.showToast(e.message, 'error'); }
+      };
+
+      window.mResetMaxDailyLossAuto = async () => {
+        try {
+          const r = await A.api.setMaxDailyLoss(0);
+          snap = r.snapshot || snap;
+          renderMobile();
+          A.showToast(r.message || 'Restored auto max loss guardrail');
+        } catch (e) { A.showToast(e.message, 'error'); }
+      };
+
+      window.mResetRiskHalt = async (resetType = 'all') => {
+        try {
+          const r = await A.api.resetRiskHalt(resetType);
+          snap = r.snapshot || snap;
+          renderMobile();
+          A.showToast(r.message || 'Risk guardrail reset', r.ok ? 'info' : 'warn');
+        } catch (e) { A.showToast(e.message, 'error'); }
+      };
 
       // Server URL config for Android APK
       function syncServerInputsUi() {

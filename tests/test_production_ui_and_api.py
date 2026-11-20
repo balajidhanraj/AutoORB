@@ -505,3 +505,53 @@ def test_scheduler_0840_oauth_and_milestone_progression(tmp_path: Path, monkeypa
         asyncio.run(engine.dispose())
 
 
+def test_max_daily_loss_guardrail_and_halt_resets(tmp_path: Path) -> None:
+    from datetime import datetime
+    from config import IST
+
+    orch, app, engine = _build_test_client(tmp_path)
+    try:
+        with TestClient(app) as client:
+            # 1. Modify Daily Max Loss Guardrail to custom ₹7,500
+            r_set = client.post("/api/settings/max-daily-loss", json={"amount": 7500})
+            assert r_set.status_code == 200
+            d_set = r_set.json()
+            assert d_set["ok"] is True
+            assert d_set["max_daily_loss"] == 7500.0
+            assert d_set["is_custom_max_daily_loss"] is True
+            assert d_set["snapshot"]["max_daily_loss"] == 7500.0
+
+            # 2. Simulate daily order max, weekly loss circuit breaker, daily MTM loss, and system halt
+            now_ist = datetime.now(IST)
+            cal_week = (now_ist.year, now_ist.isocalendar()[1])
+            orch.risk_manager.trades_taken_today = 2
+            orch.risk_manager.weekly_losses[cal_week] = 2
+            orch.risk_manager.realized_pnl_today = -7600.0
+            orch.risk_manager.halted = True
+            orch.risk_manager.halt_reason = "DAILY_LOSS_LIMIT_BREACHED"
+            assert orch.risk_manager.can_take_new_trade("NIFTY", now_ist) is False
+
+            # 3. Granular resets: daily_orders, weekly_loss, daily_mtm
+            r_ord = client.post("/api/risk/reset-halt", json={"reset_type": "daily_orders"})
+            assert r_ord.status_code == 200 and r_ord.json()["ok"] is True
+            assert orch.risk_manager.trades_taken_today == 0
+            assert orch.risk_manager.halted is False
+
+            r_wk = client.post("/api/risk/reset-halt", json={"reset_type": "weekly_loss"})
+            assert r_wk.status_code == 200 and r_wk.json()["ok"] is True
+            assert orch.risk_manager.weekly_losses[cal_week] == 0
+            assert r_wk.json()["snapshot"]["weekly_guard"]["is_halted"] is False
+
+            r_mtm = client.post("/api/risk/reset-halt", json={"reset_type": "daily_mtm"})
+            assert r_mtm.status_code == 200 and r_mtm.json()["ok"] is True
+            assert orch.risk_manager.realized_pnl_today == 0.0
+            assert orch.risk_manager.can_take_new_trade("NIFTY", now_ist) is True
+
+            # 4. Restore Daily Max Loss Guardrail to dynamic AUTO
+            r_auto = client.post("/api/settings/max-daily-loss", json={"amount": 0})
+            assert r_auto.status_code == 200
+            assert r_auto.json()["is_custom_max_daily_loss"] is False
+    finally:
+        asyncio.run(engine.dispose())
+
+

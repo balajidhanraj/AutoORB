@@ -113,6 +113,7 @@ class RiskManager:
         self.halt_reason: Optional[str] = None
         self.custom_lots: Dict[str, int] = {}
         self.custom_product_types: Dict[str, str] = {}
+        self.custom_max_daily_loss: Optional[float] = None
         self.weekly_losses: Dict[Tuple[int, int], int] = {}
 
     def load_backtest_trades(self, limit: int = 50) -> None:
@@ -157,12 +158,15 @@ class RiskManager:
         self.custom_product_types[index_name] = "M" if norm in {"M", "NRML", "NORMAL"} else "I"
 
     def get_dynamic_max_daily_loss(self, now_dt: Optional[datetime] = None) -> float:
-        """Dynamic Max Daily Loss based on active/selected lot sizing:
+        """Return user-configured Daily Max Loss Guardrail if set, else dynamic lot-based limit:
         - 1 lot base = ₹2,500
         - 2 lots base (Mon-Fri) = ₹5,000
         - 4 lots boosted (Tuesday / custom) = ₹10,000
         Formula: max(active_lots) * 2,500.0
         """
+        if self.custom_max_daily_loss is not None and self.custom_max_daily_loss > 0:
+            self.settings.max_daily_loss = float(self.custom_max_daily_loss)
+            return float(self.custom_max_daily_loss)
         now = now_dt or datetime.now(IST)
         nf_lots = self.custom_lots.get("NIFTY") or self.calculate_dynamic_lots("NIFTY", trade_time=now)
         bnf_lots = self.custom_lots.get("BANKNIFTY") or self.calculate_dynamic_lots("BANKNIFTY", trade_time=now)
@@ -170,6 +174,63 @@ class RiskManager:
         limit = float(active_lots * 2500.0)
         self.settings.max_daily_loss = limit
         return limit
+
+    def set_max_daily_loss(self, amount: Optional[float]) -> Tuple[bool, str]:
+        """Allow user to set a custom Daily Max Loss Guardrail (₹) or pass None/0 to restore AUTO dynamic sizing."""
+        with self._lock:
+            if amount is None or float(amount) <= 0:
+                self.custom_max_daily_loss = None
+                auto_limit = self.get_dynamic_max_daily_loss()
+                msg = f"Daily Max Loss Guardrail restored to AUTO (₹{auto_limit:,.0f})."
+                logger.info(msg)
+                return True, msg
+            val = round(float(amount), 2)
+            if val < 500.0:
+                return False, "Daily Max Loss Guardrail must be at least ₹500."
+            self.custom_max_daily_loss = val
+            self.settings.max_daily_loss = val
+            msg = f"Daily Max Loss Guardrail updated to ₹{val:,.0f} (CUSTOM)."
+            logger.info(msg)
+            return True, msg
+
+    def reset_halt_and_limits(self, reset_type: str = "all", now_dt: Optional[datetime] = None) -> Tuple[bool, str]:
+        """Reset system halts and/or daily order loss, weekly loss circuit breaker, and daily MTM loss."""
+        norm = (reset_type or "all").strip().lower()
+        now = now_dt or datetime.now(IST)
+        cal_week = (now.year, now.isocalendar()[1])
+
+        with self._lock:
+            if norm in {"all", "full"}:
+                self.halted = False
+                self.halt_reason = None
+                self.trades_taken_today = 0
+                self.realized_pnl_today = 0.0
+                self.weekly_losses[cal_week] = 0
+                msg = "All system halts cleared: Daily orders (0), Weekly loss guard (0), and Daily MTM loss (₹0) reset."
+            elif norm in {"daily_orders", "orders", "trades"}:
+                self.trades_taken_today = 0
+                self.halted = False
+                self.halt_reason = None
+                msg = "Daily order counter reset to 0 and system halt cleared."
+            elif norm in {"weekly_loss", "weekly"}:
+                self.weekly_losses[cal_week] = 0
+                self.halted = False
+                self.halt_reason = None
+                msg = f"Weekly loss circuit breaker reset to 0 for {cal_week[0]}-W{cal_week[1]:02d} and halt cleared."
+            elif norm in {"daily_mtm", "mtm"}:
+                self.realized_pnl_today = 0.0
+                self.halted = False
+                self.halt_reason = None
+                msg = "Daily MTM realized loss baseline reset to ₹0 and MTM halt cleared."
+            elif norm == "halt":
+                self.halted = False
+                self.halt_reason = None
+                msg = "System halt cleared; trading engine resumed."
+            else:
+                return False, f"Unknown reset_type '{reset_type}'. Use all, daily_orders, weekly_loss, daily_mtm, or halt."
+
+        logger.warning("Risk guardrail reset (%s): %s", norm, msg)
+        return True, msg
 
     def get_available_fund(self) -> float:
         """Return available fund for sizing: live broker terminal net/cash in LIVE mode, or local capital + realized PnL in PAPER mode."""

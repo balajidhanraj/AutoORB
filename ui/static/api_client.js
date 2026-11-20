@@ -602,6 +602,8 @@
       exitPosition: (index_name) => postJson('/api/positions/exit', { index_name }),
       modifyPositionSl: (index_name, sl_trigger_price) => postJson('/api/positions/modify-sl', { index_name, sl_trigger_price }),
       resetTrades: () => postJson('/api/trades/reset'),
+      setMaxDailyLoss: (amount) => postJson('/api/settings/max-daily-loss', { amount }),
+      resetRiskHalt: (reset_type = 'all') => postJson('/api/risk/reset-halt', { reset_type }),
       controlMilestone: (milestone = 'all', action = 'restart') => postJson('/api/schedule/milestone', { milestone, action }),
       // Multi-user Auth & Config v1
       register: (email, password, name) => postJson('/api/v1/auth/register', { email, password, name }),

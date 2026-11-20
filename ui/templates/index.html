@@ -420,8 +420,8 @@
             <span id="pos-circuit-badge" class="font-label-caps text-label-caps text-profit font-bold">CIRCUIT SAFE</span>
           </div>
           <div class="space-y-space-xs my-space-xs">
-            <div class="flex items-center justify-between">
-              <span class="font-body-sm text-body-sm text-on-surface-variant">Daily Hard Stop Margin Loss</span>
+            <div class="flex items-center justify-between gap-2">
+              <span class="font-body-sm text-body-sm text-on-surface-variant">Daily Max Loss Guardrail</span>
               <span id="pos-max-loss" class="font-data-mono-sm text-data-mono-sm text-loss font-bold tabular-nums">-₹5,000.00 MAX</span>
             </div>
             <div class="w-full h-2.5 rounded-full bg-surface-container-highest overflow-hidden relative">
@@ -430,6 +430,18 @@
             <div class="flex items-center justify-between text-on-surface-variant font-label-caps text-label-caps">
               <span id="pos-dd-label">0.0% DRAWDOWN USED</span>
               <span id="pos-buffer-label">BUFFER: ₹5,000.00</span>
+            </div>
+            <div class="flex items-center gap-1.5 pt-1">
+              <input id="pos-max-loss-input" type="number" min="500" step="500" placeholder="Custom ₹ limit" class="min-w-0 flex-1 px-2 py-1 rounded bg-surface-container-lowest border border-outline-variant/50 font-data-mono-sm text-on-surface"/>
+              <button onclick="applyMaxDailyLoss('pos-max-loss-input')" type="button" class="px-2.5 py-1 rounded bg-primary-container text-on-primary-fixed font-label-caps font-bold cursor-pointer shrink-0">SET</button>
+              <button onclick="resetMaxDailyLossAuto()" type="button" class="px-2 py-1 rounded bg-surface-container-high hover:bg-surface-bright text-on-surface-variant hover:text-on-surface font-label-caps font-bold cursor-pointer shrink-0" title="Restore dynamic lot-based auto limit">AUTO</button>
+            </div>
+            <div class="flex flex-wrap items-center gap-1.5 pt-1 border-t border-outline-variant/25">
+              <span id="pos-halt-reason" class="hidden w-full font-data-mono-sm text-[11px] text-loss truncate"></span>
+              <button onclick="handleResetRiskHalt('all')" type="button" class="px-2 py-1 rounded bg-primary-container/20 hover:bg-primary-container text-profit hover:text-on-primary-fixed font-label-caps text-[9.5px] font-bold cursor-pointer">RESET ALL HALTS</button>
+              <button onclick="handleResetRiskHalt('daily_orders')" type="button" class="px-2 py-1 rounded bg-surface-container-high hover:bg-surface-bright text-on-surface-variant hover:text-on-surface font-label-caps text-[9.5px] font-bold cursor-pointer">DAILY ORDERS</button>
+              <button onclick="handleResetRiskHalt('weekly_loss')" type="button" class="px-2 py-1 rounded bg-surface-container-high hover:bg-surface-bright text-on-surface-variant hover:text-on-surface font-label-caps text-[9.5px] font-bold cursor-pointer">WEEKLY LOSS</button>
+              <button onclick="handleResetRiskHalt('daily_mtm')" type="button" class="px-2 py-1 rounded bg-surface-container-high hover:bg-surface-bright text-on-surface-variant hover:text-on-surface font-label-caps text-[9.5px] font-bold cursor-pointer">DAILY MTM</button>
             </div>
           </div>
           <div class="flex items-center justify-between bg-surface-container-lowest/70 px-space-sm py-1.5 rounded-lg">
@@ -671,12 +683,23 @@
                   <button id="btn-ana-toggle-mode" type="button" class="px-3 py-1 rounded bg-surface-container-high font-label-caps text-label-caps font-bold text-profit cursor-pointer">PAPER</button>
                 </div>
                 <div class="flex items-center justify-between text-body-sm">
-                  <span class="text-on-surface-variant">Dynamic Max Daily Loss</span>
+                  <span class="text-on-surface-variant">Daily Max Loss Guardrail</span>
                   <span id="ana-max-loss" class="font-data-mono-sm text-loss font-bold">--</span>
+                </div>
+                <div class="flex gap-1.5">
+                  <input id="ana-custom-max-loss" type="number" min="500" step="500" placeholder="Custom max loss ₹" class="min-w-0 flex-1 px-2 py-1 rounded bg-surface-container-lowest border border-outline-variant/50 font-data-mono-sm text-on-surface"/>
+                  <button onclick="applyMaxDailyLoss('ana-custom-max-loss')" type="button" class="px-2.5 py-1 rounded bg-primary-container text-on-primary-fixed font-label-caps font-bold cursor-pointer">SET</button>
+                  <button onclick="resetMaxDailyLossAuto()" type="button" class="px-2 py-1 rounded bg-surface-container-high text-on-surface-variant font-label-caps font-bold cursor-pointer">AUTO</button>
                 </div>
                 <div class="flex items-center justify-between text-body-sm">
                   <span class="text-on-surface-variant">Weekly Guard Status</span>
                   <span id="ana-weekly-guard" class="font-data-mono-sm text-profit font-bold">--</span>
+                </div>
+                <div class="flex flex-wrap gap-1.5 pt-1 border-t border-outline-variant/25">
+                  <button onclick="handleResetRiskHalt('all')" type="button" class="px-2 py-1 rounded bg-primary-container/20 hover:bg-primary-container text-profit hover:text-on-primary-fixed font-label-caps text-[9.5px] font-bold cursor-pointer">RESET ALL HALTS</button>
+                  <button onclick="handleResetRiskHalt('daily_orders')" type="button" class="px-2 py-1 rounded bg-surface-container-high text-on-surface-variant font-label-caps text-[9.5px] font-bold cursor-pointer">DAILY ORDERS</button>
+                  <button onclick="handleResetRiskHalt('weekly_loss')" type="button" class="px-2 py-1 rounded bg-surface-container-high text-on-surface-variant font-label-caps text-[9.5px] font-bold cursor-pointer">WEEKLY LOSS</button>
+                  <button onclick="handleResetRiskHalt('daily_mtm')" type="button" class="px-2 py-1 rounded bg-surface-container-high text-on-surface-variant font-label-caps text-[9.5px] font-bold cursor-pointer">DAILY MTM</button>
                 </div>
               </div>
             </div>
@@ -1300,11 +1323,28 @@
         document.getElementById('pos-realized-pnl').textContent = A.fmtSignedINR(realized);
         document.getElementById('pos-unrealized-pnl').textContent = A.fmtSignedINR(unrealized);
 
-        document.getElementById('pos-max-loss').textContent = `-${A.fmtINR(maxLoss)} MAX`;
+        const maxLossTag = snap.is_custom_max_daily_loss ? 'CUSTOM' : 'AUTO';
+        document.getElementById('pos-max-loss').textContent = `-${A.fmtINR(maxLoss)} (${maxLossTag})`;
+        const posLossInp = document.getElementById('pos-max-loss-input');
+        if (posLossInp && document.activeElement !== posLossInp && !posLossInp.value) posLossInp.placeholder = `₹${Math.round(maxLoss)}`;
         document.getElementById('pos-risk-bar').style.width = `${Math.max(5, 100 - ddUsed)}%`;
         document.getElementById('pos-dd-label').textContent = `${ddUsed.toFixed(1)}% DRAWDOWN USED`;
         document.getElementById('pos-buffer-label').textContent = `BUFFER: ${A.fmtINR(bufferRem)}`;
-        document.getElementById('pos-circuit-badge').textContent = snap.halted ? 'CIRCUIT TRIPPED' : 'CIRCUIT SAFE';
+        const cb = document.getElementById('pos-circuit-badge');
+        const hrEl = document.getElementById('pos-halt-reason');
+        const wgPos = snap.weekly_guard || {};
+        if (snap.halted || wgPos.is_halted) {
+          cb.textContent = snap.halted ? 'CIRCUIT TRIPPED' : 'WEEKLY HALTED';
+          cb.className = 'font-label-caps text-label-caps text-loss font-bold';
+          if (hrEl) {
+            hrEl.textContent = `HALT: ${snap.halt_reason || wgPos.status_text || 'SYSTEM HALTED'}`;
+            hrEl.classList.remove('hidden');
+          }
+        } else {
+          cb.textContent = 'CIRCUIT SAFE';
+          cb.className = 'font-label-caps text-label-caps text-profit font-bold';
+          if (hrEl) hrEl.classList.add('hidden');
+        }
 
         const broker = snap.broker || {};
         document.getElementById('pos-margin-used').textContent = A.fmtINR(broker.margin_used || 0);
@@ -1541,9 +1581,15 @@
         const btnM = document.getElementById('btn-ana-toggle-mode');
         btnM.textContent = snap.mode || 'PAPER';
         btnM.className = `px-3 py-1 rounded bg-surface-container-high font-label-caps text-label-caps font-bold cursor-pointer ${snap.mode === 'LIVE' ? 'text-loss' : 'text-profit'}`;
-        document.getElementById('ana-max-loss').textContent = A.fmtINR(snap.max_daily_loss || 5000, 0);
+        const maxLossTag = snap.is_custom_max_daily_loss ? 'CUSTOM' : 'AUTO';
+        document.getElementById('ana-max-loss').textContent = `${A.fmtINR(snap.max_daily_loss || 5000, 0)} (${maxLossTag})`;
         const wg = snap.weekly_guard || {};
-        document.getElementById('ana-weekly-guard').textContent = wg.halted ? 'WEEKLY PAUSED' : `${wg.losses_this_week || 0} / ${wg.max_weekly_losses || 2} LOSSES`;
+        const wgEl = document.getElementById('ana-weekly-guard');
+        const wLosses = wg.losses ?? wg.losses_this_week ?? 0;
+        const wMax = wg.max_losses ?? wg.max_weekly_losses ?? 2;
+        const wHalted = Boolean(wg.is_halted || wg.halted);
+        wgEl.textContent = wHalted ? `WEEKLY HALTED (${wLosses}/${wMax})` : `${wLosses} / ${wMax} LOSSES`;
+        wgEl.className = `font-data-mono-sm font-bold ${wHalted ? 'text-loss' : 'text-profit'}`;
 
         const ms = (snap.schedule && snap.schedule.milestones) || [];
         const fallbackKeys = ['auth', 'cache', 'ws', 'orb_lock', 'scanner', 'squareoff'];
@@ -1677,6 +1723,37 @@
         } catch (e) {
           A.showToast(e.message, 'error');
         }
+      };
+
+      window.applyMaxDailyLoss = async (inputId) => {
+        const el = document.getElementById(inputId);
+        const v = Number(el && el.value);
+        if (!v || v < 500) { A.showToast('Enter a valid amount (minimum ₹500)', 'warn'); return; }
+        try {
+          const r = await A.api.setMaxDailyLoss(v);
+          snap = r.snapshot || snap;
+          if (el) el.value = '';
+          renderAll();
+          A.showToast(r.message || 'Daily Max Loss Guardrail updated', r.ok ? 'info' : 'warn');
+        } catch (e) { A.showToast(e.message, 'error'); }
+      };
+
+      window.resetMaxDailyLossAuto = async () => {
+        try {
+          const r = await A.api.setMaxDailyLoss(0);
+          snap = r.snapshot || snap;
+          renderAll();
+          A.showToast(r.message || 'Restored dynamic auto max loss');
+        } catch (e) { A.showToast(e.message, 'error'); }
+      };
+
+      window.handleResetRiskHalt = async (resetType = 'all') => {
+        try {
+          const r = await A.api.resetRiskHalt(resetType);
+          snap = r.snapshot || snap;
+          renderAll();
+          A.showToast(r.message || 'Risk guardrail reset complete', r.ok ? 'info' : 'warn');
+        } catch (e) { A.showToast(e.message, 'error'); }
       };
 
       window.handleSyncBackupIp = async () => {

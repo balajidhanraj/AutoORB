@@ -677,6 +677,14 @@ class TradingSystemOrchestrator:
         logger.info(msg)
         return True, msg
 
+    def set_max_daily_loss(self, amount: Optional[float]) -> Tuple[bool, str]:
+        """Modify the Daily Max Loss Guardrail (₹) or pass None/0 for dynamic AUTO sizing."""
+        return self.risk_manager.set_max_daily_loss(amount)
+
+    def reset_risk_guardrails(self, reset_type: str = "all") -> Tuple[bool, str]:
+        """Reset system halts, daily order count, weekly loss guard, and/or daily MTM loss."""
+        return self.risk_manager.reset_halt_and_limits(reset_type=reset_type)
+
     def set_entry_cutoff_time(self, cutoff_time_str: str) -> Tuple[bool, str]:
         """Configure entry cutoff time between ORB end time (e.g. 09:30) and Auto Squareoff (15:15)."""
         clean_str = str(cutoff_time_str).strip()
@@ -1329,6 +1337,7 @@ class TradingSystemOrchestrator:
             "trades_taken": self.risk_manager.trades_taken_today,
             "max_trades": self.settings.max_trades_per_day,
             "max_daily_loss": self.risk_manager.get_dynamic_max_daily_loss(now_ist),
+            "is_custom_max_daily_loss": self.risk_manager.custom_max_daily_loss is not None,
             "halted": self.risk_manager.halted,
             "halt_reason": self.risk_manager.halt_reason,
             "cached_contracts": self.mapper.cached_count,
