@@ -722,7 +722,7 @@ class ShoonyaClient:
             "positions": [],
             "error": "",
         }
-        if not getattr(self.api, "access_token", ""):
+        if not (getattr(self.api, "access_token", "") or getattr(self.api, "susertoken", "")):
             return empty_snapshot
 
         with self._lock:
@@ -840,7 +840,7 @@ class ShoonyaClient:
         product_type: str = "M",
     ) -> Dict[str, Any]:
         """Place a manual/test order directly on the live Shoonya broker API."""
-        if not getattr(self.api, "access_token", ""):
+        if not (getattr(self.api, "access_token", "") or getattr(self.api, "susertoken", "")):
             return {"stat": "Not_Ok", "emsg": "Shoonya session is not authenticated. Connect account first."}
 
         prd = str(product_type).strip().upper()
