@@ -133,15 +133,19 @@ class CompatibleNorenApi:
         user_id: str,
         account_id: str,
         susertoken: str = "",
+        use_bearer: bool = True,
     ) -> None:  # noqa: N802
-        self.access_token = access_token
+        self.access_token = access_token if use_bearer else ""
         if susertoken:
             self.susertoken = susertoken
         elif not getattr(self, "susertoken", ""):
             self.susertoken = access_token
         self.username = user_id
         self.account_id = account_id or user_id
-        self._session.headers.update({"Authorization": f"Bearer {access_token}"})
+        if use_bearer and access_token:
+            self._session.headers.update({"Authorization": f"Bearer {access_token}"})
+        else:
+            self._session.headers.pop("Authorization", None)
 
     def _post(self, endpoint: str, body: Dict[str, Any], _retry: bool = True) -> Any:
         token_to_send = getattr(self, "susertoken", "") or getattr(self, "access_token", "")
@@ -171,8 +175,8 @@ class CompatibleNorenApi:
                     return self._post(endpoint, body, _retry=False)
             raise
 
-    def get_limits(self) -> Dict[str, Any]:
-        return self._post("Limits", {"uid": self.username, "actid": self.account_id})
+    def get_limits(self, _retry: bool = True) -> Dict[str, Any]:
+        return self._post("Limits", {"uid": self.username, "actid": self.account_id}, _retry=_retry)
 
     def get_user_details(self) -> Dict[str, Any]:
         resp = self._post("UserDetails", {"uid": self.username})

@@ -185,7 +185,10 @@ class ShoonyaAuthenticator:
                     self.settings.shoonya_user_id,
                     self.settings.shoonya_account_id,
                 )
-            limits = self.api.get_limits()
+            try:
+                limits = self.api.get_limits(_retry=False)
+            except TypeError:
+                limits = self.api.get_limits()
             if isinstance(limits, dict) and limits.get("stat") == "Ok":
                 self.last_login_status = "AUTHENTICATED (CACHED)"
                 self.last_token_date = today_str
@@ -412,26 +415,33 @@ class ShoonyaAuthenticator:
         if token_resp.get("stat") == "Not_Ok":
             emsg = str(token_resp.get("emsg") or "")
             if "INVALID_IP" in emsg:
-                # If QuickAuth already returned a valid susertoken, fall back to it while syncing Backup IP
+                # If QuickAuth already returned a valid susertoken, activate it via jKey (without OAuth Bearer)
                 quick_token = str(getattr(self.api, "susertoken", "") or "").strip()
                 if quick_token:
                     logger.warning(
-                        "GenAcsTok reported INVALID_IP; activating QuickAuth session token and syncing Backup IP..."
+                        "GenAcsTok reported INVALID_IP; activating QuickAuth jKey session (without Bearer)..."
                     )
-                    self.api.injectOAuthHeader(
-                        quick_token,
-                        self.settings.shoonya_user_id,
-                        self.settings.shoonya_account_id,
-                        susertoken=quick_token,
-                    )
-                    limits = self.api.get_limits()
-                    if isinstance(limits, dict) and limits.get("stat") == "Ok":
-                        self.save_token(quick_token)
-                        self.last_login_status = "AUTHENTICATED (DYNAMIC_IP_FALLBACK)"
-                        return quick_token
+                    try:
+                        self.api.injectOAuthHeader(
+                            quick_token,
+                            self.settings.shoonya_user_id,
+                            self.settings.shoonya_account_id,
+                            susertoken=quick_token,
+                            use_bearer=False,
+                        )
+                        try:
+                            limits = self.api.get_limits(_retry=False)
+                        except TypeError:
+                            limits = self.api.get_limits()
+                        if isinstance(limits, dict) and limits.get("stat") == "Ok":
+                            self.save_token(quick_token)
+                            self.last_login_status = "AUTHENTICATED (DYNAMIC_IP_FALLBACK)"
+                            return quick_token
+                    except Exception as q_exc:
+                        logger.warning("QuickAuth jKey fallback validation failed: %s", q_exc)
                 raise RuntimeError(
-                    "Shoonya GenAcsTok rejected request: INVALID_IP — click 'SYNC BACKUP IP' or whitelist "
-                    "current public IP in Shoonya Profile -> API Key"
+                    "Shoonya GenAcsTok rejected request: INVALID_IP — this server IP is not mapped to "
+                    f"{self.settings.shoonya_user_id} in Shoonya Profile -> API Key"
                 )
             raise RuntimeError(f"GenAcsTok error: {token_resp}")
 
@@ -445,7 +455,10 @@ class ShoonyaAuthenticator:
             self.settings.shoonya_account_id,
         )
 
-        limits = self.api.get_limits()
+        try:
+            limits = self.api.get_limits(_retry=False)
+        except TypeError:
+            limits = self.api.get_limits()
         if not isinstance(limits, dict) or limits.get("stat") != "Ok":
             raise RuntimeError(f"get_limits validation failed after OAuth login: {limits}")
 
@@ -492,6 +505,8 @@ class ShoonyaAuthenticator:
             except Exception as exc:
                 last_error = exc
                 logger.error("OAuth login attempt %d/3 failed: %s", attempt, exc)
+                if "INVALID_IP" in str(exc):
+                    break
                 if attempt < 3:
                     backoff = self.RETRY_BACKOFFS_SEC[attempt - 1]
                     logger.info("Retrying OAuth login in %ds...", backoff)

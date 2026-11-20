@@ -562,9 +562,13 @@ class TradingSystemOrchestrator:
     def _handle_reauth(self) -> bool:
         """Triggered automatically when a 401 Unauthorized or WebSocket auth rejection occurs."""
         now_m = time.monotonic()
-        if hasattr(self, "_last_reauth_time") and (now_m - self._last_reauth_time) < 15.0:
-            logger.debug("Shoonya re-auth triggered within 15s cooldown; skipping duplicate")
-            return True
+        last_t = getattr(self, "_last_reauth_time", 0.0)
+        last_ok = getattr(self, "_last_reauth_ok", False)
+        is_invalid_ip = "INVALID_IP" in str(getattr(self.auth, "last_login_status", "") or "")
+        cooldown = 15.0 if last_ok else (180.0 if is_invalid_ip else 60.0)
+        if last_t > 0.0 and (now_m - last_t) < cooldown:
+            logger.debug("Shoonya re-auth skipped within %.0fs cooldown (last_ok=%s)", cooldown, last_ok)
+            return last_ok
         if not self._reauth_lock.acquire(blocking=False):
             logger.debug("Shoonya re-auth already in progress; skipping duplicate trigger")
             return False
@@ -573,24 +577,37 @@ class TradingSystemOrchestrator:
             logger.warning("Shoonya session invalid or expired; executing automatic token renewal...")
             token = self.auth.ensure_authenticated(force_refresh=True)
             if token:
+                self._last_reauth_ok = True
                 logger.info("Shoonya OAuth session successfully renewed (%s)", self.settings.shoonya_user_id)
                 self.client.update_credentials(self.settings)
                 susertoken = getattr(self.client.api, "susertoken", "") or getattr(self.auth.api, "susertoken", "") or token
+                use_bearer = "DYNAMIC_IP_FALLBACK" not in str(self.auth.last_login_status or "")
                 if hasattr(self.client.api, "injectOAuthHeader"):
-                    self.client.api.injectOAuthHeader(
-                        token,
-                        self.settings.shoonya_user_id,
-                        self.settings.shoonya_account_id,
-                        susertoken=susertoken,
-                    )
+                    try:
+                        self.client.api.injectOAuthHeader(
+                            token,
+                            self.settings.shoonya_user_id,
+                            self.settings.shoonya_account_id,
+                            susertoken=susertoken,
+                            use_bearer=use_bearer,
+                        )
+                    except TypeError:
+                        self.client.api.injectOAuthHeader(
+                            token,
+                            self.settings.shoonya_user_id,
+                            self.settings.shoonya_account_id,
+                            susertoken=susertoken,
+                        )
                 if not self.client.ws_connected:
                     self.client.reconnect_websocket()
                     self._backfill_all_indices()
                 return True
             else:
+                self._last_reauth_ok = False
                 logger.error("Automated Shoonya re-login failed to return a valid access token")
                 return False
         except Exception as exc:
+            self._last_reauth_ok = False
             logger.error("Exception during automated Shoonya re-authentication: %s", exc)
             return False
         finally:
