@@ -309,6 +309,26 @@ def test_multitenant_auth_and_risk_endpoints(tmp_path: Path) -> None:
             out = client.post("/api/v1/auth/logout")
             assert out.status_code == 200
             assert out.json()["status"] == "success"
+
+            neon_res = client.post(
+                "/api/v1/auth/neon",
+                json={"email": "neon.unit@example.com", "name": "Neon Unit"},
+            )
+            assert neon_res.status_code == 200
+            neon_tok = neon_res.json()["access_token"]
+            neon_hdr = {"Authorization": f"Bearer {neon_tok}"}
+
+            rec_res = client.post(
+                "/api/v1/trades/record",
+                headers=neon_hdr,
+                json={"symbol": "NIFTY26NOV25200CE", "side": "BUY", "quantity": 65, "entry_price": 150.0, "pnl": 650.0},
+            )
+            assert rec_res.status_code == 200
+            assert rec_res.json()["kind"] == "committed"
+
+            my_tr = client.get("/api/v1/trades/my-trades", headers=neon_hdr)
+            assert my_tr.status_code == 200
+            assert len(my_tr.json()) == 1
     finally:
         asyncio.run(engine.dispose())
 
@@ -423,4 +443,65 @@ def test_multi_env_vps_artifacts_and_db_normalization(tmp_path: Path) -> None:
     caddy_txt = (ROOT_DIR / "deploy" / "Caddyfile").read_text(encoding="utf-8")
     assert "reverse_proxy autoorb-prod:8000" in caddy_txt
     assert "reverse_proxy autoorb-dev:8000" in caddy_txt
+
+
+def test_scheduler_0840_oauth_and_milestone_progression(tmp_path: Path, monkeypatch) -> None:
+    from datetime import datetime
+    from config import IST
+
+    orch, _app, engine = _build_test_client(tmp_path)
+    try:
+        login_calls: list[bool] = []
+        cache_calls: list[int] = []
+        backfill_calls: list[int] = []
+
+        def fake_login(force_refresh: bool = False) -> str:
+            login_calls.append(force_refresh)
+            orch.auth.last_token_date = "2026-11-20"
+            return "tok_0840"
+
+        def fake_cache() -> int:
+            cache_calls.append(1)
+            return 1396
+
+        def fake_backfill() -> None:
+            backfill_calls.append(1)
+
+        monkeypatch.setattr(orch, "run_daily_login", fake_login)
+        monkeypatch.setattr(orch, "run_instrument_cache", fake_cache)
+        monkeypatch.setattr(orch, "_backfill_all_indices", fake_backfill)
+        orch.client.ws_connected = True  # Even if already connected at startup
+
+        # 1. User clicks RESET ALL at 08:30 IST (before 08:40 scheduled auth time)
+        t_0830 = datetime(2026, 11, 20, 8, 30, 0, tzinfo=IST)
+        ok, _msg = orch.control_schedule_milestone("all", "reset", now_ist=t_0830)
+        assert ok is True
+        st_0830 = orch._build_schedule_status(t_0830)
+        assert all(m["status"] == "PENDING" for m in st_0830["milestones"])
+
+        # 2. At 08:40:01 IST, step_scheduler must trigger run_daily_login(force_refresh=True)
+        t_0840 = datetime(2026, 11, 20, 8, 40, 1, tzinfo=IST)
+        orch.step_scheduler(t_0840)
+        assert login_calls == [True], "08:40 IST scheduler must force a fresh OAuth login"
+        st_0840 = orch._build_schedule_status(t_0840)
+        ms_0840 = {m["key"]: m["status"] for m in st_0840["milestones"]}
+        assert ms_0840["auth"] == "DONE"
+        assert ms_0840["cache"] == "PENDING"
+
+        # 3. At 08:55:01 IST, step_scheduler must trigger NFO contract cache
+        t_0855 = datetime(2026, 11, 20, 8, 55, 1, tzinfo=IST)
+        orch.step_scheduler(t_0855)
+        assert len(cache_calls) == 1
+        ms_0855 = {m["key"]: m["status"] for m in orch._build_schedule_status(t_0855)["milestones"]}
+        assert ms_0855["cache"] == "DONE"
+
+        # 4. At 09:14:01 IST, step_scheduler must trigger WS & 3D backfill even if ws_connected was True
+        t_0914 = datetime(2026, 11, 20, 9, 14, 1, tzinfo=IST)
+        orch.step_scheduler(t_0914)
+        assert len(backfill_calls) == 1
+        ms_0914 = {m["key"]: m["status"] for m in orch._build_schedule_status(t_0914)["milestones"]}
+        assert ms_0914["ws"] == "DONE"
+    finally:
+        asyncio.run(engine.dispose())
+
 

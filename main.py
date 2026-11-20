@@ -72,7 +72,7 @@ class TradingSystemOrchestrator:
 
         # Track daily schedule milestones by IST date and manual user overrides
         self._milestone_done: Dict[str, date] = {}
-        self._milestone_overrides: Dict[str, Tuple[date, str]] = {}
+        self._milestone_overrides: Dict[str, Tuple[date, str, dt_time]] = {}
         self.public_ip: str = "detecting..."
         self.previous_public_ip: str = ""
         self._last_ip_check_monotonic: float = time.monotonic()
@@ -152,20 +152,51 @@ class TradingSystemOrchestrator:
         finally:
             self._ip_sync_lock.release()
 
-    def _milestone_ready(self, key: str, today: date) -> bool:
+    def _milestone_scheduled_time(self, key: str) -> Optional[dt_time]:
+        entry_start = getattr(self.settings, "entry_start_time", dt_time(10, 0, 0))
+        mapping: Dict[str, dt_time] = {
+            "auth": self.settings.auth_time,
+            "cache": self.settings.instrument_cache_time,
+            "ws": self.settings.ws_connect_time,
+            "orb_lock": self.settings.orb_end_time,
+            "scanner": entry_start,
+            "squareoff": self.settings.auto_squareoff_time,
+            "eod_report": self.settings.eod_report_time,
+        }
+        return mapping.get(key)
+
+    def _milestone_ready(self, key: str, today: date, current_t: Optional[dt_time] = None) -> bool:
+        if self._milestone_done.get(key) == today:
+            return False
         override = self._milestone_overrides.get(key)
         if override and override[0] == today:
-            return False
-        return self._milestone_done.get(key) != today
+            ov_status = override[1]
+            ov_t = override[2] if len(override) > 2 else dt_time(23, 59, 59)
+            if ov_status in ("DONE", "ACTIVE"):
+                return False
+            if ov_status == "PENDING":
+                sched_t = self._milestone_scheduled_time(key)
+                if sched_t is not None and ov_t < sched_t:
+                    # User reset this milestone to PENDING BEFORE its scheduled trigger time today:
+                    # allow the scheduler to execute it automatically once current_t >= sched_t.
+                    return True
+                return False
+        return True
 
     def _mark_milestone(self, key: str, today: date) -> None:
         self._milestone_done[key] = today
         self._milestone_overrides.pop(key, None)
 
-    def control_schedule_milestone(self, milestone_key: str, action: str = "restart") -> Tuple[bool, str]:
+    def control_schedule_milestone(
+        self,
+        milestone_key: str,
+        action: str = "restart",
+        now_ist: Optional[datetime] = None,
+    ) -> Tuple[bool, str]:
         """Allow user to manually run/restart, reset to PENDING, or mark DONE any daily schedule milestone."""
-        now_ist = datetime.now(IST)
+        now_ist = now_ist or datetime.now(IST)
         today = now_ist.date()
+        now_t = now_ist.time()
         key = (milestone_key or "all").strip().lower()
         act = (action or "restart").strip().lower()
 
@@ -185,9 +216,9 @@ class TradingSystemOrchestrator:
                     self._milestone_done.clear()
                     self._milestone_done["reset"] = today
                     for k in all_keys:
-                        self._milestone_overrides[k] = (today, "PENDING")
+                        self._milestone_overrides[k] = (today, "PENDING", now_t)
                     self.strategy.reset_daily(today)
-                logger.info("All daily schedule milestones reset to PENDING by user")
+                logger.info("All daily schedule milestones reset to PENDING by user at %s", now_t.strftime("%H:%M:%S"))
                 return True, "All daily schedule milestones reset to PENDING."
 
             # Restart / re-run the morning pipeline
@@ -204,7 +235,9 @@ class TradingSystemOrchestrator:
             self.run_ws_connect_and_backfill()
             self._mark_milestone("ws", today)
             for k in ("orb_lock", "scanner", "squareoff"):
-                self._milestone_overrides[k] = (today, "PENDING")
+                sched_t = self._milestone_scheduled_time(k)
+                if sched_t is not None and now_t >= sched_t:
+                    self._milestone_overrides[k] = (today, "PENDING", now_t)
             logger.info("Daily startup milestones (OAuth, NFO Cache=%d, WS/Backfill) restarted by user", cnt)
             return True, f"Restarted morning milestones (OAuth, {cnt} NFO contracts, WS & 3D backfill)."
 
@@ -215,16 +248,16 @@ class TradingSystemOrchestrator:
         if act == "reset":
             with self._lock:
                 self._milestone_done.pop(key, None)
-                self._milestone_overrides[key] = (today, "PENDING")
+                self._milestone_overrides[key] = (today, "PENDING", now_t)
                 if key == "orb_lock":
                     self.strategy.reset_daily(today)
-            logger.info("Milestone '%s' (%s) reset to PENDING by user", label, key)
+            logger.info("Milestone '%s' (%s) reset to PENDING by user at %s", label, key, now_t.strftime("%H:%M:%S"))
             return True, f"{label} reset to PENDING."
 
         if act == "done":
             with self._lock:
                 self._mark_milestone(key, today)
-                self._milestone_overrides[key] = (today, "DONE")
+                self._milestone_overrides[key] = (today, "DONE", now_t)
             logger.info("Milestone '%s' (%s) marked DONE by user", label, key)
             return True, f"{label} marked DONE."
 
@@ -235,14 +268,14 @@ class TradingSystemOrchestrator:
         if key == "auth":
             token = self.run_daily_login(force_refresh=True)
             self._mark_milestone("auth", today)
-            self._milestone_overrides["auth"] = (today, "DONE")
+            self._milestone_overrides["auth"] = (today, "DONE", now_t)
             status_txt = self.auth.last_login_status or ("OK" if token else "COMPLETED")
             return True, f"Auto OAuth Login restarted ({status_txt})."
 
         if key == "cache":
             cnt = self.run_instrument_cache()
             self._mark_milestone("cache", today)
-            self._milestone_overrides["cache"] = (today, "DONE")
+            self._milestone_overrides["cache"] = (today, "DONE", now_t)
             return True, f"NFO Contract Cache restarted ({cnt} contracts loaded)."
 
         if key == "ws":
@@ -252,9 +285,8 @@ class TradingSystemOrchestrator:
                 except Exception:
                     pass
             self.run_ws_connect_and_backfill()
-            self._backfill_all_indices()
             self._mark_milestone("ws", today)
-            self._milestone_overrides["ws"] = (today, "DONE")
+            self._milestone_overrides["ws"] = (today, "DONE", now_t)
             return True, "WS & 3D Backfill restarted."
 
         if key == "orb_lock":
@@ -262,7 +294,7 @@ class TradingSystemOrchestrator:
                 builder.flush_due_candles(now_ist)
             locked = self.run_lock_orb(now_ist)
             self._mark_milestone("orb_lock", today)
-            self._milestone_overrides["orb_lock"] = (today, "DONE")
+            self._milestone_overrides["orb_lock"] = (today, "DONE", now_t)
             return True, (
                 "Opening Range locked across indices."
                 if locked
@@ -273,13 +305,13 @@ class TradingSystemOrchestrator:
             with self._lock:
                 self.risk_manager.halted = False
                 self.risk_manager.halt_reason = ""
-                self._milestone_overrides["scanner"] = (today, "ACTIVE")
+                self._milestone_overrides["scanner"] = (today, "ACTIVE", now_t)
             return True, "Institutional Breakout Scanner armed (ACTIVE)."
 
         if key == "squareoff":
             self.run_eod_squareoff()
             self._mark_milestone("squareoff", today)
-            self._milestone_overrides["squareoff"] = (today, "DONE")
+            self._milestone_overrides["squareoff"] = (today, "DONE", now_t)
             return True, "Auto EOD Square-Off executed."
 
         return False, f"Unsupported action '{action}'."
@@ -490,8 +522,9 @@ class TradingSystemOrchestrator:
     def run_ws_connect_and_backfill(self) -> None:
         tokens = [spec.spot_key for spec in INDEX_SPECS.values()] + [INDIA_VIX_KEY]
         self.client.subscribe(tokens)
-        if not self.client.ws_connected and (self.settings.mode == "LIVE" or self.auth.last_token_date):
-            self.client.start_websocket()
+        if self.settings.mode == "LIVE" or self.auth.last_token_date:
+            if not self.client.ws_connected:
+                self.client.start_websocket()
             self._backfill_all_indices()
 
     def run_lock_orb(self, now_ist: Optional[datetime] = None) -> bool:
@@ -833,26 +866,29 @@ class TradingSystemOrchestrator:
 
         # Skip trading schedule on weekends (Mon=0..Fri=4)
         if dt.weekday() < 5:
-            if current_t < self.settings.auth_time and self._milestone_ready("reset", today):
+            if current_t < self.settings.auth_time and self._milestone_ready("reset", today, current_t):
                 self._milestone_done.clear()
                 self._milestone_overrides.clear()
                 self.strategy.reset_daily(today)
                 self.risk_manager.reset_daily()
                 self._mark_milestone("reset", today)
 
-            if current_t >= self.settings.auth_time and self._milestone_ready("auth", today):
-                self.run_daily_login()
+            if current_t >= self.settings.auth_time and self._milestone_ready("auth", today, current_t):
+                logger.info("Scheduled 08:40 IST Auto OAuth Login triggered")
+                self.run_daily_login(force_refresh=True)
                 self._mark_milestone("auth", today)
 
-            if current_t >= self.settings.instrument_cache_time and self._milestone_ready("cache", today):
+            if current_t >= self.settings.instrument_cache_time and self._milestone_ready("cache", today, current_t):
+                logger.info("Scheduled 08:55 IST NFO Contract Cache triggered")
                 self.run_instrument_cache()
                 self._mark_milestone("cache", today)
 
-            if current_t >= self.settings.ws_connect_time and self._milestone_ready("ws", today):
+            if current_t >= self.settings.ws_connect_time and self._milestone_ready("ws", today, current_t):
+                logger.info("Scheduled 09:14 IST WS & 3D Backfill triggered")
                 self.run_ws_connect_and_backfill()
                 self._mark_milestone("ws", today)
 
-            if current_t >= self.settings.orb_end_time and self._milestone_ready("orb_lock", today):
+            if current_t >= self.settings.orb_end_time and self._milestone_ready("orb_lock", today, current_t):
                 if current_t >= self.settings.market_close_time:
                     # After market hours: mark milestone complete so scheduler does not repeatedly poll
                     self._mark_milestone("orb_lock", today)
@@ -866,11 +902,12 @@ class TradingSystemOrchestrator:
                         if locked:
                             self._mark_milestone("orb_lock", today)
 
-            if current_t >= self.settings.auto_squareoff_time and self._milestone_ready("squareoff", today):
+            if current_t >= self.settings.auto_squareoff_time and self._milestone_ready("squareoff", today, current_t):
+                logger.info("Scheduled 15:15 IST Auto EOD Square-Off triggered")
                 self.run_eod_squareoff()
                 self._mark_milestone("squareoff", today)
 
-            if current_t >= self.settings.eod_report_time and self._milestone_ready("eod_report", today):
+            if current_t >= self.settings.eod_report_time and self._milestone_ready("eod_report", today, current_t):
                 self.run_eod_report()
                 self._mark_milestone("eod_report", today)
 
@@ -1113,7 +1150,14 @@ class TradingSystemOrchestrator:
         def _ms_status(key: str, done_cond: bool, active_cond: bool = False) -> str:
             override = self._milestone_overrides.get(key)
             if override and override[0] == today:
-                return override[1]
+                ov_status = override[1]
+                ov_t = override[2] if len(override) > 2 else dt_time(23, 59, 59)
+                sched_t = self._milestone_scheduled_time(key)
+                if ov_status == "PENDING" and sched_t is not None and ov_t < sched_t and t >= sched_t:
+                    # Pre-schedule PENDING override has now been reached by the IST clock
+                    pass
+                else:
+                    return ov_status
             if done_cond:
                 return "DONE"
             if active_cond:

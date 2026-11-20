@@ -38,3 +38,4 @@ dist/
 .DS_Store
 Thumbs.db
 .sf/
+.neon

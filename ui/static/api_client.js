@@ -619,7 +619,11 @@
       getRiskV1: () => request('/api/v1/risk/settings'),
       updateRiskV1: (payload) => putJson('/api/v1/risk/settings', payload),
       getTradesV1: (limit = 50) => request(`/api/v1/trades/my-trades?limit=${limit}`),
-      getTradeStatsV1: () => request('/api/v1/trades/stats')
+      getTradeStatsV1: () => request('/api/v1/trades/stats'),
+      getTradesLiveQueryV1: () => postJson('/api/v1/trades/live-query', {}),
+      recordTradeV1: (payload) => postJson('/api/v1/trades/record', payload),
+      neonAuthStatus: () => request('/api/v1/auth/neon/status'),
+      neonAuth: (payload) => postJson('/api/v1/auth/neon', payload)
     }
   };
 })(window);

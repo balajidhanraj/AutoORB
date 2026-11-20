@@ -6,9 +6,13 @@ import os
 from pathlib import Path
 from typing import AsyncGenerator
 
+from dotenv import load_dotenv
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from database.models import Base
+
+load_dotenv()
 
 def normalize_database_url(raw_url: str) -> str:
     """Normalize PostgreSQL URLs (VPS / Neon / Supabase / GCP Cloud SQL) for asyncpg."""
@@ -36,26 +40,36 @@ def normalize_database_url(raw_url: str) -> str:
     return cleaned
 
 
-# Supports SQLite by default or PostgreSQL (VPS / Supabase / Neon / RDS) via DATABASE_URL
+# Supports SQLite by default or Neon Lakebase Postgres via DATABASE_URL (pooled) and DATABASE_URL_UNPOOLED (direct)
 DATABASE_URL = normalize_database_url(
     os.getenv("DATABASE_URL", "sqlite+aiosqlite:///data/autoorb.db")
 )
+DATABASE_URL_UNPOOLED = normalize_database_url(
+    os.getenv("DATABASE_URL_UNPOOLED", "")
+) or DATABASE_URL
 
 # Ensure sqlite data directory exists
 if "sqlite" in DATABASE_URL:
     Path("data").mkdir(exist_ok=True)
 
-_engine_kwargs: dict = {"echo": False, "future": True}
-if "sqlite" not in DATABASE_URL:
-    _engine_kwargs.update(
-        {
-            "pool_pre_ping": True,
-            "pool_size": 5,
-            "max_overflow": 10,
-        }
-    )
 
-engine = create_async_engine(DATABASE_URL, **_engine_kwargs)
+def _build_engine_kwargs(url: str) -> dict:
+    kwargs: dict = {"echo": False, "future": True}
+    if "sqlite" not in url:
+        kwargs.update(
+            {
+                "pool_pre_ping": True,
+                "pool_size": 5,
+                "max_overflow": 10,
+            }
+        )
+        # Neon pooled endpoints (-pooler) run PgBouncer in transaction mode; disable asyncpg statement cache
+        if "-pooler." in url:
+            kwargs["connect_args"] = {"statement_cache_size": 0}
+    return kwargs
+
+
+engine = create_async_engine(DATABASE_URL, **_build_engine_kwargs(DATABASE_URL))
 
 AsyncSessionLocal = async_sessionmaker(
     bind=engine,
@@ -65,9 +79,19 @@ AsyncSessionLocal = async_sessionmaker(
 
 
 async def init_db() -> None:
-    """Create all database tables if they do not exist."""
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+    """Create all database tables using the direct (unpooled) connection string per Neon best practices."""
+    if "sqlite" not in DATABASE_URL_UNPOOLED and DATABASE_URL_UNPOOLED != DATABASE_URL:
+        migration_engine = create_async_engine(
+            DATABASE_URL_UNPOOLED, **_build_engine_kwargs(DATABASE_URL_UNPOOLED)
+        )
+        try:
+            async with migration_engine.begin() as conn:
+                await conn.run_sync(Base.metadata.create_all)
+        finally:
+            await migration_engine.dispose()
+    else:
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
 
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:

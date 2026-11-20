@@ -66,6 +66,12 @@ class FirebaseAuthRequest(BaseModel):
     provider: Optional[str] = "firebase"
 
 
+class NeonAuthSessionRequest(BaseModel):
+    session_token: Optional[str] = None
+    email: Optional[EmailStr] = None
+    name: Optional[str] = None
+
+
 class AuthResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
@@ -366,6 +372,73 @@ async def firebase_auth(req: FirebaseAuthRequest, db: AsyncSession = Depends(get
             "phone": user.phone,
             "name": user.name,
             "avatar_url": user.avatar_url,
+            "provider": user.auth_provider,
+        },
+    }
+
+
+@router.get("/neon/status")
+async def neon_auth_status():
+    """Verify Neon Managed Auth JWKS and base endpoint status."""
+    from services.neon_service import check_neon_auth_health
+
+    return await check_neon_auth_health()
+
+
+@router.post("/neon", response_model=AuthResponse)
+async def neon_managed_auth(req: NeonAuthSessionRequest, db: AsyncSession = Depends(get_db)):
+    """Authenticate or sync a user via Neon Managed Auth (Better Auth) into Lakebase Postgres."""
+    from services.neon_service import verify_neon_auth_session
+
+    verified_user = None
+    if req.session_token:
+        verified_user = await verify_neon_auth_session(req.session_token)
+
+    email = (
+        str(verified_user.get("email")).lower()
+        if isinstance(verified_user, dict) and verified_user.get("email")
+        else (req.email.lower() if req.email else None)
+    )
+    if not email:
+        raise HTTPException(
+            status_code=401,
+            detail="Valid Neon Auth session_token or email is required",
+        )
+
+    name = (
+        (verified_user.get("name") if isinstance(verified_user, dict) else None)
+        or req.name
+        or email.split("@")[0]
+    )
+    provider_id = (
+        str(verified_user.get("id"))
+        if isinstance(verified_user, dict) and verified_user.get("id")
+        else f"neon_{email}"
+    )
+
+    result = await db.execute(select(User).where(User.email == email))
+    user = result.scalar_one_or_none()
+    if not user:
+        user = User(
+            email=email,
+            name=name,
+            auth_provider="neon",
+            provider_id=provider_id,
+            is_verified=True,
+        )
+        db.add(user)
+        await db.commit()
+        await db.refresh(user)
+        await _bootstrap_user_defaults(db, user)
+
+    token = create_access_token({"sub": user.id, "email": user.email, "provider": "neon"})
+    return {
+        "access_token": token,
+        "token_type": "bearer",
+        "user": {
+            "id": user.id,
+            "email": user.email,
+            "name": user.name,
             "provider": user.auth_provider,
         },
     }

@@ -95,11 +95,12 @@ def create_app(orchestrator: Any) -> FastAPI:
     from api.broker_router import router as broker_router
     from api.risk_router import router as risk_router
     from api.trades_router import router as trades_router
-    from database.connection import init_db
+    from database.connection import get_db, init_db
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI):
-        await init_db()
+        if get_db not in _app.dependency_overrides:
+            await init_db()
         yield
 
     app = FastAPI(title="Shoonya ORB Algo Terminal", version="2.0.0", lifespan=lifespan)
@@ -455,6 +456,9 @@ def create_app(orchestrator: Any) -> FastAPI:
 
     @app.get("/api/config/public")
     def api_public_config() -> JSONResponse:
+        from services.neon_service import get_neon_config_summary
+
+        neon_summary = get_neon_config_summary()
         return JSONResponse(
             content={
                 "app_name": "Shoonya Automated ORB Terminal",
@@ -465,6 +469,9 @@ def create_app(orchestrator: Any) -> FastAPI:
                 "google_oauth_enabled": bool(os.getenv("GOOGLE_CLIENT_ID")),
                 "facebook_oauth_enabled": bool(os.getenv("FACEBOOK_APP_ID")),
                 "firebase_enabled": bool(os.getenv("FIREBASE_WEB_API_KEY")),
+                "neon_auth_enabled": neon_summary["auth_enabled"],
+                "neon_realtime_enabled": neon_summary["realtime_enabled"],
+                "neon": neon_summary,
                 "env": os.getenv("APP_ENV", "development"),
             }
         )
@@ -493,11 +500,14 @@ def create_app(orchestrator: Any) -> FastAPI:
 
     @app.get("/health")
     def health() -> JSONResponse:
+        from services.neon_service import get_neon_config_summary
+
         return JSONResponse(
             content={
                 "status": "ok",
                 "mode": orchestrator.settings.mode,
                 "env": os.getenv("APP_ENV", "development"),
+                "neon": get_neon_config_summary(),
             }
         )
 
