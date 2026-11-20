@@ -70,9 +70,13 @@ class TradingSystemOrchestrator:
             name: spec.product_type for name, spec in INDEX_SPECS.items()
         }
 
-        # Track daily schedule milestones by IST date
+        # Track daily schedule milestones by IST date and manual user overrides
         self._milestone_done: Dict[str, date] = {}
+        self._milestone_overrides: Dict[str, Tuple[date, str]] = {}
         self.public_ip: str = "detecting..."
+        self.previous_public_ip: str = ""
+        self._last_ip_check_monotonic: float = time.monotonic()
+        self._ip_sync_lock = threading.Lock()
         threading.Thread(
             target=self._detect_public_ip,
             name="public-ip-detect",
@@ -84,20 +88,201 @@ class TradingSystemOrchestrator:
             except Exception as exc:
                 logger.debug("Startup cached token check skipped: %s", exc)
 
-    def _detect_public_ip(self) -> None:
-        """Best-effort lookup of the host outbound IPv4 address for Shoonya IP whitelisting."""
+    def _fetch_outbound_ip(self) -> str:
+        """Query external IP echo services for the host's current outbound IPv4 address."""
+        for url in (
+            "https://api.ipify.org?format=text",
+            "https://icanhazip.com",
+            "https://ifconfig.me/ip",
+        ):
+            try:
+                with urllib.request.urlopen(url, timeout=3.0) as resp:
+                    ip_text = resp.read().decode("utf-8", errors="ignore").strip()
+                    if ip_text and "." in ip_text and len(ip_text) <= 45:
+                        return ip_text
+            except Exception:
+                continue
+        return ""
+
+    def _detect_public_ip(self, auto_sync_on_change: bool = False) -> None:
+        """Best-effort lookup of the host outbound IPv4 address; auto-syncs Shoonya Backup IP when changed."""
+        new_ip = self._fetch_outbound_ip()
+        if not new_ip:
+            if self.public_ip == "detecting...":
+                self.public_ip = "unknown"
+            return
+
+        old_ip = self.public_ip
+        self.public_ip = new_ip
+        if not self.auth.last_synced_backup_ip:
+            self.auth.last_synced_backup_ip = new_ip
+            self.auth.last_ip_sync_status = f"ACTIVE ({new_ip})"
+
+        if auto_sync_on_change and old_ip not in ("", "detecting...", "unknown") and new_ip != old_ip:
+            self.previous_public_ip = old_ip
+            logger.warning(
+                "Outbound Public IP changed (%s -> %s); triggering automatic Shoonya Backup IP sync...",
+                old_ip,
+                new_ip,
+            )
+            self.sync_shoonya_backup_ip(target_ip=new_ip)
+
+    def sync_shoonya_backup_ip(self, target_ip: str = "") -> Tuple[bool, str]:
+        """Detect or use target_ip and sync it as the Shoonya Backup IP + refresh session."""
+        if not self._ip_sync_lock.acquire(blocking=False):
+            return False, "Backup IP sync is already in progress."
         try:
-            with urllib.request.urlopen("https://api.ipify.org?format=text", timeout=3.0) as resp:
-                ip_text = resp.read().decode("utf-8", errors="ignore").strip()
-                self.public_ip = ip_text or "unknown"
-        except Exception:
-            self.public_ip = "unknown"
+            ip_to_use = (target_ip or "").strip()
+            if not ip_to_use:
+                detected = self._fetch_outbound_ip()
+                if detected:
+                    if self.public_ip not in ("", "detecting...", "unknown") and detected != self.public_ip:
+                        self.previous_public_ip = self.public_ip
+                    self.public_ip = detected
+                ip_to_use = self.public_ip
+            else:
+                if self.public_ip not in ("", "detecting...", "unknown") and ip_to_use != self.public_ip:
+                    self.previous_public_ip = self.public_ip
+                self.public_ip = ip_to_use
+
+            ok, msg = self.auth.sync_backup_ip_in_shoonya(ip_to_use)
+            if ok:
+                self.client.get_live_broker_snapshot(force=True)
+            return ok, msg
+        finally:
+            self._ip_sync_lock.release()
 
     def _milestone_ready(self, key: str, today: date) -> bool:
+        override = self._milestone_overrides.get(key)
+        if override and override[0] == today:
+            return False
         return self._milestone_done.get(key) != today
 
     def _mark_milestone(self, key: str, today: date) -> None:
         self._milestone_done[key] = today
+        self._milestone_overrides.pop(key, None)
+
+    def control_schedule_milestone(self, milestone_key: str, action: str = "restart") -> Tuple[bool, str]:
+        """Allow user to manually run/restart, reset to PENDING, or mark DONE any daily schedule milestone."""
+        now_ist = datetime.now(IST)
+        today = now_ist.date()
+        key = (milestone_key or "all").strip().lower()
+        act = (action or "restart").strip().lower()
+
+        labels = {
+            "auth": "Auto OAuth Login",
+            "cache": "NFO Contract Cache",
+            "ws": "WS & 3D Backfill",
+            "orb_lock": f"{self.settings.orb_window_minutes}-Min ORB Lock",
+            "scanner": "Institutional Breakout Scan",
+            "squareoff": "Auto EOD Square-Off",
+        }
+        all_keys = list(labels.keys())
+
+        if key == "all":
+            if act == "reset":
+                with self._lock:
+                    self._milestone_done.clear()
+                    self._milestone_done["reset"] = today
+                    for k in all_keys:
+                        self._milestone_overrides[k] = (today, "PENDING")
+                    self.strategy.reset_daily(today)
+                logger.info("All daily schedule milestones reset to PENDING by user")
+                return True, "All daily schedule milestones reset to PENDING."
+
+            # Restart / re-run the morning pipeline
+            with self._lock:
+                self._milestone_done.clear()
+                self._milestone_done["reset"] = today
+                self._milestone_overrides.clear()
+                self.strategy.reset_daily(today)
+
+            self.run_daily_login(force_refresh=True)
+            self._mark_milestone("auth", today)
+            cnt = self.run_instrument_cache()
+            self._mark_milestone("cache", today)
+            self.run_ws_connect_and_backfill()
+            self._mark_milestone("ws", today)
+            for k in ("orb_lock", "scanner", "squareoff"):
+                self._milestone_overrides[k] = (today, "PENDING")
+            logger.info("Daily startup milestones (OAuth, NFO Cache=%d, WS/Backfill) restarted by user", cnt)
+            return True, f"Restarted morning milestones (OAuth, {cnt} NFO contracts, WS & 3D backfill)."
+
+        if key not in labels:
+            return False, f"Unknown milestone '{milestone_key}'."
+
+        label = labels[key]
+        if act == "reset":
+            with self._lock:
+                self._milestone_done.pop(key, None)
+                self._milestone_overrides[key] = (today, "PENDING")
+                if key == "orb_lock":
+                    self.strategy.reset_daily(today)
+            logger.info("Milestone '%s' (%s) reset to PENDING by user", label, key)
+            return True, f"{label} reset to PENDING."
+
+        if act == "done":
+            with self._lock:
+                self._mark_milestone(key, today)
+                self._milestone_overrides[key] = (today, "DONE")
+            logger.info("Milestone '%s' (%s) marked DONE by user", label, key)
+            return True, f"{label} marked DONE."
+
+        # act in ("restart", "run")
+        with self._lock:
+            self._milestone_overrides.pop(key, None)
+
+        if key == "auth":
+            token = self.run_daily_login(force_refresh=True)
+            self._mark_milestone("auth", today)
+            self._milestone_overrides["auth"] = (today, "DONE")
+            status_txt = self.auth.last_login_status or ("OK" if token else "COMPLETED")
+            return True, f"Auto OAuth Login restarted ({status_txt})."
+
+        if key == "cache":
+            cnt = self.run_instrument_cache()
+            self._mark_milestone("cache", today)
+            self._milestone_overrides["cache"] = (today, "DONE")
+            return True, f"NFO Contract Cache restarted ({cnt} contracts loaded)."
+
+        if key == "ws":
+            if self.client.ws_connected:
+                try:
+                    self.client.reconnect_websocket()
+                except Exception:
+                    pass
+            self.run_ws_connect_and_backfill()
+            self._backfill_all_indices()
+            self._mark_milestone("ws", today)
+            self._milestone_overrides["ws"] = (today, "DONE")
+            return True, "WS & 3D Backfill restarted."
+
+        if key == "orb_lock":
+            for builder in self.candle_builders.values():
+                builder.flush_due_candles(now_ist)
+            locked = self.run_lock_orb(now_ist)
+            self._mark_milestone("orb_lock", today)
+            self._milestone_overrides["orb_lock"] = (today, "DONE")
+            return True, (
+                "Opening Range locked across indices."
+                if locked
+                else "ORB lock executed (waiting for opening candles)."
+            )
+
+        if key == "scanner":
+            with self._lock:
+                self.risk_manager.halted = False
+                self.risk_manager.halt_reason = ""
+                self._milestone_overrides["scanner"] = (today, "ACTIVE")
+            return True, "Institutional Breakout Scanner armed (ACTIVE)."
+
+        if key == "squareoff":
+            self.run_eod_squareoff()
+            self._mark_milestone("squareoff", today)
+            self._milestone_overrides["squareoff"] = (today, "DONE")
+            return True, "Auto EOD Square-Off executed."
+
+        return False, f"Unsupported action '{action}'."
 
     def _on_raw_tick(self, tick: Dict[str, Any]) -> None:
         """Route incoming Shoonya WebSocket ticks to Spot CandleBuilders or active options."""
@@ -635,9 +820,22 @@ class TradingSystemOrchestrator:
         today = dt.date()
         current_t = dt.time()
 
+        # Check outbound public IP every 300s (5 min) and auto-sync Shoonya Backup IP if IP changed
+        now_mono = time.monotonic()
+        if now_mono - self._last_ip_check_monotonic >= 300.0:
+            self._last_ip_check_monotonic = now_mono
+            threading.Thread(
+                target=self._detect_public_ip,
+                kwargs={"auto_sync_on_change": True},
+                name="periodic-ip-watcher",
+                daemon=True,
+            ).start()
+
         # Skip trading schedule on weekends (Mon=0..Fri=4)
         if dt.weekday() < 5:
             if current_t < self.settings.auth_time and self._milestone_ready("reset", today):
+                self._milestone_done.clear()
+                self._milestone_overrides.clear()
                 self.strategy.reset_daily(today)
                 self.risk_manager.reset_daily()
                 self._mark_milestone("reset", today)
@@ -912,7 +1110,10 @@ class TradingSystemOrchestrator:
 
         all_locked = all(self.strategy.get_state(name).is_locked for name in INDEX_SPECS)
 
-        def _ms_status(done_cond: bool, active_cond: bool = False) -> str:
+        def _ms_status(key: str, done_cond: bool, active_cond: bool = False) -> str:
+            override = self._milestone_overrides.get(key)
+            if override and override[0] == today:
+                return override[1]
             if done_cond:
                 return "DONE"
             if active_cond:
@@ -921,47 +1122,66 @@ class TradingSystemOrchestrator:
 
         milestones = [
             {
+                "key": "auth",
                 "time": "08:40 IST",
                 "label": "Auto OAuth Login",
                 "status": _ms_status(
-                    bool(self.auth.last_token_date == today.strftime("%Y-%m-%d"))
-                    or self._milestone_done.get("auth") == today
+                    "auth",
+                    self._milestone_done.get("auth") == today
+                    or (
+                        t >= self.settings.auth_time
+                        and bool(self.auth.last_token_date == today.strftime("%Y-%m-%d"))
+                    ),
                 ),
             },
             {
+                "key": "cache",
                 "time": "08:55 IST",
                 "label": "NFO Contract Cache",
                 "status": _ms_status(
-                    self.mapper.cached_count > 0 or self._milestone_done.get("cache") == today
+                    "cache",
+                    self._milestone_done.get("cache") == today
+                    or (t >= self.settings.instrument_cache_time and self.mapper.cached_count > 0),
                 ),
             },
             {
+                "key": "ws",
                 "time": "09:14 IST",
                 "label": "WS & 3D Backfill",
                 "status": _ms_status(
-                    self.client.ws_connected or self._milestone_done.get("ws") == today
+                    "ws",
+                    self._milestone_done.get("ws") == today
+                    or (t >= self.settings.ws_connect_time and self.client.ws_connected),
                 ),
             },
             {
+                "key": "orb_lock",
                 "time": f"{self.settings.orb_end_time.strftime('%H:%M')} IST",
                 "label": f"{self.settings.orb_window_minutes}-Min ORB Lock",
-                "status": _ms_status(all_locked or self._milestone_done.get("orb_lock") == today),
+                "status": _ms_status(
+                    "orb_lock",
+                    all_locked or self._milestone_done.get("orb_lock") == today,
+                ),
             },
             {
+                "key": "scanner",
                 "time": f"{entry_start.strftime('%H:%M')}-{entry_cutoff.strftime('%H:%M')}",
                 "label": "Institutional Breakout Scan",
                 "status": _ms_status(
+                    "scanner",
                     is_weekday and t > entry_cutoff,
                     active_cond=is_weekday
                     and entry_start <= t <= entry_cutoff,
                 ),
             },
             {
+                "key": "squareoff",
                 "time": "15:15 IST",
                 "label": "Auto EOD Square-Off",
                 "status": _ms_status(
+                    "squareoff",
                     self._milestone_done.get("squareoff") == today
-                    or (is_weekday and t >= self.settings.auto_squareoff_time)
+                    or (is_weekday and t >= self.settings.auto_squareoff_time),
                 ),
             },
         ]
@@ -1037,6 +1257,9 @@ class TradingSystemOrchestrator:
             "ist_time": now_ist.strftime("%Y-%m-%d %H:%M:%S"),
             "ws_connected": self.client.ws_connected,
             "public_ip": self.public_ip,
+            "previous_public_ip": self.previous_public_ip,
+            "last_synced_backup_ip": self.auth.last_synced_backup_ip or self.public_ip,
+            "backup_ip_status": self.auth.last_ip_sync_status,
             "india_vix": vix,
             "avail_fund": round(self.risk_manager.get_available_fund(), 2),
             "weekly_guard": self.risk_manager.get_weekly_guard_status(now_ist),

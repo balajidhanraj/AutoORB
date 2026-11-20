@@ -11,12 +11,28 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from database.models import Base
 
 def normalize_database_url(raw_url: str) -> str:
-    """Normalize PostgreSQL URLs to use asyncpg driver for async SQLAlchemy."""
+    """Normalize PostgreSQL URLs (VPS / Neon / Supabase / GCP Cloud SQL) for asyncpg."""
     cleaned = (raw_url or "").strip()
     if cleaned.startswith("postgres://"):
-        return "postgresql+asyncpg://" + cleaned[len("postgres://") :]
-    if cleaned.startswith("postgresql://"):
-        return "postgresql+asyncpg://" + cleaned[len("postgresql://") :]
+        cleaned = "postgresql+asyncpg://" + cleaned[len("postgres://") :]
+    elif cleaned.startswith("postgresql://"):
+        cleaned = "postgresql+asyncpg://" + cleaned[len("postgresql://") :]
+
+    if cleaned.startswith("postgresql+asyncpg://") and "?" in cleaned:
+        from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
+
+        parts = urlsplit(cleaned)
+        filtered_params = []
+        for k, v in parse_qsl(parts.query, keep_blank_values=True):
+            if k == "sslmode":
+                filtered_params.append(("ssl", v))
+            elif k == "channel_binding":
+                continue
+            else:
+                filtered_params.append((k, v))
+        cleaned = urlunsplit(
+            (parts.scheme, parts.netloc, parts.path, urlencode(filtered_params), parts.fragment)
+        )
     return cleaned
 
 

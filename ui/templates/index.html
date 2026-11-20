@@ -12,9 +12,9 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet"/>
   <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"/>
-  <link rel="stylesheet" href="/static/theme.css?v=11"/>
+  <link rel="stylesheet" href="/static/theme.css?v=13"/>
   <script src="https://cdn.tailwindcss.com"></script>
-  <script src="/static/api_client.js?v=11"></script>
+  <script src="/static/api_client.js?v=13"></script>
   <script>
     if (window.tailwind && window.AUTOORB_TAILWIND_CONFIG) {
       window.tailwind.config = window.AUTOORB_TAILWIND_CONFIG;
@@ -683,7 +683,18 @@
 
             <!-- 6-Stage Daily Schedule Timeline -->
             <div>
-              <span class="font-label-caps text-label-caps text-on-surface-variant uppercase block mb-2">DAILY IST SCHEDULE MILESTONES</span>
+              <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
+                <span class="font-label-caps text-label-caps text-on-surface-variant uppercase">DAILY IST SCHEDULE MILESTONES</span>
+                <div class="flex items-center gap-1.5">
+                  <button onclick="handleMilestoneControl('all','restart')" type="button" class="px-2.5 py-1 rounded-lg bg-primary-container/20 hover:bg-primary-container text-profit hover:text-on-primary-fixed font-label-caps font-bold flex items-center gap-1 transition-colors cursor-pointer" title="Re-run OAuth, NFO Contract Cache, and WS &amp; 3D Backfill">
+                    <span class="material-symbols-outlined text-[13px]">restart_alt</span>
+                    <span>RESTART ALL</span>
+                  </button>
+                  <button onclick="handleMilestoneControl('all','reset')" type="button" class="px-2.5 py-1 rounded-lg bg-surface-container-high hover:bg-surface-bright text-on-surface-variant hover:text-on-surface font-label-caps font-bold transition-colors cursor-pointer" title="Reset all milestones to PENDING">
+                    RESET ALL
+                  </button>
+                </div>
+              </div>
               <div id="ana-milestones" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2"></div>
             </div>
           </div>
@@ -699,7 +710,8 @@
             <div class="bg-surface-container rounded-lg p-space-md space-y-1.5 font-data-mono-sm">
               <div class="flex justify-between"><span class="text-on-surface-variant">Client ID</span><span id="ana-uid" class="text-on-surface font-bold">--</span></div>
               <div class="flex justify-between"><span class="text-on-surface-variant">Account Name</span><span id="ana-uname" class="text-on-surface font-bold">--</span></div>
-              <div class="flex justify-between"><span class="text-on-surface-variant">Outbound Public IP</span><span id="ana-ip" class="text-profit font-bold">--</span></div>
+              <div class="flex justify-between items-center gap-2"><span class="text-on-surface-variant">Outbound Public IP</span><span id="ana-ip" class="text-profit font-bold">--</span></div>
+              <div class="flex justify-between items-center gap-2"><span class="text-on-surface-variant">Backup IP Auto-Sync</span><span id="ana-backup-ip-status" class="text-on-surface text-[11px] truncate">MONITORING</span></div>
               <div class="flex justify-between"><span class="text-on-surface-variant">Cached Contracts</span><span id="ana-contracts" class="text-on-surface">--</span></div>
             </div>
             <div class="space-y-1.5">
@@ -711,9 +723,10 @@
                 <div id="ana-margin-bar" class="h-full bg-primary-container rounded-full" style="width: 0%;"></div>
               </div>
             </div>
-            <div class="grid grid-cols-2 gap-2">
-              <button id="btn-ana-switch-acct" type="button" class="py-2.5 px-3 rounded-lg bg-primary-container text-on-primary-fixed font-label-caps text-label-caps font-bold cursor-pointer">SWITCH ACCOUNT</button>
-              <button id="btn-ana-reauth" type="button" class="py-2.5 px-3 rounded-lg bg-surface-container-high hover:bg-surface-bright text-on-surface font-label-caps text-label-caps font-bold cursor-pointer">RE-AUTH OAUTH</button>
+            <div class="grid grid-cols-3 gap-1.5">
+              <button id="btn-ana-switch-acct" type="button" class="py-2 px-2 rounded-lg bg-primary-container text-on-primary-fixed font-label-caps text-label-caps font-bold cursor-pointer truncate">SWITCH ACCT</button>
+              <button id="btn-ana-reauth" type="button" class="py-2 px-2 rounded-lg bg-surface-container-high hover:bg-surface-bright text-on-surface font-label-caps text-label-caps font-bold cursor-pointer truncate">RE-AUTH</button>
+              <button id="btn-ana-sync-ip" type="button" onclick="handleSyncBackupIp()" class="py-2 px-2 rounded-lg bg-surface-container-high hover:bg-surface-bright text-profit font-label-caps text-label-caps font-bold cursor-pointer truncate" title="Detect current outbound IP and sync Shoonya Backup IP">SYNC BACKUP IP</button>
             </div>
           </div>
 
@@ -1533,12 +1546,28 @@
         document.getElementById('ana-weekly-guard').textContent = wg.halted ? 'WEEKLY PAUSED' : `${wg.losses_this_week || 0} / ${wg.max_weekly_losses || 2} LOSSES`;
 
         const ms = (snap.schedule && snap.schedule.milestones) || [];
-        document.getElementById('ana-milestones').innerHTML = ms.map(m => {
-          const clr = m.status === 'DONE' ? 'border-primary-container/60 text-profit' : m.status === 'ACTIVE' ? 'border-tertiary-fixed-dim text-amber-tactical' : 'border-outline-variant/40 text-on-surface-variant';
-          return `<div class="p-2 rounded-lg bg-surface-container border ${clr}">
-            <div class="font-label-caps text-[9px] opacity-80">${esc(m.time)}</div>
-            <div class="font-body-sm font-semibold truncate">${esc(m.label)}</div>
-            <div class="font-label-caps text-[9px] font-bold mt-0.5">${esc(m.status)}</div>
+        const fallbackKeys = ['auth', 'cache', 'ws', 'orb_lock', 'scanner', 'squareoff'];
+        document.getElementById('ana-milestones').innerHTML = ms.map((m, idx) => {
+          const mKey = m.key || fallbackKeys[idx] || 'all';
+          const isDone = m.status === 'DONE';
+          const isAct = m.status === 'ACTIVE';
+          const clr = isDone ? 'border-primary-container/60 text-profit' : isAct ? 'border-tertiary-fixed-dim text-amber-tactical' : 'border-outline-variant/40 text-on-surface-variant';
+          const runLbl = (isDone || isAct) ? 'Restart' : 'Run';
+          const toggleBtn = (isDone || isAct)
+            ? `<button onclick="handleMilestoneControl('${esc(mKey)}','reset')" type="button" class="px-1.5 py-0.5 rounded bg-surface-container-highest hover:bg-surface-bright text-on-surface-variant hover:text-on-surface font-label-caps text-[9px] cursor-pointer" title="Reset to PENDING">Reset</button>`
+            : `<button onclick="handleMilestoneControl('${esc(mKey)}','done')" type="button" class="px-1.5 py-0.5 rounded bg-surface-container-highest hover:bg-surface-bright text-on-surface-variant hover:text-profit font-label-caps text-[9px] cursor-pointer" title="Mark as DONE">✓ Done</button>`;
+          return `<div class="p-2 rounded-lg bg-surface-container border ${clr} flex flex-col justify-between gap-1.5">
+            <div>
+              <div class="flex items-center justify-between gap-1">
+                <span class="font-label-caps text-[9px] opacity-80">${esc(m.time)}</span>
+                <span class="font-label-caps text-[9px] font-bold">${esc(m.status)}</span>
+              </div>
+              <div class="font-body-sm font-semibold truncate text-on-surface mt-0.5" title="${esc(m.label)}">${esc(m.label)}</div>
+            </div>
+            <div class="flex items-center gap-1 pt-1 border-t border-outline-variant/25">
+              <button onclick="handleMilestoneControl('${esc(mKey)}','restart')" type="button" class="flex-1 px-1.5 py-0.5 rounded bg-primary-container/15 hover:bg-primary-container text-profit hover:text-on-primary-fixed font-label-caps text-[9px] font-bold cursor-pointer">↻ ${runLbl}</button>
+              ${toggleBtn}
+            </div>
           </div>`;
         }).join('');
 
@@ -1546,6 +1575,8 @@
         document.getElementById('ana-uid').textContent = broker.user_id || snap.user_id || '--';
         document.getElementById('ana-uname').textContent = broker.account_name || '--';
         document.getElementById('ana-ip').textContent = snap.public_ip || '--';
+        const bipEl = document.getElementById('ana-backup-ip-status');
+        if (bipEl) bipEl.textContent = snap.backup_ip_status || 'MONITORING';
         document.getElementById('ana-contracts').textContent = `${snap.cached_contracts || 0} NFO`;
         const used = Number(broker.margin_used || 0);
         const totalCash = Math.max(used, Number(broker.cash || snap.capital || 1));
@@ -1635,6 +1666,29 @@
           renderAll();
           A.showToast(r.message);
         } catch (e) { A.showToast(e.message, 'error'); }
+      };
+
+      window.handleMilestoneControl = async (milestoneKey, action) => {
+        try {
+          const r = await A.api.controlMilestone(milestoneKey, action);
+          snap = r.snapshot || snap;
+          renderAll();
+          A.showToast(r.message || 'Schedule milestone updated', r.ok ? 'info' : 'warn');
+        } catch (e) {
+          A.showToast(e.message, 'error');
+        }
+      };
+
+      window.handleSyncBackupIp = async () => {
+        try {
+          A.showToast('Syncing current Public IP to Shoonya Backup IP...');
+          const r = await A.api.syncBackupIp();
+          snap = r.snapshot || snap;
+          renderAll();
+          A.showToast(r.message || 'Backup IP synced', r.ok ? 'info' : 'warn');
+        } catch (e) {
+          A.showToast(e.message, 'error');
+        }
       };
       window.applyCustomFund = () => {
         const amt = Number(document.getElementById('ana-custom-fund').value);

@@ -20,9 +20,9 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet"/>
   <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"/>
-  <link rel="stylesheet" href="./static/theme.css?v=11"/>
+  <link rel="stylesheet" href="./static/theme.css?v=13"/>
   <script src="https://cdn.tailwindcss.com"></script>
-  <script src="./static/api_client.js?v=11"></script>
+  <script src="./static/api_client.js?v=13"></script>
   <script>
     if (window.tailwind && window.AUTOORB_TAILWIND_CONFIG) {
       window.tailwind.config = window.AUTOORB_TAILWIND_CONFIG;
@@ -467,6 +467,14 @@
           </div>
         </div>
 
+        <div class="p-2 rounded-lg bg-surface-container flex items-center justify-between gap-2 font-data-mono-sm">
+          <div class="min-w-0">
+            <span class="font-label-caps text-on-surface-variant block">Outbound Public IP &bull; Backup IP Auto-Sync</span>
+            <span id="mc-public-ip" class="text-profit font-bold truncate block">--</span>
+          </div>
+          <button onclick="mSyncBackupIp()" type="button" class="px-2.5 py-1.5 rounded-lg bg-primary-container/20 text-profit font-label-caps font-bold cursor-pointer shrink-0">SYNC BACKUP IP</button>
+        </div>
+
         <div class="grid grid-cols-2 gap-2">
           <button id="mc-btn-sync" type="button" class="py-2 rounded-lg bg-surface-container-high font-label-caps text-on-surface flex items-center justify-center gap-1 cursor-pointer"><span class="material-symbols-outlined text-[15px] text-profit">sync</span>SYNC LIMITS</button>
           <button id="mc-btn-reauth" type="button" class="py-2 rounded-lg bg-surface-container-high font-label-caps text-on-surface flex items-center justify-center gap-1 cursor-pointer"><span class="material-symbols-outlined text-[15px] text-amber-tactical">key</span>RE-AUTH OAUTH</button>
@@ -511,8 +519,14 @@
       </div>
 
       <!-- Automated Daily Timeline -->
-      <div class="rounded-xl bg-surface-container-low glass-panel p-space-md space-y-2">
-        <span class="font-title-sm text-on-surface font-bold block">Automated Daily IST Timeline</span>
+      <div class="rounded-xl bg-surface-container-low glass-panel p-space-md space-y-2.5">
+        <div class="flex items-center justify-between gap-2 flex-wrap">
+          <span class="font-title-sm text-on-surface font-bold">Automated Daily IST Timeline</span>
+          <div class="flex items-center gap-1.5">
+            <button onclick="mControlMilestone('all','restart')" type="button" class="px-2.5 py-1 rounded-lg bg-primary-container/20 text-profit font-label-caps font-bold cursor-pointer">↻ RESTART ALL</button>
+            <button onclick="mControlMilestone('all','reset')" type="button" class="px-2.5 py-1 rounded-lg bg-surface-container-high text-on-surface-variant font-label-caps font-bold cursor-pointer">RESET ALL</button>
+          </div>
+        </div>
         <div id="mc-timeline" class="space-y-2 font-body-sm"></div>
       </div>
 
@@ -960,6 +974,8 @@
         const broker = snap.broker || {};
         document.getElementById('mc-brk-uid').textContent = broker.user_id || snap.user_id || 'Unlinked';
         document.getElementById('mc-brk-badge').textContent = broker.connected ? 'CONNECTED' : (snap.oauth_status || 'OFFLINE');
+        const mipEl = document.getElementById('mc-public-ip');
+        if (mipEl) mipEl.textContent = `${snap.public_ip || '--'} (${snap.backup_ip_status || 'AUTO'})`;
         document.getElementById('mc-avail-margin').textContent = A.fmtINR(snap.avail_fund ?? broker.net_available ?? 0, 0);
         document.getElementById('mc-used-margin').textContent = A.fmtINR(broker.margin_used || 0, 0);
         const cap = Number(snap.capital || 200000);
@@ -968,10 +984,30 @@
         document.getElementById('mc-trade-cnt').textContent = `${snap.trades_taken || 0}/${snap.max_trades || 2}`;
 
         const ms = (snap.schedule && snap.schedule.milestones) || [];
-        document.getElementById('mc-timeline').innerHTML = ms.map(m => `<div class="flex items-center justify-between p-2 rounded-lg bg-surface-container">
-          <div><span class="font-data-mono-sm text-on-surface-variant mr-2">${esc(m.time)}</span><b class="text-on-surface">${esc(m.label)}</b></div>
-          <span class="font-label-caps font-bold ${m.status === 'DONE' ? 'text-profit' : m.status === 'ACTIVE' ? 'text-amber-tactical' : 'text-on-surface-variant'}">${esc(m.status)}</span>
-        </div>`).join('');
+        const fallbackKeys = ['auth', 'cache', 'ws', 'orb_lock', 'scanner', 'squareoff'];
+        document.getElementById('mc-timeline').innerHTML = ms.map((m, idx) => {
+          const mKey = m.key || fallbackKeys[idx] || 'all';
+          const isDone = m.status === 'DONE';
+          const isAct = m.status === 'ACTIVE';
+          const stClr = isDone ? 'text-profit' : isAct ? 'text-amber-tactical' : 'text-on-surface-variant';
+          const runLbl = (isDone || isAct) ? 'RESTART' : 'RUN';
+          const resetOrDoneBtn = (isDone || isAct)
+            ? `<button onclick="mControlMilestone('${esc(mKey)}','reset')" type="button" class="px-2 py-1 rounded bg-surface-container-high text-on-surface-variant font-label-caps text-[9.5px] font-bold cursor-pointer">RESET</button>`
+            : `<button onclick="mControlMilestone('${esc(mKey)}','done')" type="button" class="px-2 py-1 rounded bg-surface-container-high text-profit font-label-caps text-[9.5px] font-bold cursor-pointer">✓ DONE</button>`;
+          return `<div class="flex items-center justify-between gap-2 p-2 rounded-lg bg-surface-container">
+            <div class="min-w-0">
+              <div class="flex items-center gap-1.5">
+                <span class="font-data-mono-sm text-on-surface-variant">${esc(m.time)}</span>
+                <span class="font-label-caps font-bold ${stClr}">${esc(m.status)}</span>
+              </div>
+              <b class="text-on-surface block truncate">${esc(m.label)}</b>
+            </div>
+            <div class="flex items-center gap-1 shrink-0">
+              <button onclick="mControlMilestone('${esc(mKey)}','restart')" type="button" class="px-2 py-1 rounded bg-primary-container/20 text-profit font-label-caps text-[9.5px] font-bold cursor-pointer">↻ ${runLbl}</button>
+              ${resetOrDoneBtn}
+            </div>
+          </div>`;
+        }).join('');
       }
 
       // ---------- Mobile Logs ----------
@@ -1070,6 +1106,27 @@
       window.mAutoTrigger = async (idx) => { try { const r = await A.api.autoTrigger(idx, 'AUTO'); snap = r.snapshot || snap; renderMobile(); A.showToast(r.message, r.ok ? 'info' : 'warn'); } catch (e) { A.showToast(e.message, 'error'); } };
       window.mExitPos = async (idx) => { try { const r = await A.api.exitPosition(idx); snap = r.snapshot || snap; renderMobile(); A.showToast(r.message); } catch (e) { A.showToast(e.message, 'error'); } };
       window.setMobileFunds = async (amt) => { try { const r = await A.api.brokerFunds(amt, 'set'); snap = r.snapshot || snap; renderMobile(); A.showToast(r.message); } catch (e) { A.showToast(e.message, 'error'); } };
+      window.mControlMilestone = async (mKey, act) => {
+        try {
+          const r = await A.api.controlMilestone(mKey, act);
+          snap = r.snapshot || snap;
+          renderMobile();
+          A.showToast(r.message || 'Milestone updated', r.ok ? 'info' : 'warn');
+        } catch (e) {
+          A.showToast(e.message, 'error');
+        }
+      };
+      window.mSyncBackupIp = async () => {
+        try {
+          A.showToast('Syncing Public IP to Shoonya Backup IP...');
+          const r = await A.api.syncBackupIp();
+          snap = r.snapshot || snap;
+          renderMobile();
+          A.showToast(r.message || 'Backup IP synced', r.ok ? 'info' : 'warn');
+        } catch (e) {
+          A.showToast(e.message, 'error');
+        }
+      };
 
       window.openMobileSl = (idx, sym, currSl, entry, ltp) => {
         slIdx = idx;

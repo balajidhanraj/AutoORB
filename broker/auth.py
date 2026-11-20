@@ -125,6 +125,9 @@ class ShoonyaAuthenticator:
         self._sleep = sleep_fn
         self.last_login_status: str = "UNAUTHENTICATED"
         self.last_token_date: Optional[str] = None
+        self.last_synced_backup_ip: str = ""
+        self.last_ip_sync_status: str = "MONITORING"
+        self.last_ip_sync_time: Optional[str] = None
 
     @staticmethod
     def _today_ist_str() -> str:
@@ -409,9 +412,26 @@ class ShoonyaAuthenticator:
         if token_resp.get("stat") == "Not_Ok":
             emsg = str(token_resp.get("emsg") or "")
             if "INVALID_IP" in emsg:
+                # If QuickAuth already returned a valid susertoken, fall back to it while syncing Backup IP
+                quick_token = str(getattr(self.api, "susertoken", "") or "").strip()
+                if quick_token:
+                    logger.warning(
+                        "GenAcsTok reported INVALID_IP; activating QuickAuth session token and syncing Backup IP..."
+                    )
+                    self.api.injectOAuthHeader(
+                        quick_token,
+                        self.settings.shoonya_user_id,
+                        self.settings.shoonya_account_id,
+                        susertoken=quick_token,
+                    )
+                    limits = self.api.get_limits()
+                    if isinstance(limits, dict) and limits.get("stat") == "Ok":
+                        self.save_token(quick_token)
+                        self.last_login_status = "AUTHENTICATED (DYNAMIC_IP_FALLBACK)"
+                        return quick_token
                 raise RuntimeError(
-                    "Shoonya GenAcsTok rejected request: INVALID_IP — whitelist your current public IP "
-                    "in Shoonya Profile -> API Key"
+                    "Shoonya GenAcsTok rejected request: INVALID_IP — click 'SYNC BACKUP IP' or whitelist "
+                    "current public IP in Shoonya Profile -> API Key"
                 )
             raise RuntimeError(f"GenAcsTok error: {token_resp}")
 
@@ -483,3 +503,143 @@ class ShoonyaAuthenticator:
         if self.notifier:
             self.notifier.send_async(alert_msg)
         return None
+
+    def sync_backup_ip_in_shoonya(self, new_ip: str) -> Tuple[bool, str]:
+        """Automatically update Shoonya Backup IP via headless Selenium + TOTP and refresh session."""
+        ip_clean = (new_ip or "").strip()
+        if not ip_clean or ip_clean in ("unknown", "detecting..."):
+            return False, "Outbound public IP not detected yet."
+
+        now_str = datetime.now(IST).strftime("%Y-%m-%d %H:%M:%S IST")
+        self.last_ip_sync_time = now_str
+
+        if not all([
+            self.settings.shoonya_user_id,
+            self.settings.shoonya_password,
+            self.settings.shoonya_totp_secret,
+        ]):
+            self.last_synced_backup_ip = ip_clean
+            self.last_ip_sync_status = f"DETECTED ({ip_clean}) — AWAITING BROKER CREDS"
+            return False, f"Detected IP {ip_clean}; connect Shoonya credentials first to auto-sync Backup IP."
+
+        portal_updated = False
+        portal_detail = ""
+        driver = None
+        try:
+            from selenium.webdriver.common.by import By
+            from selenium.webdriver.common.keys import Keys
+            from selenium.webdriver.support import expected_conditions as EC
+            from selenium.webdriver.support.ui import WebDriverWait
+
+            driver = self._create_webdriver()
+            wait = WebDriverWait(driver, 18)
+            driver.get("https://trade.shoonya.com/")
+
+            user_input = wait.until(
+                EC.visibility_of_element_located(
+                    (By.CSS_SELECTOR, "input[name*='user' i], input[id*='user' i], input[type='text']")
+                )
+            )
+            pwd_input = wait.until(
+                EC.visibility_of_element_located((By.CSS_SELECTOR, "input[type='password']"))
+            )
+            user_input.clear()
+            user_input.send_keys(self.settings.shoonya_user_id)
+            pwd_input.clear()
+            pwd_input.send_keys(self.settings.shoonya_password)
+
+            inline_otp = [
+                el
+                for el in driver.find_elements(By.CSS_SELECTOR, "input#lgnotp, input[autocomplete='one-time-code']")
+                if el.is_displayed()
+            ]
+            if inline_otp:
+                inline_otp[0].clear()
+                inline_otp[0].send_keys(self.generate_totp())
+
+            submit_btns = driver.find_elements(
+                By.CSS_SELECTOR, "button[type='submit'], button.lgnBtnClss, input[type='submit']"
+            )
+            if submit_btns:
+                submit_btns[0].click()
+            else:
+                pwd_input.send_keys(Keys.RETURN)
+
+            if not inline_otp:
+                try:
+                    wait.until(
+                        EC.presence_of_element_located(
+                            (
+                                By.CSS_SELECTOR,
+                                "input#lgnotp, input[maxlength='1'], input[name*='otp' i], input[id*='otp' i]",
+                            )
+                        )
+                    )
+                    self._fill_otp_inputs(driver, self.generate_totp())
+                    otp_btns = driver.find_elements(
+                        By.CSS_SELECTOR, "button[type='submit'], button.lgnBtnClss, input[type='submit']"
+                    )
+                    if otp_btns:
+                        otp_btns[0].click()
+                except Exception:
+                    pass
+
+            self._sleep(2.5)
+            # Locate API Key / Backup IP input if visible in Profile -> API Key
+            backup_selectors = (
+                "input[name*='backup' i]",
+                "input[id*='backup' i]",
+                "input[placeholder*='backup' i]",
+                "input[name*='secondary' i]",
+                "input[id*='secondary' i]",
+                "input[name*='ip2' i]",
+                "input[id*='ip2' i]",
+            )
+            for sel in backup_selectors:
+                fields = [el for el in driver.find_elements(By.CSS_SELECTOR, sel) if el.is_displayed()]
+                if fields:
+                    fields[0].clear()
+                    fields[0].send_keys(ip_clean)
+                    save_btns = [
+                        b
+                        for b in driver.find_elements(By.CSS_SELECTOR, "button, input[type='submit']")
+                        if b.is_displayed()
+                        and any(k in (b.text or "").lower() for k in ("save", "update", "submit", "apply"))
+                    ]
+                    if save_btns:
+                        save_btns[0].click()
+                    portal_updated = True
+                    portal_detail = "Updated Backup IP in Shoonya web portal"
+                    break
+        except Exception as exc:
+            portal_detail = f"Portal headless sync note: {exc}"
+            logger.debug("Shoonya portal Backup IP automation note: %s", exc)
+        finally:
+            if driver is not None:
+                try:
+                    driver.quit()
+                except Exception:
+                    pass
+
+        # Re-authenticate session on the new IP (using QuickAuth + GenAcsTok / susertoken fallback)
+        session_ok = False
+        try:
+            tok = self.login_via_selenium()
+            session_ok = bool(tok)
+        except Exception as exc:
+            logger.warning("Re-auth during Backup IP sync reported: %s", exc)
+
+        self.last_synced_backup_ip = ip_clean
+        if portal_updated and session_ok:
+            self.last_ip_sync_status = f"SYNCED ({ip_clean})"
+            msg = f"Backup IP {ip_clean} updated in Shoonya & session active."
+        elif session_ok:
+            self.last_ip_sync_status = f"ACTIVE ON IP {ip_clean}"
+            msg = f"Shoonya session active on outbound IP {ip_clean} (QuickAuth/Backup IP verified)."
+        else:
+            self.last_ip_sync_status = f"PENDING PORTAL CONFIRM ({ip_clean})"
+            msg = f"Detected new outbound IP {ip_clean}. ({portal_detail or 'Verify Backup IP in Shoonya API Key settings'})"
+
+        if self.notifier:
+            self.notifier.send_async(f"<b>Shoonya Backup IP Sync</b>\nIP: <code>{ip_clean}</code>\nStatus: {msg}")
+        return (portal_updated or session_ok), msg

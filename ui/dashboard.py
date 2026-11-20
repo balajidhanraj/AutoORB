@@ -80,6 +80,15 @@ class SetProductTypeRequest(BaseModel):
     product_type: str = "NRML"
 
 
+class ScheduleMilestoneRequest(BaseModel):
+    milestone: str = "all"
+    action: str = "restart"
+
+
+class SyncBackupIpRequest(BaseModel):
+    ip: str = ""
+
+
 def create_app(orchestrator: Any) -> FastAPI:
     """Build and return the FastAPI web dashboard application."""
     from api.auth_router import router as auth_router
@@ -296,6 +305,20 @@ def create_app(orchestrator: Any) -> FastAPI:
             }
         )
 
+    @app.post("/api/broker/sync-backup-ip")
+    def api_sync_backup_ip(payload: Optional[SyncBackupIpRequest] = None) -> JSONResponse:
+        target_ip = payload.ip.strip() if payload and payload.ip else ""
+        ok, msg = orchestrator.sync_shoonya_backup_ip(target_ip=target_ip)
+        return JSONResponse(
+            content={
+                "ok": ok,
+                "message": msg,
+                "public_ip": orchestrator.public_ip,
+                "backup_ip_status": orchestrator.auth.last_ip_sync_status,
+                "snapshot": orchestrator.get_status_snapshot(),
+            }
+        )
+
     @app.post("/api/broker/funds")
     def api_broker_funds(payload: BrokerFundsRequest) -> JSONResponse:
         ok, msg = orchestrator.add_or_update_funds(amount=payload.amount, action=payload.action)
@@ -359,6 +382,20 @@ def create_app(orchestrator: Any) -> FastAPI:
     @app.post("/api/trades/reset")
     def api_reset_trades() -> JSONResponse:
         ok, msg = orchestrator.reset_daily_trades()
+        return JSONResponse(
+            content={
+                "ok": ok,
+                "message": msg,
+                "snapshot": orchestrator.get_status_snapshot(),
+            }
+        )
+
+    @app.post("/api/schedule/milestone")
+    def api_schedule_milestone(payload: ScheduleMilestoneRequest) -> JSONResponse:
+        ok, msg = orchestrator.control_schedule_milestone(
+            milestone_key=payload.milestone,
+            action=payload.action,
+        )
         return JSONResponse(
             content={
                 "ok": ok,

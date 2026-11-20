@@ -589,6 +589,7 @@
       killSwitch: () => postJson('/api/kill-switch'),
       oauthLogin: () => postJson('/api/oauth-login'),
       refreshBroker: () => postJson('/api/broker/refresh'),
+      syncBackupIp: (ip = '') => postJson('/api/broker/sync-backup-ip', { ip }),
       connectBrokerLegacy: (payload) => postJson('/api/broker/connect', payload),
       brokerFunds: (amount, action) => postJson('/api/broker/funds', { amount, action }),
       placeManualOrder: (payload) => postJson('/api/broker/order', payload),
@@ -601,6 +602,7 @@
       exitPosition: (index_name) => postJson('/api/positions/exit', { index_name }),
       modifyPositionSl: (index_name, sl_trigger_price) => postJson('/api/positions/modify-sl', { index_name, sl_trigger_price }),
       resetTrades: () => postJson('/api/trades/reset'),
+      controlMilestone: (milestone = 'all', action = 'restart') => postJson('/api/schedule/milestone', { milestone, action }),
       // Multi-user Auth & Config v1
       register: (email, password, name) => postJson('/api/v1/auth/register', { email, password, name }),
       login: (email, password) => postJson('/api/v1/auth/login', { email, password }),

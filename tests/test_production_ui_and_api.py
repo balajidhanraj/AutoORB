@@ -65,9 +65,11 @@ def test_desktop_mobile_and_static_assets(tmp_path: Path) -> None:
             assert home.status_code == 200
             html = home.text
             assert "Shoonya Automated ORB Terminal" in html
-            assert "/static/theme.css?v=11" in html
-            assert "/static/api_client.js?v=11" in html
+            assert "/static/theme.css?v=13" in html
+            assert "/static/api_client.js?v=13" in html
             assert "/static/icon-192.png" in html
+            assert "handleMilestoneControl" in html
+            assert "handleSyncBackupIp" in html
             assert "Inter" in html
             for marker in (
                 "desk-landing-screen",
@@ -88,9 +90,11 @@ def test_desktop_mobile_and_static_assets(tmp_path: Path) -> None:
                 mres = client.get(mobile_path)
                 assert mres.status_code == 200
                 mhtml = mres.text
-                assert "/static/theme.css?v=11" in mhtml
-                assert "/static/api_client.js?v=11" in mhtml
+                assert "/static/theme.css?v=13" in mhtml
+                assert "/static/api_client.js?v=13" in mhtml
                 assert "/static/icon-192.png" in mhtml
+                assert "mControlMilestone" in mhtml
+                assert "mSyncBackupIp" in mhtml
                 assert "m-main-safe" in mhtml
                 assert "sheet-safe" in mhtml
                 assert "100dvh" in mhtml
@@ -220,6 +224,28 @@ def test_public_config_cors_and_modify_sl(tmp_path: Path) -> None:
             assert body["ok"] is True
             assert orch.risk_manager.positions["NIFTY"].sl_trigger_price == 148.5
             assert body["snapshot"]["positions"][0]["sl_trigger_price"] == 148.5
+
+            # Daily schedule milestone user controls (reset -> PENDING, done -> DONE)
+            ms_reset = client.post("/api/schedule/milestone", json={"milestone": "all", "action": "reset"})
+            assert ms_reset.status_code == 200
+            assert ms_reset.json()["ok"] is True
+            for m_item in ms_reset.json()["snapshot"]["schedule"]["milestones"]:
+                assert m_item["status"] == "PENDING"
+
+            ms_done = client.post("/api/schedule/milestone", json={"milestone": "cache", "action": "done"})
+            assert ms_done.status_code == 200
+            assert ms_done.json()["ok"] is True
+            cache_ms = next(
+                m for m in ms_done.json()["snapshot"]["schedule"]["milestones"] if m["key"] == "cache"
+            )
+            assert cache_ms["status"] == "DONE"
+
+            # Backup IP sync endpoint
+            ip_sync = client.post("/api/broker/sync-backup-ip", json={"ip": "203.0.113.45"})
+            assert ip_sync.status_code == 200
+            ip_data = ip_sync.json()
+            assert ip_data["public_ip"] == "203.0.113.45"
+            assert ip_data["snapshot"]["last_synced_backup_ip"] == "203.0.113.45"
     finally:
         asyncio.run(engine.dispose())
 
@@ -299,8 +325,8 @@ def test_mobile_sync_output() -> None:
     content = out_html.read_text(encoding="utf-8")
     assert "m-landing-screen" in content
     assert "showLandingScreen" in content
-    assert "./static/theme.css?v=11" in content
-    assert "./static/api_client.js?v=11" in content
+    assert "./static/theme.css?v=13" in content
+    assert "./static/api_client.js?v=13" in content
     assert "./static/icon-192.png" in content
     assert (out_html.parent / "app" / "index.html").exists()
     assert '<meta name="autoorb-api-base" content="https://' in content
@@ -360,6 +386,10 @@ def test_mobile_sync_injects_custom_vps_urls(tmp_path: Path, monkeypatch) -> Non
 def test_multi_env_vps_artifacts_and_db_normalization(tmp_path: Path) -> None:
     assert normalize_database_url("postgres://u:p@h:5432/db") == "postgresql+asyncpg://u:p@h:5432/db"
     assert normalize_database_url("postgresql://u:p@h:5432/db") == "postgresql+asyncpg://u:p@h:5432/db"
+    assert (
+        normalize_database_url("postgresql://u:p@ep.neon.tech/neondb?sslmode=require&channel_binding=require")
+        == "postgresql+asyncpg://u:p@ep.neon.tech/neondb?ssl=require"
+    )
     assert normalize_database_url("sqlite+aiosqlite:///data/autoorb.db") == "sqlite+aiosqlite:///data/autoorb.db"
 
     _orch, app, engine = _build_test_client(tmp_path)
