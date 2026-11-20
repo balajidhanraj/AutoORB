@@ -100,7 +100,18 @@ def create_app(orchestrator: Any) -> FastAPI:
     @asynccontextmanager
     async def lifespan(_app: FastAPI):
         if get_db not in _app.dependency_overrides:
-            await init_db()
+            import asyncio as _asyncio
+            import logging as _logging
+
+            _log = _logging.getLogger("shoonya_orb.ui")
+            for attempt in range(1, 3):
+                try:
+                    await init_db()
+                    break
+                except Exception as exc:
+                    _log.error("Database init_db() attempt %d/2 failed: %s", attempt, exc)
+                    if attempt < 2:
+                        await _asyncio.sleep(2.0)
         yield
 
     app = FastAPI(title="Shoonya ORB Algo Terminal", version="2.0.0", lifespan=lifespan)

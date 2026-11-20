@@ -16,7 +16,7 @@ load_dotenv()
 
 def normalize_database_url(raw_url: str) -> str:
     """Normalize PostgreSQL URLs (VPS / Neon / Supabase / GCP Cloud SQL) for asyncpg."""
-    cleaned = (raw_url or "").strip()
+    cleaned = (raw_url or "").strip().strip('"').strip("'").strip()
     if cleaned.startswith("postgres://"):
         cleaned = "postgresql+asyncpg://" + cleaned[len("postgres://") :]
     elif cleaned.startswith("postgresql://"):
