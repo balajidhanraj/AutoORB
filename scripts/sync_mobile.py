@@ -25,10 +25,10 @@ def sync_mobile_assets(
         raise FileNotFoundError(f"Missing source template: {SRC_HTML}")
 
     resolved_prod = (
-        prod_url if prod_url is not None else os.getenv("PROD_API_URL", "https://balajidhanraj-shoonya-orb.hf.space")
+        prod_url if prod_url is not None else os.getenv("PROD_API_URL", "https://autoorb-xeha.onrender.com")
     ).strip().rstrip("/")
     resolved_dev = (
-        dev_url if dev_url is not None else os.getenv("DEV_API_URL", "https://balajidhanraj-shoonya-orb.hf.space")
+        dev_url if dev_url is not None else os.getenv("DEV_API_URL", "https://autoorb-xeha.onrender.com")
     ).strip().rstrip("/")
     resolved_local = (
         local_url if local_url is not None else os.getenv("LOCAL_API_URL", "http://192.168.0.109:8000")
