@@ -13,11 +13,11 @@
     }
   }
 
-  const FALLBACK_CLOUD_API_BASE = 'http://35.209.175.6';
+  const FALLBACK_CLOUD_API_BASE = 'https://autoorb-xeha.onrender.com';
   const FALLBACK_LOCAL_API_BASE = 'http://192.168.0.109:8000';
 
   function isPlaceholderUrl(url) {
-    return /(^|\/\/|\.)yourdomain\.com(\/|$|:)/i.test(String(url || ''));
+    return /(^|\/\/|\.)yourdomain\.com(\/|$|:)|35\.209\.175\.6|balajidhanraj-shoonya-orb\.hf\.space/i.test(String(url || ''));
   }
 
   function getDefaultApiBase() {
@@ -250,8 +250,10 @@
     const url = `${clean}/health`;
     let res;
     try {
+      const isLocal = /^http:\/\/(127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|localhost)/i.test(clean);
+      const timeoutMs = isLocal ? 4500 : 25000;
       const ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
-      const timer = ctrl ? setTimeout(() => ctrl.abort(), 4500) : null;
+      const timer = ctrl ? setTimeout(() => ctrl.abort(), timeoutMs) : null;
       res = await fetch(url, {
         headers: { Accept: 'application/json' },
         signal: ctrl ? ctrl.signal : undefined
