@@ -659,8 +659,9 @@ def main() -> None:
     parser.add_argument("--end", type=str, default="2026-11-20", help="End date YYYY-MM-DD")
     parser.add_argument("--fetch", action="store_true", help="Fetch fresh 5m candles from Shoonya TPSeries")
     parser.add_argument("--force", action="store_true", help="Force re-fetch even if 365d cache is non-empty")
-    parser.add_argument("--max-trades", type=int, default=4, help="Max trades per day on BANKNIFTY (default 4)")
+    parser.add_argument("--max-trades", type=int, default=4, help="Max trades per day (default 4)")
     parser.add_argument("--daily-risk", type=float, default=10000.0, help="Daily max loss cap (Rs)")
+    parser.add_argument("--include-nifty", action="store_true", help="Include NIFTY in backtest (default: BANKNIFTY only)")
     args = parser.parse_args()
 
     start_d = date.fromisoformat(args.start)
@@ -675,9 +676,10 @@ def main() -> None:
             auth.login_via_selenium()
         print(f"Authenticated with Shoonya ({settings.shoonya_user_id}); fetching {start_d} -> {end_d}...", flush=True)
 
+    active_indices = ("NIFTY", "BANKNIFTY") if args.include_nifty else ("BANKNIFTY",)
     candles_by_index: Dict[str, List[Candle]] = {}
     date_ranges: Dict[str, Tuple[str, str]] = {}
-    for idx in ("NIFTY", "BANKNIFTY"):
+    for idx in active_indices:
         cache_365 = ROOT_DIR / "data" / "historical" / f"{idx}_5m_365d.json"
         if not args.force and cache_365.exists() and cache_365.stat().st_size > 1000:
             candles = load_candles_from_cache(idx)

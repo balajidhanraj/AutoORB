@@ -97,6 +97,11 @@ class ResetRiskRequest(BaseModel):
     reset_type: str = "all"
 
 
+class EnabledIndicesRequest(BaseModel):
+    nifty: Optional[bool] = None
+    banknifty: Optional[bool] = None
+
+
 def create_app(orchestrator: Any) -> FastAPI:
     """Build and return the FastAPI web dashboard application."""
     from api.auth_router import router as auth_router
@@ -420,6 +425,21 @@ def create_app(orchestrator: Any) -> FastAPI:
                 "message": msg,
                 "max_daily_loss": orchestrator.settings.max_daily_loss,
                 "is_custom_max_daily_loss": orchestrator.risk_manager.custom_max_daily_loss is not None,
+                "snapshot": orchestrator.get_status_snapshot(),
+            }
+        )
+
+    @app.post("/api/settings/enabled-indices")
+    def api_set_enabled_indices(payload: EnabledIndicesRequest) -> JSONResponse:
+        ok, msg = orchestrator.set_enabled_indices(
+            nifty=payload.nifty,
+            banknifty=payload.banknifty,
+        )
+        return JSONResponse(
+            content={
+                "ok": ok,
+                "message": msg,
+                "enabled_indices": orchestrator.risk_manager.get_enabled_indices(),
                 "snapshot": orchestrator.get_status_snapshot(),
             }
         )

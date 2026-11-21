@@ -683,6 +683,14 @@ class TradingSystemOrchestrator:
         """Modify the Daily Max Loss Guardrail (₹) or pass None/0 for dynamic AUTO sizing."""
         return self.risk_manager.set_max_daily_loss(amount)
 
+    def set_enabled_indices(
+        self,
+        nifty: Optional[bool] = None,
+        banknifty: Optional[bool] = None,
+    ) -> Tuple[bool, str]:
+        """Toggle whether NIFTY and/or BANKNIFTY are enabled for live strategy execution."""
+        return self.risk_manager.set_enabled_indices(nifty=nifty, banknifty=banknifty)
+
     def reset_risk_guardrails(self, reset_type: str = "all") -> Tuple[bool, str]:
         """Reset system halts, daily order count, weekly loss guard, and/or daily MTM loss."""
         return self.risk_manager.reset_halt_and_limits(reset_type=reset_type)
@@ -1340,6 +1348,7 @@ class TradingSystemOrchestrator:
             "max_trades": self.settings.max_trades_per_day,
             "max_daily_loss": self.risk_manager.get_dynamic_max_daily_loss(now_ist),
             "is_custom_max_daily_loss": self.risk_manager.custom_max_daily_loss is not None,
+            "enabled_indices": self.risk_manager.get_enabled_indices(),
             "halted": self.risk_manager.halted,
             "halt_reason": self.risk_manager.halt_reason,
             "cached_contracts": self.mapper.cached_count,

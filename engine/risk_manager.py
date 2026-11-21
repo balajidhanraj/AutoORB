@@ -303,11 +303,36 @@ class RiskManager:
             "state": state,
         }
 
+    def get_enabled_indices(self) -> Dict[str, bool]:
+        with self._lock:
+            return {
+                "NIFTY": bool(getattr(self.settings, "enable_nifty_trading", True)),
+                "BANKNIFTY": bool(getattr(self.settings, "enable_banknifty_trading", True)),
+            }
+
+    def set_enabled_indices(
+        self,
+        nifty: Optional[bool] = None,
+        banknifty: Optional[bool] = None,
+    ) -> Tuple[bool, str]:
+        with self._lock:
+            if nifty is not None:
+                self.settings.enable_nifty_trading = bool(nifty)
+            if banknifty is not None:
+                self.settings.enable_banknifty_trading = bool(banknifty)
+            active = [k for k, v in self.get_enabled_indices().items() if v]
+            label = " + ".join(active) if active else "NONE (Paused)"
+            msg = f"Active strategy indices updated: {label}"
+            logger.info(msg)
+            return True, msg
+
     def can_take_new_trade(self, index_name: str, check_time: Optional[datetime] = None) -> bool:
         with self._lock:
             if self.halted:
                 return False
             if index_name == "NIFTY" and not getattr(self.settings, "enable_nifty_trading", True):
+                return False
+            if index_name == "BANKNIFTY" and not getattr(self.settings, "enable_banknifty_trading", True):
                 return False
             if self.sl_hit_today_by_index.get(index_name, False):
                 return False

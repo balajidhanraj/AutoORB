@@ -509,6 +509,19 @@
           <button onclick="setMobileFunds(500000)" type="button" class="py-1.5 rounded bg-surface-container-high font-bold cursor-pointer">₹5L</button>
         </div>
         <div class="flex items-center justify-between pt-2 border-t border-outline-variant/30">
+          <span class="font-body-sm text-on-surface-variant">Strategy Indices</span>
+          <div class="flex items-center gap-3 font-data-mono-sm font-bold">
+            <label class="inline-flex items-center gap-1.5 cursor-pointer select-none">
+              <input id="mc-chk-nifty" type="checkbox" onchange="mToggleStrategyIndices()" class="w-4 h-4 accent-emerald-500 rounded cursor-pointer"/>
+              <span class="text-on-surface">NIFTY</span>
+            </label>
+            <label class="inline-flex items-center gap-1.5 cursor-pointer select-none">
+              <input id="mc-chk-bnf" type="checkbox" checked onchange="mToggleStrategyIndices()" class="w-4 h-4 accent-emerald-500 rounded cursor-pointer"/>
+              <span class="text-on-surface">BANKNIFTY</span>
+            </label>
+          </div>
+        </div>
+        <div class="flex items-center justify-between pt-2 border-t border-outline-variant/30">
           <span class="font-body-sm text-on-surface-variant">Daily Trade Counter: <b id="mc-trade-cnt" class="text-on-surface">0/2</b></span>
           <button id="mc-btn-reset-trades" type="button" class="px-3 py-1 rounded bg-surface-container-high font-label-caps text-profit font-bold cursor-pointer">RESET</button>
         </div>
@@ -1032,7 +1045,12 @@
         const cap = Number(snap.capital || 200000);
         document.getElementById('mc-cap-disp').textContent = A.fmtINR(cap, 0);
         document.getElementById('mc-cap-slider').value = cap;
-        document.getElementById('mc-trade-cnt').textContent = `${snap.trades_taken || 0}/${snap.max_trades || 2}`;
+        document.getElementById('mc-trade-cnt').textContent = `${snap.trades_taken || 0}/${snap.max_trades || 4}`;
+        const mcEnIdx = snap.enabled_indices || {};
+        const mcChkNf = document.getElementById('mc-chk-nifty');
+        const mcChkBnf = document.getElementById('mc-chk-bnf');
+        if (mcChkNf && typeof mcEnIdx.NIFTY === 'boolean') mcChkNf.checked = mcEnIdx.NIFTY;
+        if (mcChkBnf && typeof mcEnIdx.BANKNIFTY === 'boolean') mcChkBnf.checked = mcEnIdx.BANKNIFTY;
         const mcLossDisp = document.getElementById('mc-max-loss-disp');
         if (mcLossDisp) mcLossDisp.textContent = `-${A.fmtINR(snap.max_daily_loss || 5000, 0)} (${snap.is_custom_max_daily_loss ? 'CUSTOM' : 'AUTO'})`;
         const wgC = snap.weekly_guard || {};
@@ -1278,6 +1296,17 @@
           snap = r.snapshot || snap;
           renderMobile();
           A.showToast(r.message || 'Restored auto max loss guardrail');
+        } catch (e) { A.showToast(e.message, 'error'); }
+      };
+
+      window.mToggleStrategyIndices = async () => {
+        const nf = Boolean(document.getElementById('mc-chk-nifty')?.checked);
+        const bnf = Boolean(document.getElementById('mc-chk-bnf')?.checked);
+        try {
+          const r = await A.api.setEnabledIndices(nf, bnf);
+          snap = r.snapshot || snap;
+          renderMobile();
+          A.showToast(r.message || 'Strategy indices updated', r.ok ? 'info' : 'warn');
         } catch (e) { A.showToast(e.message, 'error'); }
       };
 

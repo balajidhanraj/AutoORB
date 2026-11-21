@@ -605,6 +605,7 @@
       modifyPositionSl: (index_name, sl_trigger_price) => postJson('/api/positions/modify-sl', { index_name, sl_trigger_price }),
       resetTrades: () => postJson('/api/trades/reset'),
       setMaxDailyLoss: (amount) => postJson('/api/settings/max-daily-loss', { amount }),
+      setEnabledIndices: (nifty, banknifty) => postJson('/api/settings/enabled-indices', { nifty, banknifty }),
       resetRiskHalt: (reset_type = 'all') => postJson('/api/risk/reset-halt', { reset_type }),
       controlMilestone: (milestone = 'all', action = 'restart') => postJson('/api/schedule/milestone', { milestone, action }),
       // Multi-user Auth & Config v1

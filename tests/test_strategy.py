@@ -522,7 +522,8 @@ def test_nf_bnf_30m_max4_global_single_order_defaults(tmp_path: Path) -> None:
         log_dir=str(tmp_path / "logs"),
     )
     assert prod_settings.capital == 100000.0
-    assert prod_settings.enable_nifty_trading is True
+    assert prod_settings.enable_nifty_trading is False
+    assert prod_settings.enable_banknifty_trading is True
     assert prod_settings.banknifty_be_pyramiding is False
     assert prod_settings.max_trades_per_day == 4
     assert prod_settings.orb_window_minutes == 30
@@ -535,6 +536,13 @@ def test_nf_bnf_30m_max4_global_single_order_defaults(tmp_path: Path) -> None:
     mapper = InstrumentMapper(client)
     rm = RiskManager(prod_settings, client, mapper)
 
+    # Default: NIFTY unchecked (False), BANKNIFTY checked (True)
+    assert rm.can_take_new_trade("NIFTY") is False
+    assert rm.can_take_new_trade("BANKNIFTY") is True
+
+    # Toggle NIFTY ON via checkbox API helper
+    ok, _ = rm.set_enabled_indices(nifty=True, banknifty=True)
+    assert ok is True
     assert rm.can_take_new_trade("NIFTY") is True
     assert rm.can_take_new_trade("BANKNIFTY") is True
 

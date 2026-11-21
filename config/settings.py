@@ -114,7 +114,8 @@ class AppSettings(BaseModel):
     capital: float = Field(default=100000.0)
     max_daily_loss: float = Field(default=10000.0)
     max_trades_per_day: int = Field(default=4)
-    enable_nifty_trading: bool = Field(default=True)
+    enable_nifty_trading: bool = Field(default=False)
+    enable_banknifty_trading: bool = Field(default=True)
 
     min_india_vix: float = Field(default=12.0)
     min_orb_range_pct: float = Field(default=0.20)
@@ -204,7 +205,8 @@ def load_settings(env_path: str | Path | None = None) -> AppSettings:
         capital=float(os.getenv("CAPITAL", "100000") or 100000),
         max_daily_loss=float(os.getenv("MAX_DAILY_LOSS", "10000") or 10000),
         max_trades_per_day=int(os.getenv("MAX_TRADES_PER_DAY", "4") or 4),
-        enable_nifty_trading=_parse_bool(os.getenv("ENABLE_NIFTY_TRADING"), default=True),
+        enable_nifty_trading=_parse_bool(os.getenv("ENABLE_NIFTY_TRADING"), default=False),
+        enable_banknifty_trading=_parse_bool(os.getenv("ENABLE_BANKNIFTY_TRADING"), default=True),
         min_india_vix=float(os.getenv("MIN_INDIA_VIX", "12.0") or 12.0),
         min_orb_range_pct=float(os.getenv("MIN_ORB_RANGE_PCT", "0.20") or 0.20),
         max_orb_range_pct=float(os.getenv("MAX_ORB_RANGE_PCT", "0.85") or 0.85),

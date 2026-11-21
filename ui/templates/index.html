@@ -690,6 +690,19 @@
                   <span class="font-body-sm text-on-surface-variant">Active Trading Mode</span>
                   <button id="btn-ana-toggle-mode" type="button" class="px-3 py-1 rounded bg-surface-container-high font-label-caps text-label-caps font-bold text-profit cursor-pointer">PAPER</button>
                 </div>
+                <div class="flex items-center justify-between text-body-sm py-1 border-y border-outline-variant/20">
+                  <span class="text-on-surface-variant">Strategy Indices</span>
+                  <div class="flex items-center gap-3 font-data-mono-sm font-bold">
+                    <label class="inline-flex items-center gap-1.5 cursor-pointer select-none">
+                      <input id="chk-strat-nifty" type="checkbox" onchange="handleToggleStrategyIndices()" class="w-4 h-4 accent-emerald-500 rounded cursor-pointer"/>
+                      <span class="text-on-surface">NIFTY</span>
+                    </label>
+                    <label class="inline-flex items-center gap-1.5 cursor-pointer select-none">
+                      <input id="chk-strat-bnf" type="checkbox" checked onchange="handleToggleStrategyIndices()" class="w-4 h-4 accent-emerald-500 rounded cursor-pointer"/>
+                      <span class="text-on-surface">BANKNIFTY</span>
+                    </label>
+                  </div>
+                </div>
                 <div class="flex items-center justify-between text-body-sm">
                   <span class="text-on-surface-variant">Daily Max Loss Guardrail</span>
                   <span id="ana-max-loss" class="font-data-mono-sm text-loss font-bold">--</span>
@@ -1650,6 +1663,11 @@
         const btnM = document.getElementById('btn-ana-toggle-mode');
         btnM.textContent = snap.mode || 'PAPER';
         btnM.className = `px-3 py-1 rounded bg-surface-container-high font-label-caps text-label-caps font-bold cursor-pointer ${snap.mode === 'LIVE' ? 'text-loss' : 'text-profit'}`;
+        const enIdx = snap.enabled_indices || {};
+        const chkNf = document.getElementById('chk-strat-nifty');
+        const chkBnf = document.getElementById('chk-strat-bnf');
+        if (chkNf && typeof enIdx.NIFTY === 'boolean') chkNf.checked = enIdx.NIFTY;
+        if (chkBnf && typeof enIdx.BANKNIFTY === 'boolean') chkBnf.checked = enIdx.BANKNIFTY;
         const maxLossTag = snap.is_custom_max_daily_loss ? 'CUSTOM' : 'AUTO';
         document.getElementById('ana-max-loss').textContent = `${A.fmtINR(snap.max_daily_loss || 5000, 0)} (${maxLossTag})`;
         const wg = snap.weekly_guard || {};
@@ -1792,6 +1810,17 @@
         } catch (e) {
           A.showToast(e.message, 'error');
         }
+      };
+
+      window.handleToggleStrategyIndices = async () => {
+        const nf = Boolean(document.getElementById('chk-strat-nifty')?.checked);
+        const bnf = Boolean(document.getElementById('chk-strat-bnf')?.checked);
+        try {
+          const r = await A.api.setEnabledIndices(nf, bnf);
+          snap = r.snapshot || snap;
+          renderAll();
+          A.showToast(r.message || 'Strategy indices updated', r.ok ? 'info' : 'warn');
+        } catch (e) { A.showToast(e.message, 'error'); }
       };
 
       window.applyMaxDailyLoss = async (inputId) => {
