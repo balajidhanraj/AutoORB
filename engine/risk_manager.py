@@ -316,11 +316,11 @@ class RiskManager:
                 return False
             active_for_idx = [p for p in self.positions.values() if p.index_name == index_name]
             if active_for_idx:
-                # BANKNIFTY BE-Locked Pyramiding: allow next leg (up to max_trades_per_day) ONLY if
-                # ALL currently open legs are already risk-free at Breakeven/Trailing.
+                # Default (₹1L capital safe): hold next order until the running order finishes.
+                # Only allow BE-Locked Pyramiding if banknifty_be_pyramiding is explicitly enabled.
                 allow_bnf_pyramid = (
                     index_name == "BANKNIFTY"
-                    and getattr(self.settings, "banknifty_be_pyramiding", True)
+                    and getattr(self.settings, "banknifty_be_pyramiding", False)
                 )
                 if not allow_bnf_pyramid or len(active_for_idx) >= self.settings.max_trades_per_day:
                     return False

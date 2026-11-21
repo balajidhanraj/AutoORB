@@ -441,8 +441,9 @@ def run_bnf_30m_live_parity_backtest(
             if not (time(10, 0) <= ts.time() <= time(13, 15)):
                 continue
 
-            # BE-Locked Pyramiding: new leg allowed ONLY if ALL open legs are already risk-free at BE
-            if open_legs and any(o["be_ts"] is None or o["be_ts"] > ts for o in open_legs):
+            # Strict single-active-order lock (₹1L capital safe):
+            # Hold any new signal while a previous order is still running; allow next entry ONLY after exit.
+            if open_legs:
                 continue
 
             vwap = calculate_intraday_vwap(dc[: pos_i + 1], session_date=sess_date)
@@ -654,13 +655,22 @@ def main() -> None:
         daily_loss_limit=args.daily_risk,
     )
     all_trades.sort(key=lambda t: (t["date"], t["in_t"]))
+    # Verify strict zero-overlap: next trade always starts strictly AFTER prior trade exited
+    by_day: Dict[str, List[Dict[str, Any]]] = {}
+    for t in all_trades:
+        by_day.setdefault(t["date"], []).append(t)
+    for d_str, d_items in by_day.items():
+        for a, b in zip(d_items, d_items[1:]):
+            if b["in_t"] <= a["out_t"]:
+                raise AssertionError(f"Overlap detected on {d_str}: {a['in_t']}-{a['out_t']} vs {b['in_t']}-{b['out_t']}")
+
     date_range = (
         (bnf_candles[0].timestamp.strftime("%Y-%m-%d"), bnf_candles[-1].timestamp.strftime("%Y-%m-%d"))
         if bnf_candles
         else ("N/A", "N/A")
     )
     print_report(
-        f"BANKNIFTY-ONLY 30m ORB BACKTEST (Max {args.max_trades}/day, BE-Pyr, Fixed 45pt SL, Rs {args.daily_risk:,.0f} Risk)",
+        f"BANKNIFTY-ONLY 30m ORB BACKTEST (Sequential 1-Order Lock, Max {args.max_trades}/day, Fixed 45pt SL, Rs 1L Cap)",
         all_trades,
         date_range,
     )

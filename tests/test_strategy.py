@@ -513,15 +513,17 @@ def test_hybrid_nifty_optA_and_banknifty_optH_pyramiding(tmp_path: Path) -> None
     assert rm.can_take_new_trade("BANKNIFTY") is False  # Max 2/day reached for BANKNIFTY
 
 
-def test_bnf_only_30m_max4_be_pyramid_defaults(tmp_path: Path) -> None:
-    """Verify production defaults: BANKNIFTY-ONLY, 30m ORB (10:00-13:15), Fixed 45pt SL, Max 4/day BE-Locked Pyramid."""
+def test_bnf_only_30m_max4_sequential_defaults(tmp_path: Path) -> None:
+    """Verify production defaults: ₹1L capital, BANKNIFTY-ONLY, 30m ORB (10:00-13:15), strict single-order lock, Max 4/day."""
     prod_settings = AppSettings(
         mode="PAPER",
         token_file_path=str(tmp_path / "daily_token.json"),
         data_dir=str(tmp_path / "data"),
         log_dir=str(tmp_path / "logs"),
     )
+    assert prod_settings.capital == 100000.0
     assert prod_settings.enable_nifty_trading is False
+    assert prod_settings.banknifty_be_pyramiding is False
     assert prod_settings.max_trades_per_day == 4
     assert prod_settings.orb_window_minutes == 30
     assert prod_settings.entry_start_time == time(10, 0, 0)
@@ -539,7 +541,7 @@ def test_bnf_only_30m_max4_be_pyramid_defaults(tmp_path: Path) -> None:
     bnf_sig = ORBSignal(
         index_name="BANKNIFTY",
         signal_type="CE",
-        candle_time=_ist_dt(2026, 11, 16, 9, 40),
+        candle_time=_ist_dt(2026, 11, 16, 10, 15),
         spot_close=52500.0,
         orh=52400.0,
         orl=52200.0,
@@ -548,11 +550,16 @@ def test_bnf_only_30m_max4_be_pyramid_defaults(tmp_path: Path) -> None:
         india_vix=15.0,
     )
     for leg_idx in range(1, 5):
-        pos = rm.execute_entry(bnf_sig, option_ltp=500.0 + leg_idx * 20.0)
+        pos = rm.execute_entry(bnf_sig, option_ltp=500.0 + leg_idx * 10.0)
         assert pos is not None
         assert rm.trades_taken_by_index["BANKNIFTY"] == leg_idx
-        assert rm.can_take_new_trade("BANKNIFTY") is False  # Blocked until risk-free at BE
+        # Hold new entries while current order is running (even at Breakeven), WITHOUT halting system
+        assert rm.halted is False
+        assert rm.can_take_new_trade("BANKNIFTY") is False
         pos.state = PositionState.OPEN_FULL_BREAKEVEN
+        assert rm.can_take_new_trade("BANKNIFTY") is False
+        # Once running order completes cleanly, next trade is allowed up to Max 4/day
+        rm._close_position_record_locked(pos, exit_price=pos.entry_avg_price, exit_reason="BREAKEVEN_SL")
         if leg_idx < 4:
             assert rm.can_take_new_trade("BANKNIFTY") is True
         else:
