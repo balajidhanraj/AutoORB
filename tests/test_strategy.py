@@ -513,8 +513,8 @@ def test_hybrid_nifty_optA_and_banknifty_optH_pyramiding(tmp_path: Path) -> None
     assert rm.can_take_new_trade("BANKNIFTY") is False  # Max 2/day reached for BANKNIFTY
 
 
-def test_bnf_only_30m_max4_sequential_defaults(tmp_path: Path) -> None:
-    """Verify production defaults: ₹1L capital, BANKNIFTY-ONLY, 30m ORB (10:00-13:15), strict single-order lock, Max 4/day."""
+def test_nf_bnf_30m_max4_global_single_order_defaults(tmp_path: Path) -> None:
+    """Verify production defaults: ₹1L capital, NIFTY+BANKNIFTY, 30m ORB (10:00-13:15), global 1-active-order lock, Max 4/day."""
     prod_settings = AppSettings(
         mode="PAPER",
         token_file_path=str(tmp_path / "daily_token.json"),
@@ -522,7 +522,7 @@ def test_bnf_only_30m_max4_sequential_defaults(tmp_path: Path) -> None:
         log_dir=str(tmp_path / "logs"),
     )
     assert prod_settings.capital == 100000.0
-    assert prod_settings.enable_nifty_trading is False
+    assert prod_settings.enable_nifty_trading is True
     assert prod_settings.banknifty_be_pyramiding is False
     assert prod_settings.max_trades_per_day == 4
     assert prod_settings.orb_window_minutes == 30
@@ -535,7 +535,7 @@ def test_bnf_only_30m_max4_sequential_defaults(tmp_path: Path) -> None:
     mapper = InstrumentMapper(client)
     rm = RiskManager(prod_settings, client, mapper)
 
-    assert rm.can_take_new_trade("NIFTY") is False
+    assert rm.can_take_new_trade("NIFTY") is True
     assert rm.can_take_new_trade("BANKNIFTY") is True
 
     bnf_sig = ORBSignal(
@@ -549,21 +549,34 @@ def test_bnf_only_30m_max4_sequential_defaults(tmp_path: Path) -> None:
         rsi=68.0,
         india_vix=15.0,
     )
+    nf_sig = ORBSignal(
+        index_name="NIFTY",
+        signal_type="CE",
+        candle_time=_ist_dt(2026, 11, 16, 10, 20),
+        spot_close=24580.0,
+        orh=24540.0,
+        orl=24495.0,
+        vwap=24530.0,
+        rsi=68.0,
+        india_vix=15.0,
+    )
     for leg_idx in range(1, 5):
-        pos = rm.execute_entry(bnf_sig, option_ltp=500.0 + leg_idx * 10.0)
+        sig = bnf_sig if leg_idx % 2 == 1 else nf_sig
+        pos = rm.execute_entry(sig, option_ltp=500.0 if sig.index_name == "BANKNIFTY" else 150.0)
         assert pos is not None
-        assert rm.trades_taken_by_index["BANKNIFTY"] == leg_idx
-        # Hold new entries while current order is running (even at Breakeven), WITHOUT halting system
+        assert rm.trades_taken_today == leg_idx
+        # Hold BOTH NIFTY and BANKNIFTY while ANY order is running, WITHOUT halting system
         assert rm.halted is False
         assert rm.can_take_new_trade("BANKNIFTY") is False
-        pos.state = PositionState.OPEN_FULL_BREAKEVEN
-        assert rm.can_take_new_trade("BANKNIFTY") is False
-        # Once running order completes cleanly, next trade is allowed up to Max 4/day
+        assert rm.can_take_new_trade("NIFTY") is False
+        # Once running order completes cleanly, next trade on either index is allowed up to Max 4/day
         rm._close_position_record_locked(pos, exit_price=pos.entry_avg_price, exit_reason="BREAKEVEN_SL")
         if leg_idx < 4:
             assert rm.can_take_new_trade("BANKNIFTY") is True
+            assert rm.can_take_new_trade("NIFTY") is True
         else:
-            assert rm.can_take_new_trade("BANKNIFTY") is False  # Max 4/day cap reached
+            assert rm.can_take_new_trade("BANKNIFTY") is False
+            assert rm.can_take_new_trade("NIFTY") is False
 
 
 def test_auto_square_off_all_and_exit_position(tmp_path: Path) -> None:

@@ -307,31 +307,37 @@ class RiskManager:
         with self._lock:
             if self.halted:
                 return False
-            if index_name == "NIFTY" and not getattr(self.settings, "enable_nifty_trading", False):
+            if index_name == "NIFTY" and not getattr(self.settings, "enable_nifty_trading", True):
                 return False
             if self.sl_hit_today_by_index.get(index_name, False):
                 return False
-            idx_count = self.trades_taken_by_index.get(index_name, 0)
-            if idx_count >= self.settings.max_trades_per_day:
-                return False
-            active_for_idx = [p for p in self.positions.values() if p.index_name == index_name]
-            if active_for_idx:
-                # Default (₹1L capital safe): hold next order until the running order finishes.
-                # Only allow BE-Locked Pyramiding if banknifty_be_pyramiding is explicitly enabled.
-                allow_bnf_pyramid = (
-                    index_name == "BANKNIFTY"
-                    and getattr(self.settings, "banknifty_be_pyramiding", False)
-                )
-                if not allow_bnf_pyramid or len(active_for_idx) >= self.settings.max_trades_per_day:
+            allow_bnf_pyramid = (
+                index_name == "BANKNIFTY"
+                and getattr(self.settings, "banknifty_be_pyramiding", False)
+            )
+            if not allow_bnf_pyramid:
+                # Default ₹1L capital-safe mode: strictly 1 active order across ALL indices at a time,
+                # and global max_trades_per_day (4) across NIFTY + BANKNIFTY combined.
+                if self.trades_taken_today >= self.settings.max_trades_per_day:
                     return False
-                if any(
-                    leg.state not in {
-                        PositionState.OPEN_FULL_BREAKEVEN,
-                        PositionState.OPEN_PARTIAL_TRAILING,
-                    }
-                    for leg in active_for_idx
-                ):
+                if len(self.positions) > 0:
                     return False
+            else:
+                idx_count = self.trades_taken_by_index.get(index_name, 0)
+                if idx_count >= self.settings.max_trades_per_day:
+                    return False
+                active_for_idx = [p for p in self.positions.values() if p.index_name == index_name]
+                if active_for_idx:
+                    if len(active_for_idx) >= self.settings.max_trades_per_day:
+                        return False
+                    if any(
+                        leg.state not in {
+                            PositionState.OPEN_FULL_BREAKEVEN,
+                            PositionState.OPEN_PARTIAL_TRAILING,
+                        }
+                        for leg in active_for_idx
+                    ):
+                        return False
             max_w_losses = getattr(self.settings, "max_weekly_losses", 0)
             if max_w_losses > 0:
                 now_dt = check_time or datetime.now(IST)

@@ -267,7 +267,8 @@ def _vwap_is_sloping(
     return pct >= min_slope_pct if direction == "CE" else pct <= -min_slope_pct
 
 
-def _simulate_bnf_fixed45_trade(
+def _simulate_fixed_sl_trade(
+    index_name: str,
     spec: IndexSpec,
     sig_type: str,
     strike: int,
@@ -279,8 +280,8 @@ def _simulate_bnf_fixed45_trade(
     p0: float,
     exit_slippage: float = 1.0,
 ) -> Dict[str, Any]:
-    """Simulate Fixed 45pt SL, BE (+45pt), T1 50% exit (+80pt), and 15:15 EOD square-off with real Shoonya VIX."""
-    iv_mult = 1.12
+    """Simulate Fixed SL (25pt NF / 45pt BNF), BE (+20/+45), T1 50% (+40/+80), and 15:15 EOD with real Shoonya VIX."""
+    iv_mult = 1.12 if index_name == "BANKNIFTY" else 1.0
     sl_price = max(1.0, p0 - spec.sl_pts)
     be_ts: Optional[datetime] = None
     t1_ts: Optional[datetime] = None
@@ -369,168 +370,204 @@ def _simulate_bnf_fixed45_trade(
     }
 
 
-def run_bnf_30m_live_parity_backtest(
-    bnf_candles: List[Candle],
+def run_nf_bnf_sequential_backtest(
+    candles_by_index: Dict[str, List[Candle]],
     vix_map: Optional[Dict[datetime, float]] = None,
     start_date: Optional[date] = None,
     end_date: Optional[date] = None,
     max_trades_per_day: int = 4,
     daily_loss_limit: float = 10000.0,
 ) -> List[Dict[str, Any]]:
-    """Run BANKNIFTY-ONLY 30m ORB (10:00-13:15) + 20-EMA + Body>=0.40 + Fixed 45pt SL + BE-Locked Pyramid (Max 4/day)."""
+    """Run NIFTY + BANKNIFTY 30m ORB (10:00-13:15) with strict GLOBAL single-active-order lock (Rs 1L capital safe)."""
     vix_lookup = vix_map or {}
-    spec = INDEX_SPECS["BANKNIFTY"]
+    # Priority order when both trigger on the exact same candle: BANKNIFTY first, then NIFTY
+    indices = ("BANKNIFTY", "NIFTY")
 
-    days_map: Dict[date, List[Candle]] = {}
-    for c in bnf_candles:
-        days_map.setdefault(c.timestamp.date(), []).append(c)
+    days_by_idx: Dict[str, Dict[date, List[Candle]]] = {idx: {} for idx in indices}
+    all_dates_set = set()
+    for idx in indices:
+        for c in candles_by_index.get(idx, []):
+            d = c.timestamp.date()
+            days_by_idx[idx].setdefault(d, []).append(c)
+            all_dates_set.add(d)
 
-    seen: List[Candle] = []
-    prev_close: Optional[float] = None
+    seen_by_idx: Dict[str, List[Candle]] = {idx: [] for idx in indices}
+    prev_close_by_idx: Dict[str, Optional[float]] = {idx: None for idx in indices}
     trade_dicts: List[Dict[str, Any]] = []
 
-    for sess_date in sorted(days_map.keys()):
-        dc = days_map[sess_date]
+    for sess_date in sorted(all_dates_set):
         in_window = (
             (start_date is None or sess_date >= start_date)
             and (end_date is None or sess_date <= end_date)
         )
         if not in_window:
-            seen.extend(dc)
-            if dc:
-                prev_close = dc[-1].close
+            for idx in indices:
+                dc = days_by_idx[idx].get(sess_date, [])
+                seen_by_idx[idx].extend(dc)
+                if dc:
+                    prev_close_by_idx[idx] = dc[-1].close
             continue
 
-        # 30-minute ORB: 09:15 - 09:40 candles (09:15-09:45 window), range 0.20% - 0.85%
-        orb_candles = [c for c in dc if time(9, 15) <= c.timestamp.time() <= time(9, 40)]
-        orb_ok = False
-        orh = orl = 0.0
-        if len(dc) >= 6 and len(orb_candles) >= 5:
-            orh = max(c.high for c in orb_candles)
-            orl = min(c.low for c in orb_candles)
-            range_pct = ((orh - orl) / orl) * 100.0 if orl > 0 else 999.0
-            orb_ok = 0.20 <= range_pct <= 0.85
+        orb_info: Dict[str, Optional[Tuple[float, float]]] = {}
+        bars_ts_idx: Dict[str, Dict[datetime, int]] = {idx: {} for idx in indices}
+        all_ts_set = set()
+
+        for idx in indices:
+            dc = days_by_idx[idx].get(sess_date, [])
+            for i, c in enumerate(dc):
+                bars_ts_idx[idx][c.timestamp] = i
+                all_ts_set.add(c.timestamp)
+            oc = [c for c in dc if time(9, 15) <= c.timestamp.time() <= time(9, 40)]
+            if len(dc) >= 6 and len(oc) >= 5:
+                orh = max(c.high for c in oc)
+                orl = min(c.low for c in oc)
+                rp = ((orh - orl) / orl) * 100.0 if orl > 0 else 999.0
+                orb_info[idx] = (orh, orl) if (0.20 <= rp <= 0.85) else None
+            else:
+                orb_info[idx] = None
 
         day_lots = 3 if sess_date.weekday() == 1 else 2
-        trades_today = 0
-        sl_hit_today = False
+        trades_today_global = 0
+        trades_by_idx = {idx: 0 for idx in indices}
+        sl_hit_by_idx = {idx: False for idx in indices}
         day_halted = False
         realized_today = 0.0
-        open_legs: List[Dict[str, Any]] = []
-        pending_exits: List[Tuple[datetime, float, str]] = []
+        global_active_exit_ts: Optional[datetime] = None
+        pending_exits: List[Tuple[datetime, str, float, str]] = []
 
-        for pos_i, candle in enumerate(dc):
-            ts = candle.timestamp
-            seen.append(candle)
-
-            still_open: List[Tuple[datetime, float, str]] = []
-            for ex_ts, ex_net, ex_r in pending_exits:
+        for ts in sorted(all_ts_set):
+            still_open: List[Tuple[datetime, str, float, str]] = []
+            for ex_ts, ex_idx, ex_net, ex_r in pending_exits:
                 if ex_ts <= ts:
                     realized_today += ex_net
                     if ex_r == "STOP_LOSS":
-                        sl_hit_today = True
+                        sl_hit_by_idx[ex_idx] = True
                     if realized_today <= -daily_loss_limit:
                         day_halted = True
                 else:
-                    still_open.append((ex_ts, ex_net, ex_r))
+                    still_open.append((ex_ts, ex_idx, ex_net, ex_r))
             pending_exits = still_open
-            open_legs = [o for o in open_legs if o["exit_ts"] >= ts]
 
-            if not orb_ok or day_halted or sl_hit_today or trades_today >= max_trades_per_day:
+            if global_active_exit_ts is not None and ts > global_active_exit_ts:
+                global_active_exit_ts = None
+
+            # Always update seen candle history for both indices first
+            for idx in indices:
+                pos_i = bars_ts_idx[idx].get(ts)
+                if pos_i is not None:
+                    seen_by_idx[idx].append(days_by_idx[idx][sess_date][pos_i])
+
+            if day_halted or trades_today_global >= max_trades_per_day:
                 continue
             if not (time(10, 0) <= ts.time() <= time(13, 15)):
                 continue
-
-            # Strict single-active-order lock (₹1L capital safe):
-            # Hold any new signal while a previous order is still running; allow next entry ONLY after exit.
-            if open_legs:
+            # Strict GLOBAL single-active-order lock: hold ALL new signals while ANY order is running
+            if global_active_exit_ts is not None:
                 continue
 
-            vwap = calculate_intraday_vwap(dc[: pos_i + 1], session_date=sess_date)
-            closes_win = [c.close for c in seen[-120:]]
-            rsi = calculate_wilder_rsi(closes_win, period=14)
+            for idx in indices:
+                if global_active_exit_ts is not None:
+                    break
+                if sl_hit_by_idx[idx] or orb_info.get(idx) is None:
+                    continue
+                pos_i = bars_ts_idx[idx].get(ts)
+                if pos_i is None:
+                    continue
+                dc = days_by_idx[idx][sess_date]
+                candle = dc[pos_i]
+                orh, orl = orb_info[idx]  # type: ignore[misc]
 
-            ce_signal = (
-                (candle.close > orh)
-                and (vwap is None or candle.close > vwap)
-                and (rsi is not None and rsi > 60.0)
-                and (prev_close is None or candle.close >= prev_close)
-            )
-            pe_signal = (
-                (candle.close < orl)
-                and (vwap is None or candle.close < vwap)
-                and (rsi is not None and rsi < 40.0)
-                and (prev_close is None or candle.close <= prev_close)
-            )
+                vwap = calculate_intraday_vwap(dc[: pos_i + 1], session_date=sess_date)
+                closes_win = [c.close for c in seen_by_idx[idx][-120:]]
+                rsi = calculate_wilder_rsi(closes_win, period=14)
+                prev_c = prev_close_by_idx[idx]
 
-            # 20-EMA + Decisive Candle Body >= 0.40
-            if ce_signal or pe_signal:
-                ema20 = calculate_ema(closes_win, period=20)
-                if ema20 is not None:
-                    if ce_signal and candle.close <= ema20:
+                ce_signal = (
+                    (candle.close > orh)
+                    and (vwap is None or candle.close > vwap)
+                    and (rsi is not None and rsi > 60.0)
+                    and (prev_c is None or candle.close >= prev_c)
+                )
+                pe_signal = (
+                    (candle.close < orl)
+                    and (vwap is None or candle.close < vwap)
+                    and (rsi is not None and rsi < 40.0)
+                    and (prev_c is None or candle.close <= prev_c)
+                )
+
+                if idx == "BANKNIFTY" and (ce_signal or pe_signal):
+                    ema20 = calculate_ema(closes_win, period=20)
+                    if ema20 is not None:
+                        if ce_signal and candle.close <= ema20:
+                            ce_signal = False
+                        if pe_signal and candle.close >= ema20:
+                            pe_signal = False
+                    c_range = candle.high - candle.low
+                    c_body = abs(candle.close - candle.open)
+                    if c_range > 0 and (c_body / c_range) < 0.40:
                         ce_signal = False
-                    if pe_signal and candle.close >= ema20:
                         pe_signal = False
-                c_range = candle.high - candle.low
-                c_body = abs(candle.close - candle.open)
-                if c_range > 0 and (c_body / c_range) < 0.40:
-                    ce_signal = False
-                    pe_signal = False
 
-            if not ce_signal and not pe_signal:
-                continue
+                if not ce_signal and not pe_signal:
+                    continue
 
-            sig_type = "CE" if ce_signal else "PE"
-            atm_strike = int(round(candle.close / spec.strike_step) * spec.strike_step)
-            expiry_d = get_target_expiry("BANKNIFTY", sess_date)
-            vix_now = vix_lookup.get(ts, 14.5)
-            sigma_now = max(0.09, (vix_now / 100.0) * 1.12)
-            t_entry = _time_to_expiry_years(ts, expiry_d)
-            p0 = round(bs_option_price(candle.close, atm_strike, t_entry, sigma_now, sig_type) + 1.0, 2)
-            total_qty = spec.lot_size * day_lots
+                spec = INDEX_SPECS[idx]
+                sig_type = "CE" if ce_signal else "PE"
+                atm_strike = int(round(candle.close / spec.strike_step) * spec.strike_step)
+                expiry_d = get_target_expiry(idx, sess_date)
+                iv_mult = 1.12 if idx == "BANKNIFTY" else 1.0
+                vix_now = vix_lookup.get(ts, 14.5)
+                sigma_now = max(0.09, (vix_now / 100.0) * iv_mult)
+                t_entry = _time_to_expiry_years(ts, expiry_d)
+                p0 = round(bs_option_price(candle.close, atm_strike, t_entry, sigma_now, sig_type) + 1.0, 2)
+                total_qty = spec.lot_size * day_lots
 
-            res = _simulate_bnf_fixed45_trade(
-                spec=spec,
-                sig_type=sig_type,
-                strike=atm_strike,
-                expiry_date=expiry_d,
-                entry_candle=candle,
-                day_candles=dc,
-                vix_map=vix_lookup,
-                total_qty=total_qty,
-                p0=p0,
-            )
+                res = _simulate_fixed_sl_trade(
+                    index_name=idx,
+                    spec=spec,
+                    sig_type=sig_type,
+                    strike=atm_strike,
+                    expiry_date=expiry_d,
+                    entry_candle=candle,
+                    day_candles=dc,
+                    vix_map=vix_lookup,
+                    total_qty=total_qty,
+                    p0=p0,
+                )
 
-            trades_today += 1
-            open_legs.append(res)
-            pending_exits.append((res["exit_ts"], res["net"], res["reason"]))
+                trades_today_global += 1
+                trades_by_idx[idx] += 1
+                global_active_exit_ts = res["exit_ts"]
+                pending_exits.append((res["exit_ts"], idx, res["net"], res["reason"]))
 
-            trade_dicts.append(
-                {
-                    "id": f"BANKNIFTY-{sess_date.strftime('%Y-%m-%d')}-{trades_today}",
-                    "date": sess_date.strftime("%Y-%m-%d"),
-                    "idx": "BANKNIFTY",
-                    "side": sig_type,
-                    "strike": atm_strike,
-                    "tradingsymbol": f"BANKNIFTY {atm_strike} {sig_type}",
-                    "qty": total_qty,
-                    "in_t": ts.strftime("%H:%M"),
-                    "out_t": res["exit_time_str"],
-                    "in_px": p0,
-                    "out_px": res["exit_px"],
-                    "pts": res["pts"],
-                    "gross": res["gross"],
-                    "charges": res["charges"],
-                    "net": res["net"],
-                    "reason": res["reason"],
-                    "be": res["be"],
-                    "partial": res["partial"],
-                    "mode": "BACKTEST",
-                }
-            )
+                trade_dicts.append(
+                    {
+                        "id": f"{idx}-{sess_date.strftime('%Y-%m-%d')}-{trades_by_idx[idx]}",
+                        "date": sess_date.strftime("%Y-%m-%d"),
+                        "idx": idx,
+                        "side": sig_type,
+                        "strike": atm_strike,
+                        "tradingsymbol": f"{idx} {atm_strike} {sig_type}",
+                        "qty": total_qty,
+                        "in_t": ts.strftime("%H:%M"),
+                        "out_t": res["exit_time_str"],
+                        "in_px": p0,
+                        "out_px": res["exit_px"],
+                        "pts": res["pts"],
+                        "gross": res["gross"],
+                        "charges": res["charges"],
+                        "net": res["net"],
+                        "reason": res["reason"],
+                        "be": res["be"],
+                        "partial": res["partial"],
+                        "mode": "BACKTEST",
+                    }
+                )
 
-        if dc:
-            prev_close = dc[-1].close
+        for idx in indices:
+            dc = days_by_idx[idx].get(sess_date, [])
+            if dc:
+                prev_close_by_idx[idx] = dc[-1].close
 
     return trade_dicts
 
@@ -576,18 +613,24 @@ def compute_metrics(trades: List[Dict[str, Any]]) -> Dict[str, Any]:
 def print_report(
     title: str,
     all_trades: List[Dict[str, Any]],
-    date_range: Tuple[str, str],
+    date_ranges: Dict[str, Tuple[str, str]],
 ) -> None:
     print(f"\n================ {title} ================")
-    print(f"  BANKNIFTY  candle coverage: {date_range[0]} -> {date_range[1]}")
+    for idx, (d0, d1) in date_ranges.items():
+        print(f"  {idx:10s} candle coverage: {d0} -> {d1}")
     print("---------------------------------------------------------------------")
-    m = compute_metrics(all_trades)
-    print(
-        f"  BANKNIFTY  | Trades: {m['trades']:3d} (W:{m['wins']:3d}/L:{m['losses']:3d}) "
-        f"| WR: {m['win_rate']:5.1f}% | PF: {m['pf']:4.2f} "
-        f"| Gross: Rs {m['gross']:+10,.2f} | Charges: Rs {m['charges']:8,.2f} "
-        f"| Net: Rs {m['net']:+10,.2f} | MaxDD: Rs {m['max_dd']:9,.2f} | Avg: Rs {m['avg_pnl']:+8,.2f}"
-    )
+    for label, subset in [
+        ("NIFTY", [t for t in all_trades if t["idx"] == "NIFTY"]),
+        ("BANKNIFTY", [t for t in all_trades if t["idx"] == "BANKNIFTY"]),
+        ("COMBINED", all_trades),
+    ]:
+        m = compute_metrics(subset)
+        print(
+            f"  {label:10s} | Trades: {m['trades']:3d} (W:{m['wins']:3d}/L:{m['losses']:3d}) "
+            f"| WR: {m['win_rate']:5.1f}% | PF: {m['pf']:4.2f} "
+            f"| Gross: Rs {m['gross']:+10,.2f} | Charges: Rs {m['charges']:8,.2f} "
+            f"| Net: Rs {m['net']:+10,.2f} | MaxDD: Rs {m['max_dd']:9,.2f} | Avg: Rs {m['avg_pnl']:+8,.2f}"
+        )
 
     by_day: Dict[str, float] = {}
     for t in all_trades:
@@ -632,22 +675,31 @@ def main() -> None:
             auth.login_via_selenium()
         print(f"Authenticated with Shoonya ({settings.shoonya_user_id}); fetching {start_d} -> {end_d}...", flush=True)
 
-    cache_365 = ROOT_DIR / "data" / "historical" / "BANKNIFTY_5m_365d.json"
-    if not args.force and cache_365.exists() and cache_365.stat().st_size > 1000:
-        bnf_candles = load_candles_from_cache("BANKNIFTY")
-        print(f"  [BANKNIFTY] Loaded {len(bnf_candles)} cached 5m candles from {cache_365}", flush=True)
-    elif client is not None:
-        bnf_candles = fetch_candles_from_shoonya(client, "BANKNIFTY", start_d, end_d)
-    else:
-        bnf_candles = load_candles_from_cache("BANKNIFTY")
+    candles_by_index: Dict[str, List[Candle]] = {}
+    date_ranges: Dict[str, Tuple[str, str]] = {}
+    for idx in ("NIFTY", "BANKNIFTY"):
+        cache_365 = ROOT_DIR / "data" / "historical" / f"{idx}_5m_365d.json"
+        if not args.force and cache_365.exists() and cache_365.stat().st_size > 1000:
+            candles = load_candles_from_cache(idx)
+            print(f"  [{idx}] Loaded {len(candles)} cached 5m candles from {cache_365}", flush=True)
+        elif client is not None:
+            candles = fetch_candles_from_shoonya(client, idx, start_d, end_d)
+        else:
+            candles = load_candles_from_cache(idx)
+        candles_by_index[idx] = candles
+        date_ranges[idx] = (
+            (candles[0].timestamp.strftime("%Y-%m-%d"), candles[-1].timestamp.strftime("%Y-%m-%d"))
+            if candles
+            else ("N/A", "N/A")
+        )
 
     vix_map = load_vix_map()
     if (not vix_map or args.force) and client is not None:
         vix_map = fetch_vix_from_shoonya(client, max(start_d, date(2026, 3, 10)), end_d)
     print(f"  [INDIAVIX] Using {len(vix_map)} Shoonya 5m VIX bars for Black-Scholes option pricing", flush=True)
 
-    all_trades = run_bnf_30m_live_parity_backtest(
-        bnf_candles,
+    all_trades = run_nf_bnf_sequential_backtest(
+        candles_by_index,
         vix_map=vix_map,
         start_date=start_d,
         end_date=end_d,
@@ -655,24 +707,21 @@ def main() -> None:
         daily_loss_limit=args.daily_risk,
     )
     all_trades.sort(key=lambda t: (t["date"], t["in_t"]))
-    # Verify strict zero-overlap: next trade always starts strictly AFTER prior trade exited
+    # Verify strict GLOBAL zero-overlap across NIFTY + BANKNIFTY combined
     by_day: Dict[str, List[Dict[str, Any]]] = {}
     for t in all_trades:
         by_day.setdefault(t["date"], []).append(t)
     for d_str, d_items in by_day.items():
         for a, b in zip(d_items, d_items[1:]):
             if b["in_t"] <= a["out_t"]:
-                raise AssertionError(f"Overlap detected on {d_str}: {a['in_t']}-{a['out_t']} vs {b['in_t']}-{b['out_t']}")
+                raise AssertionError(
+                    f"Global overlap on {d_str}: {a['idx']} {a['in_t']}-{a['out_t']} vs {b['idx']} {b['in_t']}-{b['out_t']}"
+                )
 
-    date_range = (
-        (bnf_candles[0].timestamp.strftime("%Y-%m-%d"), bnf_candles[-1].timestamp.strftime("%Y-%m-%d"))
-        if bnf_candles
-        else ("N/A", "N/A")
-    )
     print_report(
-        f"BANKNIFTY-ONLY 30m ORB BACKTEST (Sequential 1-Order Lock, Max {args.max_trades}/day, Fixed 45pt SL, Rs 1L Cap)",
+        f"NIFTY + BANKNIFTY 30m ORB BACKTEST (Global 1-Order Lock, Max {args.max_trades}/day, Rs 1L Cap)",
         all_trades,
-        date_range,
+        date_ranges,
     )
 
     out_dir = ROOT_DIR / "data" / "backtest"
