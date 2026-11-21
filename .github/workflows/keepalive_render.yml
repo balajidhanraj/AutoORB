@@ -12,7 +12,7 @@ jobs:
     steps:
       - name: Ping Render /health endpoint
         env:
-          RENDER_APP_URL: ${{ vars.RENDER_APP_URL || secrets.RENDER_APP_URL || 'https://autoorb-xeha.onrender.com' }}
+          RENDER_APP_URL: ${{ vars.RENDER_APP_URL || secrets.RENDER_APP_URL || 'https://autoorb-eu.onrender.com' }}
         run: |
           curl -fsS --max-time 45 "${RENDER_APP_URL%/}/health"
           echo ""

@@ -13,11 +13,11 @@
     }
   }
 
-  const FALLBACK_CLOUD_API_BASE = 'https://autoorb-xeha.onrender.com';
+  const FALLBACK_CLOUD_API_BASE = 'https://autoorb-eu.onrender.com';
   const FALLBACK_LOCAL_API_BASE = 'http://192.168.0.109:8000';
 
   function isPlaceholderUrl(url) {
-    return /(^|\/\/|\.)yourdomain\.com(\/|$|:)|35\.209\.175\.6|balajidhanraj-shoonya-orb\.hf\.space/i.test(String(url || ''));
+    return /(^|\/\/|\.)yourdomain\.com(\/|$|:)|35\.209\.175\.6|balajidhanraj-shoonya-orb\.hf\.space|autoorb-xeha\.onrender\.com/i.test(String(url || ''));
   }
 
   function getDefaultApiBase() {
