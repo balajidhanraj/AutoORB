@@ -226,6 +226,24 @@ class ORBStrategy:
         ce_signal = (close_px > state.orh) and (close_px > vwap) and (rsi > rsi_bull)
         pe_signal = (close_px < state.orl) and (close_px < vwap) and (rsi < rsi_bear)
 
+        # 0. Sloping VWAP Filter (skip flat sideways VWAP chop)
+        if getattr(self.settings, "require_vwap_slope", False) and (ce_signal or pe_signal):
+            day_candles = [
+                c for c in candles_seq
+                if (c.timestamp.astimezone(IST) if c.timestamp.tzinfo else IST.localize(c.timestamp)).date() == candle_ist.date()
+            ]
+            if len(day_candles) >= 4:
+                prev_vwap = calculate_intraday_vwap(day_candles[:-3], session_date=candle_ist.date())
+                min_slope = float(getattr(self.settings, "min_vwap_slope_pct", 0.02) or 0.02)
+                if prev_vwap and prev_vwap > 0:
+                    slope_pct = ((vwap - prev_vwap) / prev_vwap) * 100.0
+                    if ce_signal and slope_pct < min_slope:
+                        logger.info("%s CE skipped: flat VWAP slope %.4f%% < %.4f%%", index_name, slope_pct, min_slope)
+                        ce_signal = False
+                    if pe_signal and slope_pct > -min_slope:
+                        logger.info("%s PE skipped: flat VWAP slope %.4f%% > -%.4f%%", index_name, slope_pct, min_slope)
+                        pe_signal = False
+
         # 1. Day Open Bias Filter (CE requires Spot > Open; PE requires Spot < Open)
         if getattr(self.settings, "daily_bias_filter", False) and candles_seq:
             day_open = candles_seq[0].open

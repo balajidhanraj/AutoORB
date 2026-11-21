@@ -52,6 +52,9 @@ def _make_settings(tmp_path: Path, **overrides: Any) -> AppSettings:
         "data_dir": str(tmp_path / "data"),
         "log_dir": str(tmp_path / "logs"),
         "sebi_algo_id": "ALGO_TEST_2026",
+        "enable_nifty_trading": True,
+        "dynamic_sl_pct": 0.0,
+        "require_vwap_slope": False,
     }
     defaults.update(overrides)
     return AppSettings(**defaults)
@@ -510,6 +513,52 @@ def test_hybrid_nifty_optA_and_banknifty_optH_pyramiding(tmp_path: Path) -> None
     assert rm.can_take_new_trade("BANKNIFTY") is False  # Max 2/day reached for BANKNIFTY
 
 
+def test_bnf_only_15m_max4_be_pyramid_defaults(tmp_path: Path) -> None:
+    """Verify production defaults: BANKNIFTY-ONLY, 15m ORB (09:35-12:30), Max 4/day BE-Locked Pyramid."""
+    prod_settings = AppSettings(
+        mode="PAPER",
+        token_file_path=str(tmp_path / "daily_token.json"),
+        data_dir=str(tmp_path / "data"),
+        log_dir=str(tmp_path / "logs"),
+    )
+    assert prod_settings.enable_nifty_trading is False
+    assert prod_settings.max_trades_per_day == 4
+    assert prod_settings.orb_window_minutes == 15
+    assert prod_settings.entry_start_time == time(9, 35, 0)
+    assert prod_settings.entry_cutoff_time == time(12, 30, 0)
+    assert prod_settings.require_vwap_slope is True
+    assert prod_settings.dynamic_sl_pct == 0.15
+
+    client = ShoonyaClient(prod_settings)
+    mapper = InstrumentMapper(client)
+    rm = RiskManager(prod_settings, client, mapper)
+
+    assert rm.can_take_new_trade("NIFTY") is False
+    assert rm.can_take_new_trade("BANKNIFTY") is True
+
+    bnf_sig = ORBSignal(
+        index_name="BANKNIFTY",
+        signal_type="CE",
+        candle_time=_ist_dt(2026, 11, 16, 9, 40),
+        spot_close=52500.0,
+        orh=52400.0,
+        orl=52200.0,
+        vwap=52350.0,
+        rsi=68.0,
+        india_vix=15.0,
+    )
+    for leg_idx in range(1, 5):
+        pos = rm.execute_entry(bnf_sig, option_ltp=500.0 + leg_idx * 20.0)
+        assert pos is not None
+        assert rm.trades_taken_by_index["BANKNIFTY"] == leg_idx
+        assert rm.can_take_new_trade("BANKNIFTY") is False  # Blocked until risk-free at BE
+        pos.state = PositionState.OPEN_FULL_BREAKEVEN
+        if leg_idx < 4:
+            assert rm.can_take_new_trade("BANKNIFTY") is True
+        else:
+            assert rm.can_take_new_trade("BANKNIFTY") is False  # Max 4/day cap reached
+
+
 def test_auto_square_off_all_and_exit_position(tmp_path: Path) -> None:
     settings = _make_settings(tmp_path, mode="PAPER")
     client = ShoonyaClient(settings)
@@ -902,8 +951,10 @@ def test_master_alpha_strategy_pillars(tmp_path: Path) -> None:
     assert pos.initial_qty == 260
 
     # 2. Test Weekly Circuit Breaker
-    # Close first trade with a loss
+    # Close first trade with a loss (halts same-day re-entry on NIFTY; next day clears daily SL flag)
     rm._close_position_record_locked(pos, exit_price=170.0, exit_reason="STOP_LOSS")
+    assert rm.can_take_new_trade("NIFTY") is False  # Stop-on-SL active for same day
+    rm.sl_hit_today_by_index.clear()  # Simulate next trading day within same week
     assert rm.weekly_losses[(2026, 47)] == 1
     guard1 = rm.get_weekly_guard_status(tuesday_signal.candle_time)
     assert guard1["losses"] == 1

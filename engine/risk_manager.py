@@ -110,6 +110,7 @@ class RiskManager:
         self.completed_trades: List[TradeRecord] = []
         self.trades_taken_today: int = 0
         self.trades_taken_by_index: Dict[str, int] = {}
+        self.sl_hit_today_by_index: Dict[str, bool] = {}
         self.realized_pnl_today: float = 0.0
         self.halted: bool = False
         self.halt_reason: Optional[str] = None
@@ -210,12 +211,14 @@ class RiskManager:
                 self.halt_reason = None
                 self.trades_taken_today = 0
                 self.trades_taken_by_index.clear()
+                self.sl_hit_today_by_index.clear()
                 self.realized_pnl_today = 0.0
                 self.weekly_losses[cal_week] = 0
                 msg = "All system halts cleared: Daily orders (0), Weekly loss guard (0), and Daily MTM loss (₹0) reset."
             elif norm in {"daily_orders", "orders", "trades"}:
                 self.trades_taken_today = 0
                 self.trades_taken_by_index.clear()
+                self.sl_hit_today_by_index.clear()
                 self.halted = False
                 self.halt_reason = None
                 msg = "Daily order counter reset to 0 and system halt cleared."
@@ -304,23 +307,30 @@ class RiskManager:
         with self._lock:
             if self.halted:
                 return False
+            if index_name == "NIFTY" and not getattr(self.settings, "enable_nifty_trading", False):
+                return False
+            if self.sl_hit_today_by_index.get(index_name, False):
+                return False
             idx_count = self.trades_taken_by_index.get(index_name, 0)
             if idx_count >= self.settings.max_trades_per_day:
                 return False
             active_for_idx = [p for p in self.positions.values() if p.index_name == index_name]
             if active_for_idx:
-                # Option A (NIFTY): strict sequential no-overlap.
-                # Option H (BANKNIFTY): allow 2nd leg ONLY if Leg #1 is already risk-free at Breakeven/Trailing.
+                # BANKNIFTY BE-Locked Pyramiding: allow next leg (up to max_trades_per_day) ONLY if
+                # ALL currently open legs are already risk-free at Breakeven/Trailing.
                 allow_bnf_pyramid = (
                     index_name == "BANKNIFTY"
                     and getattr(self.settings, "banknifty_be_pyramiding", True)
                 )
-                if not allow_bnf_pyramid or len(active_for_idx) >= 2:
+                if not allow_bnf_pyramid or len(active_for_idx) >= self.settings.max_trades_per_day:
                     return False
-                if active_for_idx[0].state not in {
-                    PositionState.OPEN_FULL_BREAKEVEN,
-                    PositionState.OPEN_PARTIAL_TRAILING,
-                }:
+                if any(
+                    leg.state not in {
+                        PositionState.OPEN_FULL_BREAKEVEN,
+                        PositionState.OPEN_PARTIAL_TRAILING,
+                    }
+                    for leg in active_for_idx
+                ):
                     return False
             max_w_losses = getattr(self.settings, "max_weekly_losses", 0)
             if max_w_losses > 0:
@@ -481,11 +491,7 @@ class RiskManager:
                 last_ltp=float(ltp),
                 highest_ltp=float(ltp),
                 product_type=prd_type,
-                position_key=(
-                    signal.index_name
-                    if signal.index_name not in self.positions
-                    else f"{signal.index_name}#2"
-                ),
+                position_key=self._next_position_key_locked(signal.index_name),
             )
             self.positions[pos.position_key] = pos
             logger.info(
@@ -528,9 +534,25 @@ class RiskManager:
             logger.warning("Entry order %s ended in status %s; resetting FLAT", pos.entry_order_id, status)
             self.positions.pop(pos.position_key or pos.index_name, None)
 
+    def _next_position_key_locked(self, index_name: str) -> str:
+        if index_name not in self.positions:
+            return index_name
+        leg = 2
+        while f"{index_name}#{leg}" in self.positions:
+            leg += 1
+        return f"{index_name}#{leg}"
+
     def _place_initial_sl_locked(self, pos: ActivePosition) -> None:
         spec = INDEX_SPECS[pos.index_name]
-        trig_px = round(max(0.1, pos.entry_avg_price - spec.sl_pts), 1)
+        dyn_pct = float(getattr(self.settings, "dynamic_sl_pct", 0.0) or 0.0)
+        sl_pts = spec.sl_pts
+        if dyn_pct > 0 and pos.entry_avg_price > 0:
+            cap_pts = 140.0 if pos.index_name == "BANKNIFTY" else 70.0
+            sl_pts = max(spec.sl_pts, min(cap_pts, pos.entry_avg_price * dyn_pct))
+            max_loss_cap = self.get_dynamic_max_daily_loss()
+            if pos.initial_qty > 0 and max_loss_cap > 0:
+                sl_pts = min(sl_pts, max(spec.sl_pts, (max_loss_cap * 0.90) / pos.initial_qty))
+        trig_px = round(max(0.1, pos.entry_avg_price - sl_pts), 1)
         limit_px = round(max(0.05, trig_px - spec.sl_buffer_pts), 1)
         prd_type = getattr(pos, "product_type", getattr(INDEX_SPECS.get(pos.index_name), "product_type", "M"))
         resp = self.client.place_order(
@@ -793,6 +815,8 @@ class RiskManager:
         )
         self.completed_trades.append(record)
         self.positions.pop(pos.position_key or pos.index_name, None)
+        if exit_reason in {"INITIAL_SL", "STOP_LOSS"}:
+            self.sl_hit_today_by_index[pos.index_name] = True
 
         # Track weekly losses for Weekly Circuit Breaker
         if net_pnl < 0:
@@ -1034,6 +1058,7 @@ class RiskManager:
         with self._lock:
             self.trades_taken_today = 0
             self.trades_taken_by_index.clear()
+            self.sl_hit_today_by_index.clear()
             self.halted = False
             self.halt_reason = None
             logger.info("Risk manager trades counter reset to 0; halt cleared.")
@@ -1044,6 +1069,7 @@ class RiskManager:
             self.completed_trades.clear()
             self.trades_taken_today = 0
             self.trades_taken_by_index.clear()
+            self.sl_hit_today_by_index.clear()
             self.realized_pnl_today = 0.0
             self.halted = False
             self.halt_reason = None

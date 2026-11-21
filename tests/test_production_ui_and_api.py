@@ -32,6 +32,7 @@ def _build_test_client(tmp_path: Path):
         data_dir=str(tmp_path / "data"),
         log_dir=str(tmp_path / "logs"),
         sebi_algo_id="ALGO_TEST_PROD",
+        enable_nifty_trading=True,
     )
     orch = TradingSystemOrchestrator(settings=settings)
     app = create_app(orch)
