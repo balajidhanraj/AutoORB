@@ -23,32 +23,39 @@ ROOT_DIR = Path(__file__).resolve().parent.parent
 NEON_SEAL_SCRIPT = ROOT_DIR / "scripts" / "neon_seal.mjs"
 
 
+def _clean_env(name: str, default: str = "") -> str:
+    return (os.getenv(name, default) or default).strip().strip('"').strip("'").strip()
+
+
 def get_database_name() -> str:
-    """Extract database name (e.g. 'neondb') from DATABASE_URL."""
-    raw = os.getenv("DATABASE_URL", "")
+    """Extract database name (e.g. 'neondb') from DATABASE_URL without ever exposing credentials."""
+    raw = _clean_env("DATABASE_URL")
     if not raw or "sqlite" in raw:
         return "neondb"
     try:
         parts = urlsplit(raw)
-        return (parts.path or "/neondb").lstrip("/") or "neondb"
+        candidate = (parts.path or "/neondb").lstrip("/").split("?")[0].strip()
+        if not candidate or "://" in candidate or "@" in candidate:
+            return "neondb"
+        return candidate
     except Exception:
         return "neondb"
 
 
 def get_neon_config_summary() -> Dict[str, Any]:
     """Return non-secret summary of wired Neon services for health & public config endpoints."""
-    db_url = os.getenv("DATABASE_URL", "")
-    unpooled_url = os.getenv("DATABASE_URL_UNPOOLED", "")
-    auth_base = os.getenv("NEON_AUTH_BASE_URL", "").strip()
-    jwks_url = os.getenv("NEON_AUTH_JWKS_URL", "").strip()
-    rt_url = os.getenv("NEON_REALTIME_URL", "").strip()
-    rt_secret = os.getenv("NEON_REALTIME_SECRET", "").strip()
+    db_url = _clean_env("DATABASE_URL")
+    unpooled_url = _clean_env("DATABASE_URL_UNPOOLED")
+    auth_base = _clean_env("NEON_AUTH_BASE_URL")
+    jwks_url = _clean_env("NEON_AUTH_JWKS_URL")
+    rt_url = _clean_env("NEON_REALTIME_URL")
+    rt_secret = _clean_env("NEON_REALTIME_SECRET")
 
     is_neon_pg = "neon.tech" in db_url or ("postgresql" in db_url and "sqlite" not in db_url)
     return {
         "enabled": bool(is_neon_pg or auth_base or rt_url),
-        "branch": os.getenv("NEON_BRANCH", "production"),
-        "branch_id": os.getenv("NEON_BRANCH_ID", ""),
+        "branch": _clean_env("NEON_BRANCH", "production"),
+        "branch_id": _clean_env("NEON_BRANCH_ID"),
         "database": get_database_name(),
         "postgres_pooled": "-pooler." in db_url,
         "postgres_unpooled_configured": bool(unpooled_url),
@@ -62,8 +69,8 @@ def get_neon_config_summary() -> Dict[str, Any]:
 
 async def check_neon_auth_health() -> Dict[str, Any]:
     """Verify Neon Managed Auth JWKS and base endpoint reachability."""
-    auth_base = os.getenv("NEON_AUTH_BASE_URL", "").strip()
-    jwks_url = os.getenv("NEON_AUTH_JWKS_URL", "").strip()
+    auth_base = _clean_env("NEON_AUTH_BASE_URL")
+    jwks_url = _clean_env("NEON_AUTH_JWKS_URL")
     if not auth_base or not jwks_url:
         return {"ok": False, "reason": "NEON_AUTH_BASE_URL or NEON_AUTH_JWKS_URL not configured"}
 
@@ -82,7 +89,7 @@ async def check_neon_auth_health() -> Dict[str, Any]:
 
 async def verify_neon_auth_session(session_token: str) -> Optional[Dict[str, Any]]:
     """Verify a Neon Managed Better Auth bearer token or session token against NEON_AUTH_BASE_URL."""
-    auth_base = os.getenv("NEON_AUTH_BASE_URL", "").strip().rstrip("/")
+    auth_base = _clean_env("NEON_AUTH_BASE_URL").rstrip("/")
     if not auth_base or not session_token:
         return None
 
@@ -193,8 +200,8 @@ def _seal_neon_realtime_query_python(
 
 def seal_neon_realtime_query(sql_query: str, params: Optional[List[Any]] = None) -> Dict[str, Any]:
     """Seal a live SQL query with NEON_REALTIME_SECRET via @neon/realtime/server or pure-Python fallback."""
-    rt_secret = os.getenv("NEON_REALTIME_SECRET", "").strip()
-    rt_url = os.getenv("NEON_REALTIME_URL", "").strip()
+    rt_secret = _clean_env("NEON_REALTIME_SECRET")
+    rt_url = _clean_env("NEON_REALTIME_URL")
     if not rt_secret or not rt_url:
         raise RuntimeError("NEON_REALTIME_URL and NEON_REALTIME_SECRET must be configured")
 
