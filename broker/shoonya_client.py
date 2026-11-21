@@ -866,16 +866,51 @@ class ShoonyaClient:
         is_market_hours = (now_ist.weekday() < 5) and (mkt_open <= now_ist <= mkt_close)
         amo_flag = "NO" if is_market_hours else "YES"
 
+        norm_prctyp = price_type.strip().upper()
+        norm_price = float(price)
+        norm_side = buy_or_sell.strip().upper()
+        norm_exch = exchange.strip().upper()
+        norm_tsym = tradingsymbol.strip().upper()
+
+        # SEBI ALGO_CHK rule on Shoonya rejects MKT orders via API ("MKT Order type not allowed for API order").
+        # Convert MKT to a marketable LMT order using live LTP +/- protective buffer.
+        if norm_prctyp == "MKT":
+            norm_prctyp = "LMT"
+            if norm_price <= 0:
+                ref_ltp = 0.0
+                key = self._token_by_tsym.get(norm_tsym, "")
+                if key:
+                    ref_ltp = float(self.ltp_cache.get(key) or 0.0)
+                if ref_ltp <= 0:
+                    try:
+                        sc = self.api.searchscrip(norm_exch, norm_tsym)
+                        vals = sc.get("values") if isinstance(sc, dict) else None
+                        if isinstance(vals, list) and vals:
+                            tok = str(vals[0].get("token") or "")
+                            if tok:
+                                q = self.api.get_quotes(norm_exch, tok)
+                                if isinstance(q, dict):
+                                    ref_ltp = float(q.get("lp") or q.get("c") or 0.0)
+                    except Exception:
+                        pass
+                if ref_ltp > 0:
+                    norm_price = round(ref_ltp + 5.0, 1) if norm_side == "B" else round(max(0.05, ref_ltp - 5.0), 1)
+                else:
+                    return {
+                        "stat": "Not_Ok",
+                        "emsg": "Shoonya SEBI ALGO_CHK disallows MKT API orders. Switch to LMT and enter a Limit Price.",
+                    }
+
         try:
             resp = self.api.place_order(
-                buy_or_sell=buy_or_sell.strip().upper(),
+                buy_or_sell=norm_side,
                 product_type=prd,
-                exchange=exchange.strip().upper(),
-                tradingsymbol=tradingsymbol.strip().upper(),
+                exchange=norm_exch,
+                tradingsymbol=norm_tsym,
                 quantity=int(quantity),
                 discloseqty=0,
-                price_type=price_type.strip().upper(),
-                price=float(price),
+                price_type=norm_prctyp,
+                price=norm_price,
                 trigger_price=0.0,
                 retention="DAY",
                 remarks=self.settings.sebi_algo_id or "UI_MANUAL",

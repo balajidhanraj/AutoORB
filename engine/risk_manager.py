@@ -832,7 +832,7 @@ class RiskManager:
             exchange=pos.contract.exchange,
             tradingsymbol=pos.contract.tradingsymbol,
             quantity=pos.remaining_qty,
-            price_type="MKT",
+            price_type="LMT",
             price=aggr_limit,
             product_type=prd_type,
             retention="DAY",
