@@ -117,14 +117,14 @@ class AppSettings(BaseModel):
     enable_nifty_trading: bool = Field(default=False)
 
     min_india_vix: float = Field(default=12.0)
-    min_orb_range_pct: float = Field(default=0.15)
-    max_orb_range_pct: float = Field(default=0.90)
+    min_orb_range_pct: float = Field(default=0.20)
+    max_orb_range_pct: float = Field(default=0.85)
     daily_bias_filter: bool = Field(default=True)
     use_ema_filter: bool = Field(default=True)
     min_candle_body_ratio: float = Field(default=0.40)
-    require_vwap_slope: bool = Field(default=True)
+    require_vwap_slope: bool = Field(default=False)
     min_vwap_slope_pct: float = Field(default=0.02)
-    dynamic_sl_pct: float = Field(default=0.15)
+    dynamic_sl_pct: float = Field(default=0.0)
     nifty_use_ema_body_filter: bool = Field(default=False)
     banknifty_be_pyramiding: bool = Field(default=True)
     tuesday_expiry_boost: bool = Field(default=True)
@@ -147,16 +147,16 @@ class AppSettings(BaseModel):
     data_dir: str = Field(default="data")
     log_dir: str = Field(default="logs")
 
-    # Market session timings (IST) — 15-min ORB (09:15-09:30), Morning Momentum Entry (09:35-12:30)
-    orb_window_minutes: int = Field(default=15)
+    # Market session timings (IST) — 30-min ORB (09:15-09:45), Institutional Entry Window (10:00-13:15)
+    orb_window_minutes: int = Field(default=30)
     orb_start_time: time = Field(default=time(9, 15, 0))
     auth_time: time = Field(default=time(8, 40, 0))
     instrument_cache_time: time = Field(default=time(8, 55, 0))
     ws_connect_time: time = Field(default=time(9, 14, 0))
     market_open_time: time = Field(default=time(9, 15, 0))
-    orb_end_time: time = Field(default=time(9, 30, 0))
-    entry_start_time: time = Field(default=time(9, 35, 0))
-    entry_cutoff_time: time = Field(default=time(12, 30, 0))
+    orb_end_time: time = Field(default=time(9, 45, 0))
+    entry_start_time: time = Field(default=time(10, 0, 0))
+    entry_cutoff_time: time = Field(default=time(13, 15, 0))
     auto_squareoff_time: time = Field(default=time(15, 15, 0))
     market_close_time: time = Field(default=time(15, 30, 0))
     eod_report_time: time = Field(default=time(15, 35, 0))
@@ -206,14 +206,14 @@ def load_settings(env_path: str | Path | None = None) -> AppSettings:
         max_trades_per_day=int(os.getenv("MAX_TRADES_PER_DAY", "4") or 4),
         enable_nifty_trading=_parse_bool(os.getenv("ENABLE_NIFTY_TRADING"), default=False),
         min_india_vix=float(os.getenv("MIN_INDIA_VIX", "12.0") or 12.0),
-        min_orb_range_pct=float(os.getenv("MIN_ORB_RANGE_PCT", "0.15") or 0.15),
-        max_orb_range_pct=float(os.getenv("MAX_ORB_RANGE_PCT", "0.90") or 0.90),
+        min_orb_range_pct=float(os.getenv("MIN_ORB_RANGE_PCT", "0.20") or 0.20),
+        max_orb_range_pct=float(os.getenv("MAX_ORB_RANGE_PCT", "0.85") or 0.85),
         daily_bias_filter=_parse_bool(os.getenv("DAILY_BIAS_FILTER"), default=True),
         use_ema_filter=_parse_bool(os.getenv("USE_EMA_FILTER"), default=True),
         min_candle_body_ratio=float(os.getenv("MIN_CANDLE_BODY_RATIO", "0.40") or 0.40),
-        require_vwap_slope=_parse_bool(os.getenv("REQUIRE_VWAP_SLOPE"), default=True),
+        require_vwap_slope=_parse_bool(os.getenv("REQUIRE_VWAP_SLOPE"), default=False),
         min_vwap_slope_pct=float(os.getenv("MIN_VWAP_SLOPE_PCT", "0.02") or 0.02),
-        dynamic_sl_pct=float(os.getenv("DYNAMIC_SL_PCT", "0.15") or 0.15),
+        dynamic_sl_pct=float(os.getenv("DYNAMIC_SL_PCT", "0.0") or 0.0),
         nifty_use_ema_body_filter=_parse_bool(os.getenv("NIFTY_USE_EMA_BODY_FILTER"), default=False),
         banknifty_be_pyramiding=_parse_bool(os.getenv("BANKNIFTY_BE_PYRAMIDING"), default=True),
         tuesday_expiry_boost=_parse_bool(os.getenv("TUESDAY_EXPIRY_BOOST"), default=True),

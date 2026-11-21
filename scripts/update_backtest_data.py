@@ -267,7 +267,7 @@ def _vwap_is_sloping(
     return pct >= min_slope_pct if direction == "CE" else pct <= -min_slope_pct
 
 
-def _simulate_bnf_dynamic_trade(
+def _simulate_bnf_fixed45_trade(
     spec: IndexSpec,
     sig_type: str,
     strike: int,
@@ -277,29 +277,15 @@ def _simulate_bnf_dynamic_trade(
     vix_map: Dict[datetime, float],
     total_qty: int,
     p0: float,
-    daily_loss_limit: float = 10000.0,
-    sl_pct: float = 0.15,
-    be_pct: float = 0.15,
-    t1_pct: float = 0.30,
-    trail_pct: float = 0.15,
     exit_slippage: float = 1.0,
 ) -> Dict[str, Any]:
-    """Simulate Dynamic 15% SL (capped within Rs 10k risk), BE (+15%), T1 (+30%), and Step Trailing SL (+15%)."""
+    """Simulate Fixed 45pt SL, BE (+45pt), T1 50% exit (+80pt), and 15:15 EOD square-off with real Shoonya VIX."""
     iv_mult = 1.12
-    sl_pts = max(spec.sl_pts, min(140.0, p0 * sl_pct))
-    if total_qty > 0 and daily_loss_limit > 0:
-        sl_pts = min(sl_pts, max(spec.sl_pts, (daily_loss_limit * 0.90) / total_qty))
-    be_pts = max(12.0, p0 * be_pct)
-    t1_pts = max(25.0, p0 * t1_pct)
-    trail_step = max(10.0, p0 * trail_pct)
-
-    sl_price = max(1.0, p0 - sl_pts)
+    sl_price = max(1.0, p0 - spec.sl_pts)
     be_ts: Optional[datetime] = None
     t1_ts: Optional[datetime] = None
     partial_pnl = 0.0
     remaining_qty = total_qty
-    highest_px = p0
-    trail_steps = 0
 
     exit_ts = entry_candle.timestamp
     exit_time_str = "15:15"
@@ -322,41 +308,27 @@ def _simulate_bnf_dynamic_trade(
         o_low = bs_option_price(spot_worst, strike, t_yr, sigma, sig_type)
         o_close = bs_option_price(bar.close, strike, t_yr, sigma, sig_type)
 
-        if o_high > highest_px:
-            highest_px = o_high
         fav_pts = o_high - p0
 
         if o_low <= sl_price:
             exit_px = max(0.5, sl_price - exit_slippage)
             exit_ts = bar.timestamp
             exit_time_str = bar.timestamp.strftime("%H:%M")
-            exit_reason = (
-                "TRAILING_SL"
-                if trail_steps > 0
-                else ("BREAKEVEN_SL" if be_ts is not None else "STOP_LOSS")
-            )
+            exit_reason = "BREAKEVEN_SL" if be_ts is not None else "STOP_LOSS"
             break
 
-        if t1_ts is None and fav_pts >= t1_pts:
+        if t1_ts is None and fav_pts >= spec.target1_pts:
             t1_ts = bar.timestamp
             if be_ts is None:
                 be_ts = bar.timestamp
             sl_price = max(sl_price, p0)
             booked_qty = total_qty // 2
-            partial_pnl = booked_qty * t1_pts
+            partial_pnl = booked_qty * spec.target1_pts
             remaining_qty = total_qty - booked_qty
 
-        if be_ts is None and fav_pts >= be_pts:
+        if be_ts is None and fav_pts >= spec.breakeven_trigger_pts:
             be_ts = bar.timestamp
             sl_price = max(sl_price, p0)
-
-        if t1_ts is not None:
-            steps = int((highest_px - p0 - t1_pts) // trail_step)
-            if steps > trail_steps:
-                trail_steps = steps
-                new_sl = p0 + steps * trail_step
-                if new_sl > sl_price:
-                    sl_price = new_sl
 
         if b_time >= time(15, 15):
             exit_px = o_close
@@ -397,7 +369,7 @@ def _simulate_bnf_dynamic_trade(
     }
 
 
-def run_bnf_15m_live_parity_backtest(
+def run_bnf_30m_live_parity_backtest(
     bnf_candles: List[Candle],
     vix_map: Optional[Dict[datetime, float]] = None,
     start_date: Optional[date] = None,
@@ -405,7 +377,7 @@ def run_bnf_15m_live_parity_backtest(
     max_trades_per_day: int = 4,
     daily_loss_limit: float = 10000.0,
 ) -> List[Dict[str, Any]]:
-    """Run BANKNIFTY-ONLY 15m ORB (09:35-12:30) + Sloping VWAP + 20-EMA + Body>=0.40 + Dynamic 15% SL (Max 4/day)."""
+    """Run BANKNIFTY-ONLY 30m ORB (10:00-13:15) + 20-EMA + Body>=0.40 + Fixed 45pt SL + BE-Locked Pyramid (Max 4/day)."""
     vix_lookup = vix_map or {}
     spec = INDEX_SPECS["BANKNIFTY"]
 
@@ -429,15 +401,15 @@ def run_bnf_15m_live_parity_backtest(
                 prev_close = dc[-1].close
             continue
 
-        # 15-minute ORB: 09:15, 09:20, 09:25 candles
-        orb_candles = [c for c in dc if time(9, 15) <= c.timestamp.time() <= time(9, 25)]
+        # 30-minute ORB: 09:15 - 09:40 candles (09:15-09:45 window), range 0.20% - 0.85%
+        orb_candles = [c for c in dc if time(9, 15) <= c.timestamp.time() <= time(9, 40)]
         orb_ok = False
         orh = orl = 0.0
-        if len(dc) >= 6 and len(orb_candles) >= 3:
+        if len(dc) >= 6 and len(orb_candles) >= 5:
             orh = max(c.high for c in orb_candles)
             orl = min(c.low for c in orb_candles)
             range_pct = ((orh - orl) / orl) * 100.0 if orl > 0 else 999.0
-            orb_ok = 0.15 <= range_pct <= 0.90
+            orb_ok = 0.20 <= range_pct <= 0.85
 
         day_lots = 3 if sess_date.weekday() == 1 else 2
         trades_today = 0
@@ -466,7 +438,7 @@ def run_bnf_15m_live_parity_backtest(
 
             if not orb_ok or day_halted or sl_hit_today or trades_today >= max_trades_per_day:
                 continue
-            if not (time(9, 35) <= ts.time() <= time(12, 30)):
+            if not (time(10, 0) <= ts.time() <= time(13, 15)):
                 continue
 
             # BE-Locked Pyramiding: new leg allowed ONLY if ALL open legs are already risk-free at BE
@@ -489,12 +461,6 @@ def run_bnf_15m_live_parity_backtest(
                 and (rsi is not None and rsi < 40.0)
                 and (prev_close is None or candle.close <= prev_close)
             )
-
-            # Sloping VWAP filter
-            if ce_signal and not _vwap_is_sloping(dc, pos_i, sess_date, "CE", 0.02):
-                ce_signal = False
-            if pe_signal and not _vwap_is_sloping(dc, pos_i, sess_date, "PE", 0.02):
-                pe_signal = False
 
             # 20-EMA + Decisive Candle Body >= 0.40
             if ce_signal or pe_signal:
@@ -522,7 +488,7 @@ def run_bnf_15m_live_parity_backtest(
             p0 = round(bs_option_price(candle.close, atm_strike, t_entry, sigma_now, sig_type) + 1.0, 2)
             total_qty = spec.lot_size * day_lots
 
-            res = _simulate_bnf_dynamic_trade(
+            res = _simulate_bnf_fixed45_trade(
                 spec=spec,
                 sig_type=sig_type,
                 strike=atm_strike,
@@ -532,7 +498,6 @@ def run_bnf_15m_live_parity_backtest(
                 vix_map=vix_lookup,
                 total_qty=total_qty,
                 p0=p0,
-                daily_loss_limit=daily_loss_limit,
             )
 
             trades_today += 1
@@ -680,7 +645,7 @@ def main() -> None:
         vix_map = fetch_vix_from_shoonya(client, max(start_d, date(2026, 3, 10)), end_d)
     print(f"  [INDIAVIX] Using {len(vix_map)} Shoonya 5m VIX bars for Black-Scholes option pricing", flush=True)
 
-    all_trades = run_bnf_15m_live_parity_backtest(
+    all_trades = run_bnf_30m_live_parity_backtest(
         bnf_candles,
         vix_map=vix_map,
         start_date=start_d,
@@ -695,7 +660,7 @@ def main() -> None:
         else ("N/A", "N/A")
     )
     print_report(
-        f"BANKNIFTY-ONLY 15m ORB BACKTEST (Max {args.max_trades}/day, BE-Pyr, Dynamic 15% SL, Rs {args.daily_risk:,.0f} Risk)",
+        f"BANKNIFTY-ONLY 30m ORB BACKTEST (Max {args.max_trades}/day, BE-Pyr, Fixed 45pt SL, Rs {args.daily_risk:,.0f} Risk)",
         all_trades,
         date_range,
     )

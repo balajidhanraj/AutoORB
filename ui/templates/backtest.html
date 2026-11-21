@@ -144,6 +144,15 @@
       </div>
     </section>
 
+    <!-- Monthly P&L Performance Chart -->
+    <section class="bg-surface-container-low glass-panel rounded-xl p-4 space-y-3">
+      <div class="flex flex-wrap items-center justify-between gap-2">
+        <h2 class="font-headline-md text-on-surface">Monthly Net P&amp;L Performance</h2>
+        <span id="bt-monthly-summary" class="font-data-mono-sm text-profit font-bold">--</span>
+      </div>
+      <div id="bt-monthly-chart" class="w-full min-h-[210px] rounded-lg bg-surface-container-lowest/60 p-3 overflow-x-auto"></div>
+    </section>
+
     <!-- Full Trade Ledger Table -->
     <section class="bg-surface-container-low glass-panel rounded-xl p-4 space-y-3">
       <div class="flex flex-wrap items-center justify-between gap-2">
@@ -327,6 +336,8 @@
           </div>`;
         }).join('') || '<div class="text-on-surface-variant">No data for current filter.</div>';
 
+        renderMonthlyChart(trades);
+
         const rows = trades.slice().reverse().slice(0, 200);
         document.getElementById('bt-ledger-body').innerHTML = rows.map(t => `
           <tr class="border-b border-outline-variant/20 hover:bg-surface-container/60">
@@ -341,6 +352,69 @@
             <td class="py-2 text-right font-bold ${t.net >= 0 ? 'text-profit' : 'text-loss'}">${A.fmtSignedINR(t.net, 0)}</td>
           </tr>
         `).join('') || '<tr><td colspan="9" class="py-6 text-center text-on-surface-variant">No trades match your filter.</td></tr>';
+      }
+
+      function renderMonthlyChart(trades) {
+        const chartEl = document.getElementById('bt-monthly-chart');
+        const sumEl = document.getElementById('bt-monthly-summary');
+        if (!chartEl) return;
+        const mMap = {};
+        trades.forEach(t => {
+          const ym = String(t.date || '').slice(0, 7);
+          if (!ym) return;
+          if (!mMap[ym]) mMap[ym] = { n: 0, w: 0, net: 0 };
+          mMap[ym].n += 1;
+          if (t.net > 0) mMap[ym].w += 1;
+          mMap[ym].net += t.net;
+        });
+        const keys = Object.keys(mMap).sort();
+        if (!keys.length) {
+          chartEl.innerHTML = '<div class="text-on-surface-variant font-body-sm text-center py-8">No monthly data for current filter.</div>';
+          if (sumEl) sumEl.textContent = '--';
+          return;
+        }
+        const mNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+        const greenCount = keys.filter(k => mMap[k].net >= 0).length;
+        if (sumEl) {
+          sumEl.textContent = `${greenCount}/${keys.length} PROFITABLE MONTHS`;
+          sumEl.className = `font-data-mono-sm font-bold ${greenCount >= keys.length / 2 ? 'text-profit' : 'text-loss'}`;
+        }
+        const vals = keys.map(k => mMap[k].net);
+        const maxAbs = Math.max(1, ...vals.map(Math.abs));
+        const W = Math.max(540, keys.length * 76);
+        const H = 200;
+        const padTop = 28, padBot = 36, zeroY = Math.round(padTop + (H - padTop - padBot) * 0.56);
+        const maxUp = zeroY - padTop;
+        const maxDn = (H - padBot) - zeroY;
+        const slotW = W / keys.length;
+        const barW = Math.min(44, Math.max(20, Math.round(slotW * 0.54)));
+
+        const barsSvg = keys.map((ym, i) => {
+          const d = mMap[ym];
+          const [yr, mo] = ym.split('-');
+          const lbl = `${mNames[Math.max(0, Number(mo) - 1)] || mo} '${(yr || '').slice(-2)}`;
+          const cx = Math.round(i * slotW + slotW / 2);
+          const x = Math.round(cx - barW / 2);
+          const isPos = d.net >= 0;
+          const h = Math.max(4, Math.round((Math.abs(d.net) / maxAbs) * (isPos ? maxUp : maxDn)));
+          const y = isPos ? (zeroY - h) : zeroY;
+          const fill = isPos ? '#10b981' : '#ef4444';
+          const shortVal = (isPos ? '+' : '-') + '₹' + (Math.abs(d.net) >= 1000 ? (Math.abs(d.net) / 1000).toFixed(1) + 'k' : Math.round(Math.abs(d.net)));
+          const valY = isPos ? Math.max(13, y - 6) : Math.min(H - 18, y + h + 13);
+          const wr = d.n ? Math.round((d.w / d.n) * 100) : 0;
+          const tip = `${lbl}: ${A.fmtSignedINR(d.net, 0)} (${d.n} trades, ${wr}% WR)`;
+          return `<g>
+            <title>${esc(tip)}</title>
+            <rect x="${x}" y="${y}" width="${barW}" height="${h}" rx="4" fill="${fill}" opacity="0.9"/>
+            <text x="${cx}" y="${valY}" text-anchor="middle" font-size="10" font-family="JetBrains Mono, monospace" font-weight="700" fill="${fill}">${shortVal}</text>
+            <text x="${cx}" y="${H - 6}" text-anchor="middle" font-size="10" font-family="JetBrains Mono, monospace" fill="#94a3b8">${lbl}</text>
+          </g>`;
+        }).join('');
+
+        chartEl.innerHTML = `<svg viewBox="0 0 ${W} ${H}" class="w-full h-[200px]" preserveAspectRatio="xMidYMid meet">
+          <line x1="0" y1="${zeroY}" x2="${W}" y2="${zeroY}" stroke="#475569" stroke-dasharray="3 3" stroke-width="1"/>
+          ${barsSvg}
+        </svg>`;
       }
 
       document.querySelectorAll('.bt-horizon').forEach(b => b.addEventListener('click', () => {

@@ -656,6 +656,14 @@
                 <div id="bt-index-breakdown" class="space-y-2 font-data-mono-sm text-data-mono-sm"></div>
               </div>
             </div>
+
+            <div class="bg-surface-container rounded-lg p-space-md space-y-2">
+              <div class="flex items-center justify-between">
+                <span class="font-label-caps text-label-caps text-on-surface-variant uppercase">MONTHLY NET P&amp;L CHART</span>
+                <span id="bt-monthly-summary" class="font-data-mono-sm text-data-mono-sm text-profit font-bold">--</span>
+              </div>
+              <div id="bt-monthly-chart" class="w-full min-h-[190px] rounded-lg bg-surface-container-lowest/60 p-2 overflow-x-auto"></div>
+            </div>
           </div>
 
           <!-- Execution Parameters & Daily IST Timeline -->
@@ -1565,6 +1573,67 @@
             <span class="font-bold ${v.net >= 0 ? 'text-profit' : 'text-loss'}">${A.fmtSignedINR(v.net, 0)}</span>
           </div>`;
         }).join('') || '<div class="text-on-surface-variant">No backtest data available.</div>';
+
+        // Monthly Net P&L Bar Chart
+        const mChartEl = document.getElementById('bt-monthly-chart');
+        const mSumEl = document.getElementById('bt-monthly-summary');
+        if (mChartEl) {
+          const mMap = {};
+          trades.forEach(t => {
+            const ym = String(t.date || '').slice(0, 7);
+            if (!ym) return;
+            if (!mMap[ym]) mMap[ym] = { n: 0, w: 0, net: 0 };
+            const p = Number(t.net ?? t.pnl ?? 0);
+            mMap[ym].n += 1;
+            if (p > 0) mMap[ym].w += 1;
+            mMap[ym].net += p;
+          });
+          const keys = Object.keys(mMap).sort();
+          if (!keys.length) {
+            mChartEl.innerHTML = '<div class="text-on-surface-variant font-body-sm text-center py-6">No monthly data available.</div>';
+            if (mSumEl) mSumEl.textContent = '--';
+          } else {
+            const mNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+            const greenCount = keys.filter(k => mMap[k].net >= 0).length;
+            if (mSumEl) {
+              mSumEl.textContent = `${greenCount}/${keys.length} PROFITABLE MONTHS`;
+              mSumEl.className = `font-data-mono-sm text-data-mono-sm font-bold ${greenCount >= keys.length / 2 ? 'text-profit' : 'text-loss'}`;
+            }
+            const vals = keys.map(k => mMap[k].net);
+            const maxAbsM = Math.max(1, ...vals.map(Math.abs));
+            const W = Math.max(520, keys.length * 74);
+            const H = 190;
+            const padTop = 26, padBot = 34, zeroY = Math.round(padTop + (H - padTop - padBot) * 0.56);
+            const maxUp = zeroY - padTop;
+            const maxDn = (H - padBot) - zeroY;
+            const slotW = W / keys.length;
+            const barW = Math.min(42, Math.max(18, Math.round(slotW * 0.54)));
+            const barsSvg = keys.map((ym, i) => {
+              const d = mMap[ym];
+              const [yr, mo] = ym.split('-');
+              const lbl = `${mNames[Math.max(0, Number(mo) - 1)] || mo} '${(yr || '').slice(-2)}`;
+              const cx = Math.round(i * slotW + slotW / 2);
+              const x = Math.round(cx - barW / 2);
+              const isPos = d.net >= 0;
+              const h = Math.max(4, Math.round((Math.abs(d.net) / maxAbsM) * (isPos ? maxUp : maxDn)));
+              const y = isPos ? (zeroY - h) : zeroY;
+              const fill = isPos ? '#10b981' : '#ef4444';
+              const shortVal = (isPos ? '+' : '-') + '₹' + (Math.abs(d.net) >= 1000 ? (Math.abs(d.net) / 1000).toFixed(1) + 'k' : Math.round(Math.abs(d.net)));
+              const valY = isPos ? Math.max(13, y - 5) : Math.min(H - 17, y + h + 12);
+              const wrM = d.n ? Math.round((d.w / d.n) * 100) : 0;
+              return `<g>
+                <title>${esc(`${lbl}: ${A.fmtSignedINR(d.net, 0)} (${d.n} trades, ${wrM}% WR)`)}</title>
+                <rect x="${x}" y="${y}" width="${barW}" height="${h}" rx="4" fill="${fill}" opacity="0.9"/>
+                <text x="${cx}" y="${valY}" text-anchor="middle" font-size="10" font-family="JetBrains Mono, monospace" font-weight="700" fill="${fill}">${shortVal}</text>
+                <text x="${cx}" y="${H - 5}" text-anchor="middle" font-size="10" font-family="JetBrains Mono, monospace" fill="#94a3b8">${lbl}</text>
+              </g>`;
+            }).join('');
+            mChartEl.innerHTML = `<svg viewBox="0 0 ${W} ${H}" class="w-full h-[190px]" preserveAspectRatio="xMidYMid meet">
+              <line x1="0" y1="${zeroY}" x2="${W}" y2="${zeroY}" stroke="#475569" stroke-dasharray="3 3" stroke-width="1"/>
+              ${barsSvg}
+            </svg>`;
+          }
+        }
       }
 
       document.querySelectorAll('.bt-horizon').forEach(b => b.addEventListener('click', () => {

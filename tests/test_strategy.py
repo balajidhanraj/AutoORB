@@ -513,8 +513,8 @@ def test_hybrid_nifty_optA_and_banknifty_optH_pyramiding(tmp_path: Path) -> None
     assert rm.can_take_new_trade("BANKNIFTY") is False  # Max 2/day reached for BANKNIFTY
 
 
-def test_bnf_only_15m_max4_be_pyramid_defaults(tmp_path: Path) -> None:
-    """Verify production defaults: BANKNIFTY-ONLY, 15m ORB (09:35-12:30), Max 4/day BE-Locked Pyramid."""
+def test_bnf_only_30m_max4_be_pyramid_defaults(tmp_path: Path) -> None:
+    """Verify production defaults: BANKNIFTY-ONLY, 30m ORB (10:00-13:15), Fixed 45pt SL, Max 4/day BE-Locked Pyramid."""
     prod_settings = AppSettings(
         mode="PAPER",
         token_file_path=str(tmp_path / "daily_token.json"),
@@ -523,11 +523,11 @@ def test_bnf_only_15m_max4_be_pyramid_defaults(tmp_path: Path) -> None:
     )
     assert prod_settings.enable_nifty_trading is False
     assert prod_settings.max_trades_per_day == 4
-    assert prod_settings.orb_window_minutes == 15
-    assert prod_settings.entry_start_time == time(9, 35, 0)
-    assert prod_settings.entry_cutoff_time == time(12, 30, 0)
-    assert prod_settings.require_vwap_slope is True
-    assert prod_settings.dynamic_sl_pct == 0.15
+    assert prod_settings.orb_window_minutes == 30
+    assert prod_settings.entry_start_time == time(10, 0, 0)
+    assert prod_settings.entry_cutoff_time == time(13, 15, 0)
+    assert prod_settings.require_vwap_slope is False
+    assert prod_settings.dynamic_sl_pct == 0.0
 
     client = ShoonyaClient(prod_settings)
     mapper = InstrumentMapper(client)
