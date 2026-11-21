@@ -349,7 +349,7 @@ def test_mobile_sync_output() -> None:
     assert "./static/api_client.js?v=13" in content
     assert "./static/icon-192.png" in content
     assert (out_html.parent / "app" / "index.html").exists()
-    assert '<meta name="autoorb-api-base" content="https://' in content
+    assert '<meta name="autoorb-api-base" content="http' in content
     assert "yourdomain.com" not in content
     assert 'href="/static/' not in content
     assert 'src="/static/' not in content

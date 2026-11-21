@@ -13,7 +13,7 @@
     }
   }
 
-  const FALLBACK_CLOUD_API_BASE = 'https://autoorb-xeha.onrender.com';
+  const FALLBACK_CLOUD_API_BASE = 'http://35.209.175.6';
   const FALLBACK_LOCAL_API_BASE = 'http://192.168.0.109:8000';
 
   function isPlaceholderUrl(url) {
