@@ -66,6 +66,7 @@ class ActivePosition:
     unrealized_pnl: float = 0.0
     trail_steps_applied: int = 0
     product_type: str = "M"
+    position_key: str = ""
 
 
 @dataclass
@@ -108,12 +109,14 @@ class RiskManager:
         self.positions: Dict[str, ActivePosition] = {}
         self.completed_trades: List[TradeRecord] = []
         self.trades_taken_today: int = 0
+        self.trades_taken_by_index: Dict[str, int] = {}
         self.realized_pnl_today: float = 0.0
         self.halted: bool = False
         self.halt_reason: Optional[str] = None
         self.custom_lots: Dict[str, int] = {}
         self.custom_product_types: Dict[str, str] = {}
         self.custom_max_daily_loss: Optional[float] = None
+        self._default_max_daily_loss: float = float(settings.max_daily_loss or 10000.0)
         self.weekly_losses: Dict[Tuple[int, int], int] = {}
 
     def load_backtest_trades(self, limit: int = 50) -> None:
@@ -171,7 +174,8 @@ class RiskManager:
         nf_lots = self.custom_lots.get("NIFTY") or self.calculate_dynamic_lots("NIFTY", trade_time=now)
         bnf_lots = self.custom_lots.get("BANKNIFTY") or self.calculate_dynamic_lots("BANKNIFTY", trade_time=now)
         active_lots = max(1, int(nf_lots), int(bnf_lots))
-        limit = float(active_lots * 2500.0)
+        base_limit = float(self.settings.max_daily_loss or 10000.0)
+        limit = max(base_limit, float(active_lots * 2500.0))
         self.settings.max_daily_loss = limit
         return limit
 
@@ -180,6 +184,7 @@ class RiskManager:
         with self._lock:
             if amount is None or float(amount) <= 0:
                 self.custom_max_daily_loss = None
+                self.settings.max_daily_loss = self._default_max_daily_loss
                 auto_limit = self.get_dynamic_max_daily_loss()
                 msg = f"Daily Max Loss Guardrail restored to AUTO (₹{auto_limit:,.0f})."
                 logger.info(msg)
@@ -204,11 +209,13 @@ class RiskManager:
                 self.halted = False
                 self.halt_reason = None
                 self.trades_taken_today = 0
+                self.trades_taken_by_index.clear()
                 self.realized_pnl_today = 0.0
                 self.weekly_losses[cal_week] = 0
                 msg = "All system halts cleared: Daily orders (0), Weekly loss guard (0), and Daily MTM loss (₹0) reset."
             elif norm in {"daily_orders", "orders", "trades"}:
                 self.trades_taken_today = 0
+                self.trades_taken_by_index.clear()
                 self.halted = False
                 self.halt_reason = None
                 msg = "Daily order counter reset to 0 and system halt cleared."
@@ -297,10 +304,24 @@ class RiskManager:
         with self._lock:
             if self.halted:
                 return False
-            if self.trades_taken_today >= self.settings.max_trades_per_day:
+            idx_count = self.trades_taken_by_index.get(index_name, 0)
+            if idx_count >= self.settings.max_trades_per_day:
                 return False
-            if index_name in self.positions:
-                return False
+            active_for_idx = [p for p in self.positions.values() if p.index_name == index_name]
+            if active_for_idx:
+                # Option A (NIFTY): strict sequential no-overlap.
+                # Option H (BANKNIFTY): allow 2nd leg ONLY if Leg #1 is already risk-free at Breakeven/Trailing.
+                allow_bnf_pyramid = (
+                    index_name == "BANKNIFTY"
+                    and getattr(self.settings, "banknifty_be_pyramiding", True)
+                )
+                if not allow_bnf_pyramid or len(active_for_idx) >= 2:
+                    return False
+                if active_for_idx[0].state not in {
+                    PositionState.OPEN_FULL_BREAKEVEN,
+                    PositionState.OPEN_PARTIAL_TRAILING,
+                }:
+                    return False
             max_w_losses = getattr(self.settings, "max_weekly_losses", 0)
             if max_w_losses > 0:
                 now_dt = check_time or datetime.now(IST)
@@ -460,11 +481,16 @@ class RiskManager:
                 last_ltp=float(ltp),
                 highest_ltp=float(ltp),
                 product_type=prd_type,
+                position_key=(
+                    signal.index_name
+                    if signal.index_name not in self.positions
+                    else f"{signal.index_name}#2"
+                ),
             )
-            self.positions[signal.index_name] = pos
+            self.positions[pos.position_key] = pos
             logger.info(
                 "Entry order submitted: %s %s qty=%d LMT=%.2f (order=%s)",
-                signal.index_name,
+                pos.position_key,
                 contract.tradingsymbol,
                 qty,
                 limit_px,
@@ -473,7 +499,7 @@ class RiskManager:
 
             # Check immediate fill (standard in PAPER mode when limit >= LTP)
             self._check_entry_fill_locked(pos)
-            return self.positions.get(signal.index_name)
+            return self.positions.get(pos.position_key)
 
     def _check_entry_fill_locked(self, pos: ActivePosition) -> None:
         if pos.state != PositionState.ENTERING:
@@ -489,6 +515,7 @@ class RiskManager:
             pos.highest_ltp = max(pos.last_ltp, pos.entry_avg_price)
             pos.state = PositionState.OPEN_FULL
             self.trades_taken_today += 1
+            self.trades_taken_by_index[pos.index_name] = self.trades_taken_by_index.get(pos.index_name, 0) + 1
             self._place_initial_sl_locked(pos)
             msg = (
                 f"[{self.settings.mode}] ENTRY FILLED {pos.contract.tradingsymbol} "
@@ -499,7 +526,7 @@ class RiskManager:
                 self.notifier.send_async(msg)
         elif status in {"REJECTED", "CANCELED"}:
             logger.warning("Entry order %s ended in status %s; resetting FLAT", pos.entry_order_id, status)
-            self.positions.pop(pos.index_name, None)
+            self.positions.pop(pos.position_key or pos.index_name, None)
 
     def _place_initial_sl_locked(self, pos: ActivePosition) -> None:
         spec = INDEX_SPECS[pos.index_name]
@@ -567,53 +594,60 @@ class RiskManager:
     def on_option_tick(self, index_name: str, ltp: float) -> None:
         """Update live MTM, detect SL fills, and drive Breakeven -> Target 1 -> Step Trailing."""
         with self._lock:
-            pos = self.positions.get(index_name)
-            if pos is None:
+            matching = [
+                p for k, p in list(self.positions.items())
+                if k == index_name or p.index_name == index_name
+            ]
+            if not matching:
+                return
+            for pos in matching:
+                self._process_position_tick_locked(pos, float(ltp))
+
+    def _process_position_tick_locked(self, pos: ActivePosition, ltp: float) -> None:
+        index_name = pos.index_name
+        pos.last_ltp = float(ltp)
+        pos.highest_ltp = max(pos.highest_ltp, float(ltp))
+
+        if pos.state == PositionState.ENTERING:
+            self._check_entry_fill_locked(pos)
+            return
+
+        # Check if SL-LMT order executed
+        if pos.sl_order_id:
+            sl_status = self.client.get_order_status(pos.sl_order_id)
+            if sl_status and str(sl_status.get("status", "")).upper() == "COMPLETE":
+                exit_px = float(sl_status.get("avgprc") or pos.sl_trigger_price)
+                reason = "TRAILING_SL" if pos.state == PositionState.OPEN_PARTIAL_TRAILING else (
+                    "BREAKEVEN_SL" if pos.state == PositionState.OPEN_FULL_BREAKEVEN else "INITIAL_SL"
+                )
+                self._close_position_record_locked(pos, exit_px, reason)
                 return
 
-            pos.last_ltp = float(ltp)
-            pos.highest_ltp = max(pos.highest_ltp, float(ltp))
+        if pos.state not in {
+            PositionState.OPEN_FULL,
+            PositionState.OPEN_FULL_BREAKEVEN,
+            PositionState.OPEN_PARTIAL_TRAILING,
+        }:
+            return
 
-            if pos.state == PositionState.ENTERING:
-                self._check_entry_fill_locked(pos)
-                return
+        pos.unrealized_pnl = round((ltp - pos.entry_avg_price) * pos.remaining_qty, 2)
+        spec = INDEX_SPECS[index_name]
+        gain = ltp - pos.entry_avg_price
 
-            # Check if SL-LMT order executed
-            if pos.sl_order_id:
-                sl_status = self.client.get_order_status(pos.sl_order_id)
-                if sl_status and str(sl_status.get("status", "")).upper() == "COMPLETE":
-                    exit_px = float(sl_status.get("avgprc") or pos.sl_trigger_price)
-                    reason = "TRAILING_SL" if pos.state == PositionState.OPEN_PARTIAL_TRAILING else (
-                        "BREAKEVEN_SL" if pos.state == PositionState.OPEN_FULL_BREAKEVEN else "INITIAL_SL"
-                    )
-                    self._close_position_record_locked(pos, exit_px, reason)
-                    return
+        # 1. Target 1 (+40 Nifty / +80 BNF): reduce SL-LMT qty to 50%, exit 50% via LMT
+        if gain >= spec.target1_pts and pos.state in {
+            PositionState.OPEN_FULL,
+            PositionState.OPEN_FULL_BREAKEVEN,
+        }:
+            self._execute_partial_target1_locked(pos, ltp, spec)
 
-            if pos.state not in {
-                PositionState.OPEN_FULL,
-                PositionState.OPEN_FULL_BREAKEVEN,
-                PositionState.OPEN_PARTIAL_TRAILING,
-            }:
-                return
+        # 2. Breakeven (+20 Nifty / +45 BNF): move SL to cost (Entry_Avg_Price)
+        elif gain >= spec.breakeven_trigger_pts and pos.state == PositionState.OPEN_FULL:
+            self._move_sl_to_breakeven_locked(pos, spec)
 
-            pos.unrealized_pnl = round((ltp - pos.entry_avg_price) * pos.remaining_qty, 2)
-            spec = INDEX_SPECS[index_name]
-            gain = ltp - pos.entry_avg_price
-
-            # 1. Target 1 (+30 Nifty / +65 BNF): reduce SL-LMT qty to 50%, exit 50% via LMT
-            if gain >= spec.target1_pts and pos.state in {
-                PositionState.OPEN_FULL,
-                PositionState.OPEN_FULL_BREAKEVEN,
-            }:
-                self._execute_partial_target1_locked(pos, ltp, spec)
-
-            # 2. Breakeven (+25 Nifty / +55 BNF): move SL to cost (Entry_Avg_Price)
-            elif gain >= spec.breakeven_trigger_pts and pos.state == PositionState.OPEN_FULL:
-                self._move_sl_to_breakeven_locked(pos, spec)
-
-            # 3. Step Trailing on remaining 50% after Target 1
-            if pos.state == PositionState.OPEN_PARTIAL_TRAILING:
-                self._apply_step_trailing_locked(pos, ltp, spec)
+        # 3. Step Trailing on remaining 50% after Target 1
+        if pos.state == PositionState.OPEN_PARTIAL_TRAILING:
+            self._apply_step_trailing_locked(pos, ltp, spec)
 
     def _move_sl_to_breakeven_locked(self, pos: ActivePosition, spec: IndexSpec) -> None:
         new_trig = round(pos.entry_avg_price, 1)
@@ -758,7 +792,7 @@ class RiskManager:
             mode=self.settings.mode,
         )
         self.completed_trades.append(record)
-        self.positions.pop(pos.index_name, None)
+        self.positions.pop(pos.position_key or pos.index_name, None)
 
         # Track weekly losses for Weekly Circuit Breaker
         if net_pnl < 0:
@@ -814,7 +848,7 @@ class RiskManager:
         """Cancel working SL order and execute market exit for remaining quantity."""
         if pos.state == PositionState.ENTERING:
             self.client.cancel_order(pos.entry_order_id)
-            self.positions.pop(pos.index_name, None)
+            self.positions.pop(pos.position_key or pos.index_name, None)
             return
 
         if pos.sl_order_id:
@@ -850,13 +884,17 @@ class RiskManager:
     _exit_position_market = _exit_position_locked
 
     def exit_position(self, index_name: str, reason: str = "MANUAL_EXIT") -> bool:
-        """Exit an active position for a specific index or commodity."""
+        """Exit active position(s) for a specific index or position key."""
         with self._lock:
-            pos = self.positions.get(index_name)
-            if pos is None:
+            matching = [
+                p for k, p in list(self.positions.items())
+                if k == index_name or p.index_name == index_name
+            ]
+            if not matching:
                 return False
-            self._exit_position_locked(pos, reason)
-            logger.info("Manually exited position for %s (%s)", index_name, reason)
+            for pos in matching:
+                self._exit_position_locked(pos, reason)
+            logger.info("Manually exited %d position(s) for %s (%s)", len(matching), index_name, reason)
             return True
 
     def modify_position_sl(self, index_name: str, new_sl_price: float) -> Tuple[bool, str]:
@@ -995,6 +1033,7 @@ class RiskManager:
         """Reset daily trades count and clear halt flag for live trigger testing."""
         with self._lock:
             self.trades_taken_today = 0
+            self.trades_taken_by_index.clear()
             self.halted = False
             self.halt_reason = None
             logger.info("Risk manager trades counter reset to 0; halt cleared.")
@@ -1004,6 +1043,7 @@ class RiskManager:
             self.positions.clear()
             self.completed_trades.clear()
             self.trades_taken_today = 0
+            self.trades_taken_by_index.clear()
             self.realized_pnl_today = 0.0
             self.halted = False
             self.halt_reason = None

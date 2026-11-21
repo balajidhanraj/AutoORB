@@ -1,4 +1,11 @@
-"""Fetch 5-minute historical spot candles from Shoonya and run the Master Alpha ORB backtest."""
+"""Fetch 5-minute historical spot candles from Shoonya and run the Hybrid Live-Parity Master Alpha ORB backtest.
+
+Hybrid Strategy (matches live RiskManager & ORBStrategy 1-to-1):
+  - NIFTY     (Option A): Max 2 trades/day, strict sequential no-overlap, ORB + VWAP + RSI(14) + Daily Bias.
+  - BANKNIFTY (Option H): Max 2 trades/day, Breakeven-Locked Pyramiding (Leg #2 allowed while Leg #1 is alive
+                          ONLY after Leg #1 has already locked SL at Breakeven +45 pts) + 20-EMA + Body >= 0.40.
+  - Daily Risk Guardrail: Rs 10,000 shared daily max loss cap across both indices.
+"""
 
 from __future__ import annotations
 
@@ -17,6 +24,7 @@ sys.path.insert(0, str(ROOT_DIR))
 from broker.auth import ShoonyaAuthenticator
 from broker.shoonya_client import ShoonyaClient
 from config.settings import INDEX_SPECS, IST, IndexSpec, load_settings
+from engine.indicators import calculate_ema
 from scripts.backtest_orb import (
     Candle,
     calculate_intraday_vwap,
@@ -133,205 +141,327 @@ def load_candles_from_cache(index_name: str) -> List[Candle]:
     raise FileNotFoundError(f"No historical cache found for {index_name}; run with --fetch")
 
 
-def run_master_alpha_backtest(
+def _simulate_single_trade_exit(
     index_name: str,
-    candles: List[Candle],
+    spec: IndexSpec,
+    sig_type: str,
+    entry_candle: Candle,
+    day_candles: List[Candle],
+    total_qty: int,
+    p0: float,
+    delta: float = 0.58,
+    exit_slippage: float = 1.0,
+) -> Dict[str, Any]:
+    """Simulate intraday SL / Breakeven / Target-1 partial exit / 15:15 EOD square-off with milestone timestamps."""
+    entry_spot = entry_candle.close
+    sl_price = max(1.0, p0 - spec.sl_pts)
+    be_ts: Optional[datetime] = None
+    t1_ts: Optional[datetime] = None
+    partial_pnl = 0.0
+    remaining_qty = total_qty
+
+    exit_ts = entry_candle.timestamp
+    exit_time_str = "15:15"
+    exit_px = p0
+    exit_reason = "EOD_SQUAREOFF"
+
+    subsequent = [c for c in day_candles if c.timestamp > entry_candle.timestamp]
+    for bar in subsequent:
+        b_time = bar.timestamp.time()
+        spot_move = (bar.high - entry_spot) if sig_type == "CE" else (entry_spot - bar.low)
+        spot_worst = (bar.low - entry_spot) if sig_type == "CE" else (entry_spot - bar.high)
+
+        approx_opt_high = p0 + (spot_move * delta)
+        approx_opt_low = max(0.5, p0 + (spot_worst * delta))
+        approx_opt_close = max(
+            0.5,
+            p0 + (((bar.close - entry_spot) if sig_type == "CE" else (entry_spot - bar.close)) * delta),
+        )
+
+        fav_pts = approx_opt_high - p0
+
+        if approx_opt_low <= sl_price:
+            exit_px = max(0.5, sl_price - exit_slippage)
+            exit_ts = bar.timestamp
+            exit_time_str = bar.timestamp.strftime("%H:%M")
+            exit_reason = "BREAKEVEN_SL" if be_ts is not None else "STOP_LOSS"
+            break
+
+        if t1_ts is None and fav_pts >= spec.target1_pts:
+            t1_ts = bar.timestamp
+            if be_ts is None:
+                be_ts = bar.timestamp
+            sl_price = p0
+            booked_qty = total_qty // 2
+            partial_pnl = booked_qty * spec.target1_pts
+            remaining_qty = total_qty - booked_qty
+
+        if be_ts is None and fav_pts >= spec.breakeven_trigger_pts:
+            be_ts = bar.timestamp
+            sl_price = p0
+
+        if b_time >= time(15, 15):
+            exit_px = approx_opt_close
+            exit_ts = bar.timestamp
+            exit_time_str = bar.timestamp.strftime("%H:%M")
+            exit_reason = "EOD_SQUAREOFF"
+            break
+    else:
+        if subsequent:
+            last_bar = subsequent[-1]
+            exit_ts = last_bar.timestamp
+            exit_time_str = last_bar.timestamp.strftime("%H:%M")
+            exit_px = max(
+                0.5,
+                p0 + (((last_bar.close - entry_spot) if sig_type == "CE" else (entry_spot - last_bar.close)) * delta),
+            )
+
+    pts_gain = exit_px - p0
+    total_gross = partial_pnl + (remaining_qty * pts_gain)
+    buy_turnover = total_qty * p0
+    sell_turnover = total_qty * exit_px
+    charges = calculate_transaction_charges(buy_turnover, sell_turnover)
+    net_pnl = round(total_gross - charges, 2)
+
+    return {
+        "exit_ts": exit_ts,
+        "be_ts": be_ts,
+        "t1_ts": t1_ts,
+        "exit_time_str": exit_time_str,
+        "exit_px": round(exit_px, 2),
+        "pts": round(pts_gain, 2),
+        "gross": round(total_gross, 2),
+        "charges": round(charges, 2),
+        "net": net_pnl,
+        "reason": exit_reason,
+        "be": be_ts is not None,
+        "partial": t1_ts is not None,
+    }
+
+
+def run_hybrid_live_parity_backtest(
+    candles_by_index: Dict[str, List[Candle]],
     start_date: Optional[date] = None,
     end_date: Optional[date] = None,
+    max_trades_per_index: int = 2,
+    daily_loss_limit: float = 10000.0,
 ) -> List[Dict[str, Any]]:
-    """Run Master Alpha 5-gate ORB + VWAP + Wilder RSI(14) backtest."""
-    spec: IndexSpec = INDEX_SPECS[index_name]
-    active_sl_pts = spec.sl_pts
-    active_be_pts = spec.breakeven_trigger_pts
-    active_t1_pts = spec.target1_pts
-    delta = 0.58
-    entry_slippage = 1.0
-    exit_slippage = 1.0
-    max_trades_per_day = 2
-    baseline_atm_premium = 125.0 if index_name == "NIFTY" else 260.0
+    """
+    Chronological Hybrid Live-Parity Backtest (zero lookahead):
+      - NIFTY     (Option A): Sequential no-overlap, max 2/day, ORB + VWAP + RSI(14) + Daily Bias.
+      - BANKNIFTY (Option H): BE-Locked Pyramiding (Leg #2 allowed while Leg #1 is open ONLY if be_ts <= ts),
+                              max 2/day, ORB + VWAP + RSI(14) + Daily Bias + 20-EMA + Body >= 0.40.
+      - Shared daily risk guardrail: Rs 10,000.
+    """
+    indices = ("NIFTY", "BANKNIFTY")
+    days_by_idx: Dict[str, Dict[date, List[Candle]]] = {idx: {} for idx in indices}
+    all_dates_set = set()
+    for idx in indices:
+        for c in candles_by_index.get(idx, []):
+            d = c.timestamp.date()
+            days_by_idx[idx].setdefault(d, []).append(c)
+            all_dates_set.add(d)
 
-    days_map: Dict[date, List[Candle]] = {}
-    for c in candles:
-        days_map.setdefault(c.timestamp.date(), []).append(c)
-
-    sorted_dates = sorted(days_map.keys())
+    sorted_dates = sorted(all_dates_set)
+    seen_by_idx: Dict[str, List[Candle]] = {idx: [] for idx in indices}
+    prev_close_by_idx: Dict[str, Optional[float]] = {idx: None for idx in indices}
     trade_dicts: List[Dict[str, Any]] = []
-    all_seen_candles: List[Candle] = []
-    prev_day_close: Optional[float] = None
 
     for sess_date in sorted_dates:
-        day_candles = days_map[sess_date]
-        if len(day_candles) < 6:
-            all_seen_candles.extend(day_candles)
-            if day_candles:
-                prev_day_close = day_candles[-1].close
-            continue
-
-        # Warmup-only dates before start_date still feed RSI & prev_day_close
         in_window = (
             (start_date is None or sess_date >= start_date)
             and (end_date is None or sess_date <= end_date)
         )
         if not in_window:
-            all_seen_candles.extend(day_candles)
-            prev_day_close = day_candles[-1].close
+            for idx in indices:
+                dc = days_by_idx[idx].get(sess_date, [])
+                seen_by_idx[idx].extend(dc)
+                if dc:
+                    prev_close_by_idx[idx] = dc[-1].close
             continue
 
-        orb_candles = [c for c in day_candles if time(9, 15) <= c.timestamp.time() <= time(9, 40)]
-        if len(orb_candles) < 5:
-            all_seen_candles.extend(day_candles)
-            prev_day_close = day_candles[-1].close
-            continue
+        orb_info: Dict[str, Optional[Tuple[float, float]]] = {}
+        day_bars_by_idx_ts: Dict[str, Dict[datetime, Candle]] = {idx: {} for idx in indices}
+        all_timestamps_set = set()
 
-        orh = max(c.high for c in orb_candles)
-        orl = min(c.low for c in orb_candles)
-        range_pct = ((orh - orl) / orl) * 100.0 if orl > 0 else 999.0
+        for idx in indices:
+            dc = days_by_idx[idx].get(sess_date, [])
+            for c in dc:
+                day_bars_by_idx_ts[idx][c.timestamp] = c
+                all_timestamps_set.add(c.timestamp)
 
-        if range_pct < 0.20 or range_pct > 0.85:
-            all_seen_candles.extend(day_candles)
-            prev_day_close = day_candles[-1].close
-            continue
-
-        trades_today = 0
-        in_trade = False
-        day_lost = False
+            orb_candles = [c for c in dc if time(9, 15) <= c.timestamp.time() <= time(9, 40)]
+            if len(dc) < 6 or len(orb_candles) < 5:
+                orb_info[idx] = None
+                continue
+            orh = max(c.high for c in orb_candles)
+            orl = min(c.low for c in orb_candles)
+            range_pct = ((orh - orl) / orl) * 100.0 if orl > 0 else 999.0
+            if range_pct < 0.20 or range_pct > 0.85:
+                orb_info[idx] = None
+            else:
+                orb_info[idx] = (orh, orl)
 
         is_tuesday = sess_date.weekday() == 1
         day_lots = 3 if is_tuesday else 2
-        total_qty = spec.lot_size * day_lots
 
-        for candle in day_candles:
-            all_seen_candles.append(candle)
-            c_time = candle.timestamp.time()
+        idx_cnt = {idx: 0 for idx in indices}
+        idx_sl_hit = {idx: False for idx in indices}
+        idx_open: Dict[str, List[Dict[str, Any]]] = {idx: [] for idx in indices}
+        pending_exits: List[Tuple[datetime, str, float, str]] = []
+        realized_pnl_today = 0.0
+        day_halted = False
 
-            if c_time < time(10, 0) or c_time > time(13, 15):
-                continue
+        for ts in sorted(all_timestamps_set):
+            still_open: List[Tuple[datetime, str, float, str]] = []
+            for ex_ts, ex_idx, ex_net, ex_reason in pending_exits:
+                if ex_ts <= ts:
+                    realized_pnl_today += ex_net
+                    if ex_reason == "STOP_LOSS":
+                        idx_sl_hit[ex_idx] = True
+                    if realized_pnl_today <= -daily_loss_limit:
+                        day_halted = True
+                else:
+                    still_open.append((ex_ts, ex_idx, ex_net, ex_reason))
+            pending_exits = still_open
 
-            if in_trade or trades_today >= max_trades_per_day or day_lost:
-                continue
+            for idx in indices:
+                candle = day_bars_by_idx_ts[idx].get(ts)
+                if candle is None:
+                    continue
+                seen_by_idx[idx].append(candle)
+                idx_open[idx] = [o for o in idx_open[idx] if o["exit_ts"] >= ts]
 
-            day_so_far = [c for c in day_candles if c.timestamp <= candle.timestamp]
-            vwap = calculate_intraday_vwap(day_so_far, session_date=sess_date)
-            rsi = calculate_wilder_rsi([c.close for c in all_seen_candles[-120:]], period=14)
+                c_time = candle.timestamp.time()
+                if c_time < time(10, 0) or c_time > time(13, 15):
+                    continue
 
-            trend_ce_ok = prev_day_close is None or candle.close >= prev_day_close
-            trend_pe_ok = prev_day_close is None or candle.close <= prev_day_close
+                if day_halted or idx_cnt[idx] >= max_trades_per_index or idx_sl_hit[idx]:
+                    continue
 
-            ce_signal = (
-                (candle.close > orh)
-                and (vwap is None or candle.close > vwap)
-                and (rsi is not None and rsi > 60.0)
-                and trend_ce_ok
-            )
-            pe_signal = (
-                (candle.close < orl)
-                and (vwap is None or candle.close < vwap)
-                and (rsi is not None and rsi < 40.0)
-                and trend_pe_ok
-            )
+                # Overlap / Pyramiding Rule:
+                # - NIFTY (Option A): strictly sequential no-overlap.
+                # - BANKNIFTY (Option H): allow Leg #2 only after Leg #1 has locked Breakeven (be_ts <= ts).
+                if idx_open[idx]:
+                    if idx == "NIFTY":
+                        continue
+                    first_leg = idx_open[idx][0]
+                    if first_leg["be_ts"] is None or first_leg["be_ts"] > ts:
+                        continue
 
-            if not ce_signal and not pe_signal:
-                continue
+                bounds = orb_info.get(idx)
+                if bounds is None:
+                    continue
+                orh, orl = bounds
 
-            sig_type = "CE" if ce_signal else "PE"
-            entry_spot = candle.close
-            entry_time_str = candle.timestamp.strftime("%H:%M")
-            atm_strike = int(round(entry_spot / spec.strike_step) * spec.strike_step)
-            p0 = baseline_atm_premium + entry_slippage
+                dc = days_by_idx[idx][sess_date]
+                day_so_far = [c for c in dc if c.timestamp <= candle.timestamp]
+                vwap = calculate_intraday_vwap(day_so_far, session_date=sess_date)
+                closes_win = [c.close for c in seen_by_idx[idx][-120:]]
+                rsi = calculate_wilder_rsi(closes_win, period=14)
+                prev_c = prev_close_by_idx[idx]
 
-            trades_today += 1
-            in_trade = True
-            sl_price = max(1.0, p0 - active_sl_pts)
-            breakeven_reached = False
-            partial_booked = False
-            partial_pnl = 0.0
-            remaining_qty = total_qty
+                trend_ce_ok = prev_c is None or candle.close >= prev_c
+                trend_pe_ok = prev_c is None or candle.close <= prev_c
 
-            exit_time_str = "15:15"
-            exit_px = p0
-            exit_reason = "EOD_SQUAREOFF"
-            max_fav_pts = 0.0
-
-            subsequent = [c for c in day_candles if c.timestamp > candle.timestamp]
-            for bar in subsequent:
-                b_time = bar.timestamp.time()
-                spot_move = (bar.high - entry_spot) if sig_type == "CE" else (entry_spot - bar.low)
-                spot_worst = (bar.low - entry_spot) if sig_type == "CE" else (entry_spot - bar.high)
-
-                approx_opt_high = p0 + (spot_move * delta)
-                approx_opt_low = max(0.5, p0 + (spot_worst * delta))
-                approx_opt_close = max(
-                    0.5,
-                    p0 + (((bar.close - entry_spot) if sig_type == "CE" else (entry_spot - bar.close)) * delta),
+                ce_signal = (
+                    (candle.close > orh)
+                    and (vwap is None or candle.close > vwap)
+                    and (rsi is not None and rsi > 60.0)
+                    and trend_ce_ok
+                )
+                pe_signal = (
+                    (candle.close < orl)
+                    and (vwap is None or candle.close < vwap)
+                    and (rsi is not None and rsi < 40.0)
+                    and trend_pe_ok
                 )
 
-                fav_pts = approx_opt_high - p0
-                if fav_pts > max_fav_pts:
-                    max_fav_pts = fav_pts
+                # BANKNIFTY Option H institutional filters: 20-EMA + Candle Body >= 0.40
+                if idx == "BANKNIFTY" and (ce_signal or pe_signal):
+                    ema20 = calculate_ema(closes_win, period=20)
+                    if ema20 is not None:
+                        if ce_signal and candle.close <= ema20:
+                            ce_signal = False
+                        if pe_signal and candle.close >= ema20:
+                            pe_signal = False
+                    c_range = candle.high - candle.low
+                    c_body = abs(candle.close - candle.open)
+                    if c_range > 0 and (c_body / c_range) < 0.40:
+                        ce_signal = False
+                        pe_signal = False
 
-                if approx_opt_low <= sl_price:
-                    exit_px = max(0.5, sl_price - exit_slippage)
-                    exit_time_str = bar.timestamp.strftime("%H:%M")
-                    exit_reason = "BREAKEVEN_SL" if breakeven_reached else "STOP_LOSS"
-                    if exit_reason == "STOP_LOSS":
-                        day_lost = True
-                    break
+                if not ce_signal and not pe_signal:
+                    continue
 
-                if not partial_booked and fav_pts >= active_t1_pts:
-                    partial_booked = True
-                    breakeven_reached = True
-                    sl_price = p0
-                    t1_exit_px = p0 + active_t1_pts
-                    booked_qty = total_qty // 2
-                    partial_pnl = booked_qty * (t1_exit_px - p0)
-                    remaining_qty = total_qty - booked_qty
+                spec = INDEX_SPECS[idx]
+                sig_type = "CE" if ce_signal else "PE"
+                entry_spot = candle.close
+                atm_strike = int(round(entry_spot / spec.strike_step) * spec.strike_step)
+                baseline_atm_premium = 125.0 if idx == "NIFTY" else 260.0
+                p0 = baseline_atm_premium + 1.0
+                total_qty = spec.lot_size * day_lots
 
-                if not breakeven_reached and fav_pts >= active_be_pts:
-                    breakeven_reached = True
-                    sl_price = p0
+                res = _simulate_single_trade_exit(
+                    index_name=idx,
+                    spec=spec,
+                    sig_type=sig_type,
+                    entry_candle=candle,
+                    day_candles=dc,
+                    total_qty=total_qty,
+                    p0=p0,
+                )
 
-                if b_time >= time(15, 15):
-                    exit_px = approx_opt_close
-                    exit_time_str = "15:15"
-                    exit_reason = "EOD_SQUAREOFF"
-                    break
+                idx_cnt[idx] += 1
+                idx_open[idx].append(res)
+                pending_exits.append((res["exit_ts"], idx, res["net"], res["reason"]))
 
-            in_trade = False
-            pts_gain = exit_px - p0
-            total_gross = partial_pnl + (remaining_qty * pts_gain)
-            buy_turnover = total_qty * p0
-            sell_turnover = total_qty * exit_px
-            charges = calculate_transaction_charges(buy_turnover, sell_turnover)
-            net_pnl = round(total_gross - charges, 2)
+                trade_dicts.append(
+                    {
+                        "id": f"{idx}-{sess_date.strftime('%Y-%m-%d')}-{idx_cnt[idx]}",
+                        "date": sess_date.strftime("%Y-%m-%d"),
+                        "idx": idx,
+                        "side": sig_type,
+                        "strike": atm_strike,
+                        "tradingsymbol": f"{idx} {atm_strike} {sig_type}",
+                        "qty": total_qty,
+                        "in_t": candle.timestamp.strftime("%H:%M"),
+                        "out_t": res["exit_time_str"],
+                        "in_px": p0,
+                        "out_px": res["exit_px"],
+                        "pts": res["pts"],
+                        "gross": res["gross"],
+                        "charges": res["charges"],
+                        "net": res["net"],
+                        "reason": res["reason"],
+                        "be": res["be"],
+                        "partial": res["partial"],
+                        "mode": "BACKTEST",
+                    }
+                )
 
-            contract_symbol = f"{index_name} {atm_strike} {sig_type}"
-            trade_dicts.append(
-                {
-                    "id": f"{index_name}-{sess_date.strftime('%Y-%m-%d')}-{trades_today}",
-                    "date": sess_date.strftime("%Y-%m-%d"),
-                    "idx": index_name,
-                    "side": sig_type,
-                    "strike": atm_strike,
-                    "tradingsymbol": contract_symbol,
-                    "qty": total_qty,
-                    "in_t": entry_time_str,
-                    "out_t": exit_time_str,
-                    "in_px": p0,
-                    "out_px": round(exit_px, 2),
-                    "pts": round(pts_gain, 2),
-                    "gross": round(total_gross, 2),
-                    "charges": round(charges, 2),
-                    "net": net_pnl,
-                    "reason": exit_reason,
-                    "be": breakeven_reached,
-                    "partial": partial_booked,
-                    "mode": "BACKTEST",
-                }
-            )
-
-        prev_day_close = day_candles[-1].close
+        for idx in indices:
+            dc = days_by_idx[idx].get(sess_date, [])
+            if dc:
+                prev_close_by_idx[idx] = dc[-1].close
 
     return trade_dicts
+
+
+def verify_hybrid_rules(trades: List[Dict[str, Any]], max_per_index: int = 2) -> None:
+    """Verify <= max_per_index/day per index and zero overlapping trades on NIFTY."""
+    by_day_idx: Dict[Tuple[str, str], List[Dict[str, Any]]] = {}
+    for t in trades:
+        by_day_idx.setdefault((t["date"], t["idx"]), []).append(t)
+
+    for (d, idx), items in by_day_idx.items():
+        if len(items) > max_per_index:
+            raise AssertionError(f"{d} {idx} exceeded cap {max_per_index}: {len(items)}")
+        if idx == "NIFTY":
+            items_sorted = sorted(items, key=lambda x: x["in_t"])
+            for a, b in zip(items_sorted, items_sorted[1:]):
+                if b["in_t"] <= a["out_t"]:
+                    raise AssertionError(f"NIFTY overlap on {d}: {a['in_t']}-{a['out_t']} vs {b['in_t']}-{b['out_t']}")
 
 
 def compute_metrics(trades: List[Dict[str, Any]]) -> Dict[str, Any]:
@@ -372,14 +502,18 @@ def compute_metrics(trades: List[Dict[str, Any]]) -> Dict[str, Any]:
     }
 
 
-def print_report(all_trades: List[Dict[str, Any]], date_ranges: Dict[str, Tuple[str, str]]) -> None:
-    print("\n================ 1-YEAR MASTER ALPHA BACKTEST REPORT ================")
+def print_report(
+    title: str,
+    all_trades: List[Dict[str, Any]],
+    date_ranges: Dict[str, Tuple[str, str]],
+) -> None:
+    print(f"\n================ {title} ================")
     for idx, (d0, d1) in date_ranges.items():
         print(f"  {idx:10s} candle coverage: {d0} -> {d1}")
     print("---------------------------------------------------------------------")
     for label, subset in [
-        ("NIFTY", [t for t in all_trades if t["idx"] == "NIFTY"]),
-        ("BANKNIFTY", [t for t in all_trades if t["idx"] == "BANKNIFTY"]),
+        ("NIFTY (A)", [t for t in all_trades if t["idx"] == "NIFTY"]),
+        ("BNF   (H)", [t for t in all_trades if t["idx"] == "BANKNIFTY"]),
         ("COMBINED", all_trades),
     ]:
         m = compute_metrics(subset)
@@ -389,6 +523,14 @@ def print_report(all_trades: List[Dict[str, Any]], date_ranges: Dict[str, Tuple[
             f"| Gross: Rs {m['gross']:+10,.2f} | Charges: Rs {m['charges']:8,.2f} "
             f"| Net: Rs {m['net']:+10,.2f} | MaxDD: Rs {m['max_dd']:9,.2f} | Avg: Rs {m['avg_pnl']:+8,.2f}"
         )
+
+    by_day: Dict[str, float] = {}
+    for t in all_trades:
+        by_day[t["date"]] = by_day.get(t["date"], 0.0) + t["net"]
+    if by_day:
+        wd = min(by_day.items(), key=lambda x: x[1])
+        bd = max(by_day.items(), key=lambda x: x[1])
+        print(f"  Best Day: {bd[0]} (Rs {bd[1]:+,.2f}) | Worst Day: {wd[0]} (Rs {wd[1]:+,.2f})")
 
     print("\n--------------------- MONTHLY BREAKDOWN -----------------------------")
     months: Dict[str, List[Dict[str, Any]]] = {}
@@ -404,11 +546,13 @@ def print_report(all_trades: List[Dict[str, Any]], date_ranges: Dict[str, Tuple[
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Fetch 5m candles and run Master Alpha ORB backtest.")
+    parser = argparse.ArgumentParser(description="Fetch 5m candles and run Hybrid Live-Parity ORB backtest.")
     parser.add_argument("--start", type=str, default="2025-11-20", help="Start date YYYY-MM-DD")
     parser.add_argument("--end", type=str, default="2026-11-20", help="End date YYYY-MM-DD")
     parser.add_argument("--fetch", action="store_true", help="Fetch fresh 5m candles from Shoonya TPSeries")
     parser.add_argument("--force", action="store_true", help="Force re-fetch even if 365d cache is non-empty")
+    parser.add_argument("--max-per-index", type=int, default=2, help="Max trades per day per index (default 2)")
+    parser.add_argument("--daily-risk", type=float, default=10000.0, help="Shared daily max loss cap (Rs)")
     args = parser.parse_args()
 
     start_d = date.fromisoformat(args.start)
@@ -423,7 +567,7 @@ def main() -> None:
             auth.login_via_selenium()
         print(f"Authenticated with Shoonya ({settings.shoonya_user_id}); fetching {start_d} -> {end_d}...", flush=True)
 
-    all_trades: List[Dict[str, Any]] = []
+    candles_by_index: Dict[str, List[Candle]] = {}
     date_ranges: Dict[str, Tuple[str, str]] = {}
     for idx in ("NIFTY", "BANKNIFTY"):
         cache_365 = ROOT_DIR / "data" / "historical" / f"{idx}_5m_365d.json"
@@ -440,20 +584,27 @@ def main() -> None:
             else:
                 candles = load_candles_from_cache(idx)
 
-        if candles:
-            date_ranges[idx] = (
-                candles[0].timestamp.strftime("%Y-%m-%d"),
-                candles[-1].timestamp.strftime("%Y-%m-%d"),
-            )
-        else:
-            date_ranges[idx] = ("N/A", "N/A")
+        candles_by_index[idx] = candles
+        date_ranges[idx] = (
+            (candles[0].timestamp.strftime("%Y-%m-%d"), candles[-1].timestamp.strftime("%Y-%m-%d"))
+            if candles
+            else ("N/A", "N/A")
+        )
 
-        idx_trades = run_master_alpha_backtest(idx, candles, start_date=start_d, end_date=end_d)
-        print(f"Generated {len(idx_trades)} Master Alpha trades for {idx} ({start_d} -> {end_d})", flush=True)
-        all_trades.extend(idx_trades)
-
+    all_trades = run_hybrid_live_parity_backtest(
+        candles_by_index,
+        start_date=start_d,
+        end_date=end_d,
+        max_trades_per_index=args.max_per_index,
+        daily_loss_limit=args.daily_risk,
+    )
+    verify_hybrid_rules(all_trades, max_per_index=args.max_per_index)
     all_trades.sort(key=lambda t: (t["date"], t["in_t"]))
-    print_report(all_trades, date_ranges)
+    print_report(
+        f"HYBRID LIVE-PARITY BACKTEST (NIFTY=OptA, BNF=OptH, {args.max_per_index}/idx, Rs {args.daily_risk:,.0f} Risk)",
+        all_trades,
+        date_ranges,
+    )
 
     out_dir = ROOT_DIR / "data" / "backtest"
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -474,7 +625,7 @@ def main() -> None:
             writer.writeheader()
             writer.writerows(all_trades)
 
-    print(f"Saved {len(all_trades)} trades -> {full_path}, {min_path}, {csv_path}", flush=True)
+    print(f"Saved {len(all_trades)} verified Hybrid trades -> {full_path}, {min_path}, {csv_path}", flush=True)
 
 
 if __name__ == "__main__":

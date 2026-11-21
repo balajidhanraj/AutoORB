@@ -236,8 +236,9 @@ class ORBStrategy:
                 logger.info("%s PE skipped: Spot %.2f >= Day Open %.2f", index_name, close_px, day_open)
                 pe_signal = False
 
-        # 2. 20 EMA Filter (CE requires Spot > 20 EMA; PE requires Spot < 20 EMA)
-        if getattr(self.settings, "use_ema_filter", False):
+        # 2. 20 EMA Filter (Option H for BANKNIFTY; optional for NIFTY Option A)
+        apply_ema_body = (index_name != "NIFTY") or getattr(self.settings, "nifty_use_ema_body_filter", False)
+        if apply_ema_body and getattr(self.settings, "use_ema_filter", False):
             ema20 = calculate_ema([c.close for c in candles_seq], period=20)
             if ema20 is not None:
                 if ce_signal and close_px <= ema20:
@@ -247,9 +248,9 @@ class ORBStrategy:
                     logger.info("%s PE skipped: Spot %.2f >= 20 EMA %.2f", index_name, close_px, ema20)
                     pe_signal = False
 
-        # 3. Decisive Candle Body Ratio Filter
+        # 3. Decisive Candle Body Ratio Filter (Option H for BANKNIFTY; optional for NIFTY Option A)
         min_body_ratio = getattr(self.settings, "min_candle_body_ratio", 0.0)
-        if min_body_ratio > 0 and (ce_signal or pe_signal):
+        if apply_ema_body and min_body_ratio > 0 and (ce_signal or pe_signal):
             c_range = closed_candle.high - closed_candle.low
             c_body = abs(closed_candle.close - closed_candle.open)
             if c_range > 0 and (c_body / c_range) < min_body_ratio:

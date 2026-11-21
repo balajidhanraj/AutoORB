@@ -442,23 +442,72 @@ def test_dynamic_max_daily_loss(tmp_path: Path) -> None:
     mapper = InstrumentMapper(client)
     rm = RiskManager(settings, client, mapper)
 
-    # Mon-Fri 2 lots base -> ₹5,000 max daily loss
-    mon_dt = _ist_dt(2026, 11, 16, 10, 30) # Monday
-    assert rm.get_dynamic_max_daily_loss(mon_dt) == 5000.0
+    # Default Hybrid daily risk guardrail is ₹10,000 (Mon-Fri & Tuesday)
+    mon_dt = _ist_dt(2026, 11, 16, 10, 30)  # Monday
+    assert rm.get_dynamic_max_daily_loss(mon_dt) == 10000.0
 
-    # Tuesday 4 lots boosted -> ₹10,000 max daily loss
-    tue_dt = _ist_dt(2026, 11, 17, 10, 30) # Tuesday
+    tue_dt = _ist_dt(2026, 11, 17, 10, 30)  # Tuesday
     assert rm.get_dynamic_max_daily_loss(tue_dt) == 10000.0
 
-    # Custom 1 lot selection -> ₹2,500 max daily loss
-    rm.set_index_lots("NIFTY", 1)
-    rm.set_index_lots("BANKNIFTY", 1)
-    assert rm.get_dynamic_max_daily_loss(mon_dt) == 2500.0
-    assert rm.get_dynamic_max_daily_loss(tue_dt) == 2500.0
+    # Custom user override via set_max_daily_loss works cleanly
+    ok, _ = rm.set_max_daily_loss(6000.0)
+    assert ok is True
+    assert rm.get_dynamic_max_daily_loss(mon_dt) == 6000.0
 
-    # Custom 4 lots selection -> ₹10,000 max daily loss
-    rm.set_index_lots("NIFTY", 4)
+    # Restoring AUTO returns to ₹10,000 default floor
+    ok, _ = rm.set_max_daily_loss(0)
+    assert ok is True
     assert rm.get_dynamic_max_daily_loss(mon_dt) == 10000.0
+
+
+def test_hybrid_nifty_optA_and_banknifty_optH_pyramiding(tmp_path: Path) -> None:
+    settings = _make_settings(tmp_path, mode="PAPER", max_trades_per_day=2, banknifty_be_pyramiding=True)
+    client = ShoonyaClient(settings)
+    mapper = InstrumentMapper(client)
+    rm = RiskManager(settings, client, mapper)
+
+    # 1. NIFTY (Option A): blocks overlapping Leg #2 even when Leg #1 is at Breakeven
+    nf_sig = ORBSignal(
+        index_name="NIFTY",
+        signal_type="CE",
+        candle_time=_ist_dt(2026, 11, 16, 10, 15),
+        spot_close=24580.0,
+        orh=24540.0,
+        orl=24495.0,
+        vwap=24530.0,
+        rsi=68.0,
+        india_vix=15.0,
+    )
+    nf_pos = rm.execute_entry(nf_sig, option_ltp=125.0)
+    assert nf_pos is not None
+    assert rm.can_take_new_trade("NIFTY") is False
+    nf_pos.state = PositionState.OPEN_FULL_BREAKEVEN
+    assert rm.can_take_new_trade("NIFTY") is False  # Strict sequential no-overlap on NIFTY
+
+    # 2. BANKNIFTY (Option H): blocks Leg #2 while OPEN_FULL, allows Leg #2 once OPEN_FULL_BREAKEVEN
+    bnf_sig = ORBSignal(
+        index_name="BANKNIFTY",
+        signal_type="CE",
+        candle_time=_ist_dt(2026, 11, 16, 10, 20),
+        spot_close=52500.0,
+        orh=52400.0,
+        orl=52200.0,
+        vwap=52350.0,
+        rsi=68.0,
+        india_vix=15.0,
+    )
+    bnf_pos1 = rm.execute_entry(bnf_sig, option_ltp=260.0)
+    assert bnf_pos1 is not None
+    assert rm.can_take_new_trade("BANKNIFTY") is False  # Blocked while OPEN_FULL
+
+    bnf_pos1.state = PositionState.OPEN_FULL_BREAKEVEN
+    assert rm.can_take_new_trade("BANKNIFTY") is True  # Allowed once risk-free at BE!
+
+    bnf_pos2 = rm.execute_entry(bnf_sig, option_ltp=310.0)
+    assert bnf_pos2 is not None
+    assert bnf_pos2.position_key == "BANKNIFTY#2"
+    assert rm.trades_taken_by_index["BANKNIFTY"] == 2
+    assert rm.can_take_new_trade("BANKNIFTY") is False  # Max 2/day reached for BANKNIFTY
 
 
 def test_auto_square_off_all_and_exit_position(tmp_path: Path) -> None:

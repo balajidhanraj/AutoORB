@@ -112,7 +112,7 @@ class AppSettings(BaseModel):
 
     headless_browser: bool = Field(default=True)
     capital: float = Field(default=200000.0)
-    max_daily_loss: float = Field(default=5000.0)
+    max_daily_loss: float = Field(default=10000.0)
     max_trades_per_day: int = Field(default=2)
 
     min_india_vix: float = Field(default=12.0)
@@ -121,8 +121,10 @@ class AppSettings(BaseModel):
     daily_bias_filter: bool = Field(default=True)
     use_ema_filter: bool = Field(default=True)
     min_candle_body_ratio: float = Field(default=0.40)
+    nifty_use_ema_body_filter: bool = Field(default=False)
+    banknifty_be_pyramiding: bool = Field(default=True)
     tuesday_expiry_boost: bool = Field(default=True)
-    max_weekly_losses: int = Field(default=2)
+    max_weekly_losses: int = Field(default=0)
     entry_slippage_buffer: float = Field(default=2.5)
     paper_slippage_pts: float = Field(default=1.0)
     entry_modify_timeout_sec: float = Field(default=10.0)
@@ -196,7 +198,7 @@ def load_settings(env_path: str | Path | None = None) -> AppSettings:
         sebi_algo_id=os.getenv("SEBI_ALGO_ID", "ORB_VWAP_RSI_2026").strip() or "ORB_VWAP_RSI_2026",
         headless_browser=_parse_bool(os.getenv("HEADLESS_BROWSER"), default=True),
         capital=float(os.getenv("CAPITAL", "200000") or 200000),
-        max_daily_loss=float(os.getenv("MAX_DAILY_LOSS", "5000") or 5000),
+        max_daily_loss=float(os.getenv("MAX_DAILY_LOSS", "10000") or 10000),
         max_trades_per_day=int(os.getenv("MAX_TRADES_PER_DAY", "2") or 2),
         min_india_vix=float(os.getenv("MIN_INDIA_VIX", "12.0") or 12.0),
         min_orb_range_pct=float(os.getenv("MIN_ORB_RANGE_PCT", "0.20") or 0.20),
@@ -204,8 +206,10 @@ def load_settings(env_path: str | Path | None = None) -> AppSettings:
         daily_bias_filter=_parse_bool(os.getenv("DAILY_BIAS_FILTER"), default=True),
         use_ema_filter=_parse_bool(os.getenv("USE_EMA_FILTER"), default=True),
         min_candle_body_ratio=float(os.getenv("MIN_CANDLE_BODY_RATIO", "0.40") or 0.40),
+        nifty_use_ema_body_filter=_parse_bool(os.getenv("NIFTY_USE_EMA_BODY_FILTER"), default=False),
+        banknifty_be_pyramiding=_parse_bool(os.getenv("BANKNIFTY_BE_PYRAMIDING"), default=True),
         tuesday_expiry_boost=_parse_bool(os.getenv("TUESDAY_EXPIRY_BOOST"), default=True),
-        max_weekly_losses=int(os.getenv("MAX_WEEKLY_LOSSES", "2") or 2),
+        max_weekly_losses=int(os.getenv("MAX_WEEKLY_LOSSES", "0") or 0),
         telegram_bot_token=os.getenv("TELEGRAM_BOT_TOKEN", "").strip(),
         telegram_chat_id=os.getenv("TELEGRAM_CHAT_ID", "").strip(),
         ui_host=os.getenv("UI_HOST", "0.0.0.0").strip(),
