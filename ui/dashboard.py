@@ -179,11 +179,12 @@ def create_app(orchestrator: Any) -> FastAPI:
         return RedirectResponse(url=release_url, status_code=302)
 
     @app.get("/backtest", response_class=HTMLResponse)
-    def backtest_view() -> HTMLResponse:
-        dash_path = Path(__file__).resolve().parent.parent / "data" / "backtest" / "backtest_dashboard.html"
-        if dash_path.exists():
-            return HTMLResponse(content=dash_path.read_text(encoding="utf-8"))
-        return HTMLResponse(content="<h1>Backtest dashboard file not found.</h1>")
+    def backtest_view(request: Request) -> HTMLResponse:
+        return templates.TemplateResponse(
+            request=request,
+            name="backtest.html",
+            context={},
+        )
 
     @app.get("/api/status")
     def api_status() -> JSONResponse:

@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html class="dark" lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>AutoORB — Live Analytics &amp; Backtest Ledger</title>
+  <link rel="icon" type="image/png" sizes="64x64" href="/static/favicon.png"/>
+  <link rel="icon" type="image/png" sizes="192x192" href="/static/icon-192.png"/>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet"/>
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"/>
+  <link rel="stylesheet" href="/static/theme.css?v=13"/>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="/static/api_client.js?v=13"></script>
+  <script>
+    if (window.tailwind && window.AUTOORB_TAILWIND_CONFIG) {
+      window.tailwind.config = window.AUTOORB_TAILWIND_CONFIG;
+    }
+  </script>
+</head>
+<body class="bg-background font-body-md text-on-surface antialiased min-h-screen">
+  <!-- Top Bar -->
+  <header class="sticky top-0 z-40 glass-header">
+    <div class="h-14 max-w-[1440px] mx-auto px-4 lg:px-6 flex items-center justify-between gap-3">
+      <div class="flex items-center gap-2.5 min-w-0">
+        <a href="/" class="flex items-center gap-2 hover:opacity-90 transition-opacity">
+          <img src="/static/icon-192.png" alt="AutoORB" class="w-8 h-8 rounded-lg object-cover shrink-0"/>
+          <div class="min-w-0">
+            <span class="font-headline-md text-[15px] font-bold text-on-surface block leading-none">AutoORB</span>
+            <span class="font-label-caps text-profit uppercase tracking-widest block mt-0.5">Live Analytics &amp; Backtest</span>
+          </div>
+        </a>
+      </div>
+
+      <div class="flex items-center gap-2 shrink-0">
+        <button id="bt-refresh-btn" type="button" class="px-3 py-1.5 rounded-lg bg-surface-container-low glass-panel hover:bg-surface-container text-profit font-label-caps font-bold flex items-center gap-1 cursor-pointer">
+          <span class="material-symbols-outlined text-[15px]">refresh</span>
+          <span>SYNC</span>
+        </button>
+        <a href="/api/backtest/csv" class="px-3 py-1.5 rounded-lg bg-surface-container-low glass-panel hover:bg-surface-container text-on-surface font-label-caps font-bold flex items-center gap-1">
+          <span class="material-symbols-outlined text-[15px]">download</span>
+          <span>CSV</span>
+        </a>
+        <button id="bt-theme-btn" type="button" class="w-8 h-8 rounded-lg bg-surface-container-low glass-panel text-on-surface-variant flex items-center justify-center cursor-pointer" title="Toggle Theme">
+          <span id="bt-theme-icon" class="material-symbols-outlined text-[16px]">light_mode</span>
+        </button>
+        <a href="/" class="px-3 py-1.5 rounded-lg bg-primary-container text-on-primary-container font-label-caps font-bold flex items-center gap-1">
+          <span class="material-symbols-outlined text-[15px]">arrow_back</span>
+          <span>TERMINAL</span>
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-[1440px] mx-auto px-4 lg:px-6 py-5 space-y-5">
+    <!-- Live Terminal Guardrails Strip -->
+    <section class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 tabular-nums">
+      <div class="p-3 rounded-xl bg-surface-container-low glass-panel">
+        <span class="font-label-caps text-on-surface-variant block">ENGINE MODE</span>
+        <span id="live-mode" class="font-data-mono-md text-profit font-bold mt-0.5 block">--</span>
+      </div>
+      <div class="p-3 rounded-xl bg-surface-container-low glass-panel">
+        <span class="font-label-caps text-on-surface-variant block">CAPITAL</span>
+        <span id="live-cap" class="font-data-mono-md text-on-surface font-bold mt-0.5 block">--</span>
+      </div>
+      <div class="p-3 rounded-xl bg-surface-container-low glass-panel">
+        <span class="font-label-caps text-on-surface-variant block">TODAY MTM</span>
+        <span id="live-mtm" class="font-data-mono-md text-profit font-bold mt-0.5 block">₹0</span>
+      </div>
+      <div class="p-3 rounded-xl bg-surface-container-low glass-panel">
+        <span class="font-label-caps text-on-surface-variant block">MAX DAILY LOSS</span>
+        <span id="live-max-loss" class="font-data-mono-md text-loss font-bold mt-0.5 block">--</span>
+      </div>
+      <div class="p-3 rounded-xl bg-surface-container-low glass-panel">
+        <span class="font-label-caps text-on-surface-variant block">WEEKLY GUARD</span>
+        <span id="live-weekly" class="font-data-mono-md text-profit font-bold mt-0.5 block">--</span>
+      </div>
+      <div class="p-3 rounded-xl bg-surface-container-low glass-panel">
+        <span class="font-label-caps text-on-surface-variant block">DATA SOURCE</span>
+        <span id="live-src-count" class="font-data-mono-md text-primary font-bold mt-0.5 block">Syncing...</span>
+      </div>
+    </section>
+
+    <!-- Horizon & Index Filters -->
+    <section class="flex flex-wrap items-center justify-between gap-3 bg-surface-container-low glass-panel rounded-xl p-3">
+      <div class="flex flex-wrap items-center gap-1.5">
+        <span class="font-label-caps text-on-surface-variant mr-1">HORIZON:</span>
+        <button data-horizon="ALL" type="button" class="bt-horizon px-3 py-1 rounded bg-surface-container-high text-primary font-label-caps font-bold cursor-pointer">ALL (180D)</button>
+        <button data-horizon="90" type="button" class="bt-horizon px-3 py-1 rounded text-on-surface-variant font-label-caps cursor-pointer">90D</button>
+        <button data-horizon="30" type="button" class="bt-horizon px-3 py-1 rounded text-on-surface-variant font-label-caps cursor-pointer">30D</button>
+        <button data-horizon="7" type="button" class="bt-horizon px-3 py-1 rounded text-on-surface-variant font-label-caps cursor-pointer">7D</button>
+      </div>
+      <div class="flex flex-wrap items-center gap-1.5">
+        <span class="font-label-caps text-on-surface-variant mr-1">INDEX:</span>
+        <button data-idx="ALL" type="button" class="bt-idx px-3 py-1 rounded bg-surface-container-high text-primary font-label-caps font-bold cursor-pointer">ALL</button>
+        <button data-idx="NIFTY" type="button" class="bt-idx px-3 py-1 rounded text-on-surface-variant font-label-caps cursor-pointer">NIFTY</button>
+        <button data-idx="BANKNIFTY" type="button" class="bt-idx px-3 py-1 rounded text-on-surface-variant font-label-caps cursor-pointer">BANKNIFTY</button>
+      </div>
+    </section>
+
+    <!-- Core Performance KPIs -->
+    <section class="grid grid-cols-2 md:grid-cols-5 gap-3 tabular-nums">
+      <div class="p-4 rounded-xl bg-surface-container-low glass-panel">
+        <span class="font-label-caps text-on-surface-variant block">NET REALIZED P&amp;L</span>
+        <span id="bt-net-pnl" class="font-display-lg text-[24px] font-bold text-profit mt-1 block">--</span>
+      </div>
+      <div class="p-4 rounded-xl bg-surface-container-low glass-panel">
+        <span class="font-label-caps text-on-surface-variant block">WIN RATE</span>
+        <span id="bt-win-rate" class="font-display-lg text-[24px] font-bold text-on-surface mt-1 block">--</span>
+      </div>
+      <div class="p-4 rounded-xl bg-surface-container-low glass-panel">
+        <span class="font-label-caps text-on-surface-variant block">PROFIT FACTOR</span>
+        <span id="bt-pf" class="font-display-lg text-[24px] font-bold text-primary mt-1 block">--</span>
+      </div>
+      <div class="p-4 rounded-xl bg-surface-container-low glass-panel">
+        <span class="font-label-caps text-on-surface-variant block">MAX DRAWDOWN</span>
+        <span id="bt-dd" class="font-display-lg text-[24px] font-bold text-loss mt-1 block">--</span>
+      </div>
+      <div class="p-4 rounded-xl bg-surface-container-low glass-panel col-span-2 md:col-span-1">
+        <span class="font-label-caps text-on-surface-variant block">TRADES (W / L)</span>
+        <span id="bt-wl" class="font-display-lg text-[24px] font-bold text-on-surface mt-1 block">--</span>
+      </div>
+    </section>
+
+    <!-- Equity Curve + Histogram & Index Breakdown -->
+    <section class="grid grid-cols-1 lg:grid-cols-12 gap-4">
+      <div class="lg:col-span-8 bg-surface-container-low glass-panel rounded-xl p-4 space-y-3">
+        <div class="flex items-center justify-between">
+          <h2 class="font-headline-md text-on-surface">Cumulative Equity Curve</h2>
+          <span id="bt-peak-label" class="font-data-mono-sm text-profit font-bold">PEAK: --</span>
+        </div>
+        <div id="bt-equity-svg" class="w-full min-h-[180px] rounded-lg bg-surface-container-lowest/60 p-2"></div>
+        <div>
+          <span class="font-label-caps text-on-surface-variant block mb-2">LAST 28 TRADES DISTRIBUTION</span>
+          <div id="bt-histogram" class="h-20 flex items-end gap-1 bg-surface-container-lowest/50 rounded-lg p-2"></div>
+        </div>
+      </div>
+
+      <div class="lg:col-span-4 bg-surface-container-low glass-panel rounded-xl p-4 space-y-3">
+        <h2 class="font-headline-md text-on-surface">Index Attribution</h2>
+        <div id="bt-index-breakdown" class="space-y-2 font-data-mono-sm"></div>
+      </div>
+    </section>
+
+    <!-- Full Trade Ledger Table -->
+    <section class="bg-surface-container-low glass-panel rounded-xl p-4 space-y-3">
+      <div class="flex flex-wrap items-center justify-between gap-2">
+        <h2 class="font-headline-md text-on-surface">Trade-by-Trade Analytics Ledger</h2>
+        <input id="bt-search" type="text" placeholder="Filter by symbol, date, or reason..." class="w-full sm:w-64 px-3 py-1.5 rounded-lg bg-surface-container-lowest border border-outline-variant/50 font-data-mono-sm text-on-surface"/>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-left border-collapse font-data-mono-sm tabular-nums whitespace-nowrap">
+          <thead>
+            <tr class="border-b border-outline-variant/40 text-on-surface-variant font-label-caps">
+              <th class="py-2 pr-3">Date</th>
+              <th class="py-2 pr-3">Index</th>
+              <th class="py-2 pr-3">Contract</th>
+              <th class="py-2 pr-3">Side</th>
+              <th class="py-2 pr-3">Qty</th>
+              <th class="py-2 pr-3">Entry</th>
+              <th class="py-2 pr-3">Exit</th>
+              <th class="py-2 pr-3">Reason</th>
+              <th class="py-2 text-right">Net P&amp;L</th>
+            </tr>
+          </thead>
+          <tbody id="bt-ledger-body"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    (function () {
+      const A = window.AutoORB;
+      const esc = A.escapeHtml;
+      let allTrades = [];
+      let liveSnap = {};
+      let btHorizon = 'ALL';
+      let btIndex = 'ALL';
+
+      function updateThemeIcon() {
+        const ic = document.getElementById('bt-theme-icon');
+        if (ic) ic.textContent = A.getTheme() === 'light' ? 'dark_mode' : 'light_mode';
+      }
+      updateThemeIcon();
+      document.getElementById('bt-theme-btn').addEventListener('click', () => {
+        A.toggleTheme();
+        updateThemeIcon();
+      });
+
+      function normalizeTrade(t, fallbackMode = 'BACKTEST') {
+        const net = Number(t.net ?? t.net_pnl ?? t.pnl ?? 0);
+        return {
+          id: String(t.id || t.trade_id || ''),
+          date: String(t.date || ''),
+          idx: String(t.idx || t.index_name || 'OTHER').toUpperCase(),
+          tsym: String(t.tradingsymbol || `${t.idx || t.index_name || ''} ${t.strike || ''} ${t.side || t.signal_type || ''}`).trim(),
+          side: String(t.side || t.signal_type || ''),
+          qty: Number(t.qty ?? t.quantity ?? 0),
+          in_t: String(t.in_t || t.entry_time || ''),
+          in_px: Number(t.in_px ?? t.entry_price ?? 0),
+          out_t: String(t.out_t || t.exit_time || ''),
+          out_px: Number(t.out_px ?? t.exit_price ?? 0),
+          reason: String(t.reason || t.exit_reason || fallbackMode),
+          net
+        };
+      }
+
+      async function syncData() {
+        try {
+          const [btRes, stRes] = await Promise.all([
+            A.api.getBacktestTrades(),
+            A.api.getStatus().catch(() => ({}))
+          ]);
+          liveSnap = stRes || {};
+          const rawBt = (btRes && btRes.trades) || [];
+          const rawLive = (liveSnap && liveSnap.completed_trades) || [];
+          const seen = new Set();
+          const merged = [];
+          for (const t of rawBt) {
+            const nt = normalizeTrade(t, 'BACKTEST');
+            const key = nt.id || `${nt.date}_${nt.tsym}_${nt.in_t}`;
+            if (!seen.has(key)) { seen.add(key); merged.push(nt); }
+          }
+          for (const t of rawLive) {
+            const nt = normalizeTrade(t, liveSnap.mode || 'LIVE');
+            const key = nt.id || `${nt.date}_${nt.tsym}_${nt.in_t}`;
+            if (!seen.has(key)) { seen.add(key); merged.push(nt); }
+          }
+          merged.sort((a, b) => (a.date + a.in_t).localeCompare(b.date + b.in_t));
+          allTrades = merged;
+          renderLiveStrip();
+          renderBacktest();
+        } catch (err) {
+          document.getElementById('live-src-count').textContent = 'Sync error';
+        }
+      }
+
+      function renderLiveStrip() {
+        const s = liveSnap || {};
+        document.getElementById('live-mode').textContent = s.mode || '--';
+        document.getElementById('live-cap').textContent = A.fmtINR(s.capital || 200000, 0);
+        const mtm = Number(s.mtm_pnl || 0);
+        const mtmEl = document.getElementById('live-mtm');
+        mtmEl.textContent = A.fmtSignedINR(mtm, 0);
+        mtmEl.className = `font-data-mono-md font-bold mt-0.5 block ${mtm >= 0 ? 'text-profit' : 'text-loss'}`;
+        document.getElementById('live-max-loss').textContent = `${A.fmtINR(s.max_daily_loss || 5000, 0)} (${s.is_custom_max_daily_loss ? 'CUSTOM' : 'AUTO'})`;
+        const wg = s.weekly_guard || {};
+        const wgEl = document.getElementById('live-weekly');
+        wgEl.textContent = wg.is_halted ? `HALTED (${wg.losses}/${wg.max_losses})` : `${wg.losses ?? 0}/${wg.max_losses ?? 2} LOSSES`;
+        wgEl.className = `font-data-mono-md font-bold mt-0.5 block ${wg.is_halted ? 'text-loss' : 'text-profit'}`;
+        document.getElementById('live-src-count').textContent = `${allTrades.length} Trades`;
+      }
+
+      function renderBacktest() {
+        let trades = allTrades.slice();
+        if (btIndex !== 'ALL') {
+          trades = trades.filter(t => t.idx === btIndex);
+        }
+        if (btHorizon !== 'ALL' && trades.length) {
+          const days = Number(btHorizon);
+          const dates = Array.from(new Set(trades.map(t => t.date))).sort();
+          const cutoffDate = dates[Math.max(0, dates.length - days)];
+          trades = trades.filter(t => t.date >= cutoffDate);
+        }
+
+        const q = (document.getElementById('bt-search').value || '').trim().toLowerCase();
+        if (q) {
+          trades = trades.filter(t =>
+            t.date.toLowerCase().includes(q) ||
+            t.idx.toLowerCase().includes(q) ||
+            t.tsym.toLowerCase().includes(q) ||
+            t.reason.toLowerCase().includes(q)
+          );
+        }
+
+        const pnls = trades.map(t => t.net);
+        const total = pnls.reduce((a, b) => a + b, 0);
+        const wins = pnls.filter(p => p > 0);
+        const losses = pnls.filter(p => p < 0);
+        const grossWin = wins.reduce((a, b) => a + b, 0);
+        const grossLoss = Math.abs(losses.reduce((a, b) => a + b, 0));
+        const pf = grossLoss > 0 ? (grossWin / grossLoss) : (grossWin > 0 ? 9.99 : 0);
+        const wr = trades.length ? (wins.length / trades.length) * 100 : 0;
+
+        let cum = 0, peak = 0, maxDd = 0;
+        const eq = [0];
+        pnls.forEach(p => {
+          cum += p;
+          if (cum > peak) peak = cum;
+          const dd = peak - cum;
+          if (dd > maxDd) maxDd = dd;
+          eq.push(cum);
+        });
+
+        const pnlEl = document.getElementById('bt-net-pnl');
+        pnlEl.textContent = A.fmtSignedINR(total, 0);
+        pnlEl.className = `font-display-lg text-[24px] font-bold mt-1 block ${total >= 0 ? 'text-profit' : 'text-loss'}`;
+        document.getElementById('bt-win-rate').textContent = `${wr.toFixed(1)}%`;
+        document.getElementById('bt-pf').textContent = pf.toFixed(2);
+        document.getElementById('bt-dd').textContent = `-${A.fmtINR(maxDd, 0)}`;
+        document.getElementById('bt-wl').textContent = `${trades.length} (${wins.length}/${losses.length})`;
+        document.getElementById('bt-peak-label').textContent = `PEAK CUMULATIVE: ${A.fmtSignedINR(peak, 0)}`;
+        document.getElementById('bt-equity-svg').innerHTML = A.buildEquityCurveSvg(eq);
+
+        const tail = pnls.slice(-28);
+        const maxAbs = Math.max(1, ...tail.map(Math.abs));
+        document.getElementById('bt-histogram').innerHTML = tail.map(v => {
+          const pct = Math.max(12, Math.round((Math.abs(v) / maxAbs) * 100));
+          return `<div class="flex-1 rounded-t ${v >= 0 ? 'bg-primary-container' : 'bg-secondary-container'}" style="height:${pct}%" title="${A.fmtSignedINR(v)}"></div>`;
+        }).join('') || '<div class="text-on-surface-variant font-body-sm m-auto">No trades in filter.</div>';
+
+        const byIdx = {};
+        trades.forEach(t => {
+          if (!byIdx[t.idx]) byIdx[t.idx] = { n: 0, w: 0, net: 0 };
+          byIdx[t.idx].n += 1;
+          if (t.net > 0) byIdx[t.idx].w += 1;
+          byIdx[t.idx].net += t.net;
+        });
+        document.getElementById('bt-index-breakdown').innerHTML = Object.entries(byIdx).map(([k, v]) => {
+          const iwr = v.n ? (v.w / v.n) * 100 : 0;
+          return `<div class="flex items-center justify-between p-2.5 rounded-lg bg-surface-container">
+            <span class="font-bold text-on-surface">${esc(k)} <span class="text-on-surface-variant font-normal">(${v.n} &bull; ${iwr.toFixed(0)}% WR)</span></span>
+            <span class="font-bold ${v.net >= 0 ? 'text-profit' : 'text-loss'}">${A.fmtSignedINR(v.net, 0)}</span>
+          </div>`;
+        }).join('') || '<div class="text-on-surface-variant">No data for current filter.</div>';
+
+        const rows = trades.slice().reverse().slice(0, 200);
+        document.getElementById('bt-ledger-body').innerHTML = rows.map(t => `
+          <tr class="border-b border-outline-variant/20 hover:bg-surface-container/60">
+            <td class="py-2 pr-3 text-on-surface-variant">${esc(t.date)}</td>
+            <td class="py-2 pr-3 font-bold text-on-surface">${esc(t.idx)}</td>
+            <td class="py-2 pr-3 text-on-surface">${esc(t.tsym)}</td>
+            <td class="py-2 pr-3"><span class="px-1.5 py-0.5 rounded ${t.side === 'CE' ? 'bg-primary-container/20 text-profit' : 'bg-secondary-container/20 text-loss'} font-bold">${esc(t.side)}</span></td>
+            <td class="py-2 pr-3">${t.qty}</td>
+            <td class="py-2 pr-3">₹${t.in_px.toFixed(2)} <span class="text-[10px] text-on-surface-variant">${esc(t.in_t)}</span></td>
+            <td class="py-2 pr-3">₹${t.out_px.toFixed(2)} <span class="text-[10px] text-on-surface-variant">${esc(t.out_t)}</span></td>
+            <td class="py-2 pr-3 text-on-surface-variant">${esc(t.reason)}</td>
+            <td class="py-2 text-right font-bold ${t.net >= 0 ? 'text-profit' : 'text-loss'}">${A.fmtSignedINR(t.net, 0)}</td>
+          </tr>
+        `).join('') || '<tr><td colspan="9" class="py-6 text-center text-on-surface-variant">No trades match your filter.</td></tr>';
+      }
+
+      document.querySelectorAll('.bt-horizon').forEach(b => b.addEventListener('click', () => {
+        btHorizon = b.getAttribute('data-horizon');
+        document.querySelectorAll('.bt-horizon').forEach(x => {
+          const act = x.getAttribute('data-horizon') === btHorizon;
+          x.className = act ? 'bt-horizon px-3 py-1 rounded bg-surface-container-high text-primary font-label-caps font-bold cursor-pointer' : 'bt-horizon px-3 py-1 rounded text-on-surface-variant font-label-caps cursor-pointer';
+        });
+        renderBacktest();
+      }));
+
+      document.querySelectorAll('.bt-idx').forEach(b => b.addEventListener('click', () => {
+        btIndex = b.getAttribute('data-idx');
+        document.querySelectorAll('.bt-idx').forEach(x => {
+          const act = x.getAttribute('data-idx') === btIndex;
+          x.className = act ? 'bt-idx px-3 py-1 rounded bg-surface-container-high text-primary font-label-caps font-bold cursor-pointer' : 'bt-idx px-3 py-1 rounded text-on-surface-variant font-label-caps cursor-pointer';
+        });
+        renderBacktest();
+      }));
+
+      document.getElementById('bt-search').addEventListener('input', renderBacktest);
+      document.getElementById('bt-refresh-btn').addEventListener('click', syncData);
+
+      syncData();
+      setInterval(syncData, 15000);
+    })();
+  </script>
+</body>
+</html>
