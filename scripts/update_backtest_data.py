@@ -12,6 +12,7 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import math
 import sys
 import time as time_mod
 from datetime import date, datetime, time, timedelta
@@ -22,8 +23,9 @@ ROOT_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT_DIR))
 
 from broker.auth import ShoonyaAuthenticator
+from broker.instrument_mapper import get_target_expiry
 from broker.shoonya_client import ShoonyaClient
-from config.settings import INDEX_SPECS, IST, IndexSpec, load_settings
+from config.settings import INDIA_VIX_EXCHANGE, INDIA_VIX_TOKEN, INDEX_SPECS, IST, IndexSpec, load_settings
 from engine.indicators import calculate_ema
 from scripts.backtest_orb import (
     Candle,
@@ -141,19 +143,123 @@ def load_candles_from_cache(index_name: str) -> List[Candle]:
     raise FileNotFoundError(f"No historical cache found for {index_name}; run with --fetch")
 
 
+def _norm_cdf(x: float) -> float:
+    return 0.5 * (1.0 + math.erf(x / math.sqrt(2.0)))
+
+
+def bs_option_price(
+    spot: float,
+    strike: float,
+    t_years: float,
+    sigma: float,
+    opt_type: str,
+    r: float = 0.065,
+) -> float:
+    """Black-Scholes European option price driven by real Shoonya Spot, DTE, and India VIX."""
+    intrinsic = max(0.0, spot - strike) if opt_type == "CE" else max(0.0, strike - spot)
+    if t_years <= 1e-6 or sigma <= 1e-4 or spot <= 0 or strike <= 0:
+        return max(0.5, intrinsic)
+    sqrt_t = math.sqrt(t_years)
+    d1 = (math.log(spot / strike) + (r + 0.5 * sigma * sigma) * t_years) / (sigma * sqrt_t)
+    d2 = d1 - sigma * sqrt_t
+    if opt_type == "CE":
+        px = spot * _norm_cdf(d1) - strike * math.exp(-r * t_years) * _norm_cdf(d2)
+    else:
+        px = strike * math.exp(-r * t_years) * _norm_cdf(-d2) - spot * _norm_cdf(-d1)
+    return max(0.5, px)
+
+
+def load_vix_map() -> Dict[datetime, float]:
+    """Load cached Shoonya India VIX (NSE|26017) 5m series into a timestamp -> VIX map."""
+    vix_path = ROOT_DIR / "data" / "historical" / "INDIAVIX_5m_365d.json"
+    if not vix_path.exists():
+        return {}
+    with open(vix_path, "r", encoding="utf-8") as f:
+        raw = json.load(f)
+    out: Dict[datetime, float] = {}
+    for r in raw:
+        ts_str = r.get("timestamp")
+        c_val = r.get("close")
+        if ts_str and c_val:
+            try:
+                out[datetime.fromisoformat(ts_str)] = float(c_val)
+            except Exception:
+                continue
+    return out
+
+
+def fetch_vix_from_shoonya(
+    client: ShoonyaClient,
+    start_date: date,
+    end_date: date,
+    chunk_days: int = 29,
+) -> Dict[datetime, float]:
+    """Fetch 5-minute India VIX (NSE|26017) candles from Shoonya TPSeries."""
+    by_ts: Dict[datetime, Candle] = {}
+    cur = start_date
+    while cur <= end_date:
+        ce = min(end_date, cur + timedelta(days=chunk_days))
+        st_dt = IST.localize(datetime.combine(cur, time(9, 0, 0)))
+        et_dt = IST.localize(datetime.combine(ce, time(15, 35, 0)))
+        rows = client.get_time_price_series(
+            exchange=INDIA_VIX_EXCHANGE,
+            token=INDIA_VIX_TOKEN,
+            starttime=int(st_dt.timestamp()),
+            endtime=int(et_dt.timestamp()),
+            intrv="5",
+        )
+        for row in rows:
+            bar = parse_shoonya_candle_row(row)
+            if bar and time(9, 15) <= bar.timestamp.time() <= time(15, 30):
+                by_ts[bar.timestamp] = bar
+        cur = ce + timedelta(days=1)
+        time_mod.sleep(0.4)
+
+    candles = sorted(by_ts.values(), key=lambda x: x.timestamp)
+    cache_dir = ROOT_DIR / "data" / "historical"
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    vix_path = cache_dir / "INDIAVIX_5m_365d.json"
+    with open(vix_path, "w", encoding="utf-8") as f:
+        json.dump(
+            [
+                {
+                    "timestamp": c.timestamp.isoformat(),
+                    "open": c.open,
+                    "high": c.high,
+                    "low": c.low,
+                    "close": c.close,
+                    "volume": c.volume,
+                }
+                for c in candles
+            ],
+            f,
+        )
+    print(f"  [INDIAVIX] Cached {len(candles)} unique 5m candles -> {vix_path}", flush=True)
+    return {c.timestamp: c.close for c in candles}
+
+
+def _time_to_expiry_years(bar_ts: datetime, expiry_date: date) -> float:
+    exp_dt = IST.localize(datetime.combine(expiry_date, time(15, 30, 0)))
+    bar_ist = bar_ts.astimezone(IST) if bar_ts.tzinfo else IST.localize(bar_ts)
+    sec = max(300.0, (exp_dt - bar_ist).total_seconds())
+    return sec / (365.0 * 86400.0)
+
+
 def _simulate_single_trade_exit(
     index_name: str,
     spec: IndexSpec,
     sig_type: str,
+    strike: int,
+    expiry_date: date,
     entry_candle: Candle,
     day_candles: List[Candle],
+    vix_map: Dict[datetime, float],
     total_qty: int,
     p0: float,
-    delta: float = 0.58,
     exit_slippage: float = 1.0,
 ) -> Dict[str, Any]:
-    """Simulate intraday SL / Breakeven / Target-1 partial exit / 15:15 EOD square-off with milestone timestamps."""
-    entry_spot = entry_candle.close
+    """Simulate intraday SL / Breakeven / Target-1 / 15:15 EOD using Black-Scholes driven by real Shoonya Spot & VIX."""
+    iv_mult = 1.12 if index_name == "BANKNIFTY" else 1.0
     sl_price = max(1.0, p0 - spec.sl_pts)
     be_ts: Optional[datetime] = None
     t1_ts: Optional[datetime] = None
@@ -164,19 +270,22 @@ def _simulate_single_trade_exit(
     exit_time_str = "15:15"
     exit_px = p0
     exit_reason = "EOD_SQUAREOFF"
+    last_vix = vix_map.get(entry_candle.timestamp, 14.5)
 
     subsequent = [c for c in day_candles if c.timestamp > entry_candle.timestamp]
     for bar in subsequent:
         b_time = bar.timestamp.time()
-        spot_move = (bar.high - entry_spot) if sig_type == "CE" else (entry_spot - bar.low)
-        spot_worst = (bar.low - entry_spot) if sig_type == "CE" else (entry_spot - bar.high)
+        vix_val = vix_map.get(bar.timestamp, last_vix)
+        last_vix = vix_val
+        sigma = max(0.09, (vix_val / 100.0) * iv_mult)
+        t_yr = _time_to_expiry_years(bar.timestamp, expiry_date)
 
-        approx_opt_high = p0 + (spot_move * delta)
-        approx_opt_low = max(0.5, p0 + (spot_worst * delta))
-        approx_opt_close = max(
-            0.5,
-            p0 + (((bar.close - entry_spot) if sig_type == "CE" else (entry_spot - bar.close)) * delta),
-        )
+        spot_best = bar.high if sig_type == "CE" else bar.low
+        spot_worst = bar.low if sig_type == "CE" else bar.high
+
+        approx_opt_high = bs_option_price(spot_best, strike, t_yr, sigma, sig_type)
+        approx_opt_low = bs_option_price(spot_worst, strike, t_yr, sigma, sig_type)
+        approx_opt_close = bs_option_price(bar.close, strike, t_yr, sigma, sig_type)
 
         fav_pts = approx_opt_high - p0
 
@@ -211,10 +320,10 @@ def _simulate_single_trade_exit(
             last_bar = subsequent[-1]
             exit_ts = last_bar.timestamp
             exit_time_str = last_bar.timestamp.strftime("%H:%M")
-            exit_px = max(
-                0.5,
-                p0 + (((last_bar.close - entry_spot) if sig_type == "CE" else (entry_spot - last_bar.close)) * delta),
-            )
+            vix_val = vix_map.get(last_bar.timestamp, last_vix)
+            sigma = max(0.09, (vix_val / 100.0) * iv_mult)
+            t_yr = _time_to_expiry_years(last_bar.timestamp, expiry_date)
+            exit_px = bs_option_price(last_bar.close, strike, t_yr, sigma, sig_type)
 
     pts_gain = exit_px - p0
     total_gross = partial_pnl + (remaining_qty * pts_gain)
@@ -241,11 +350,13 @@ def _simulate_single_trade_exit(
 
 def run_hybrid_live_parity_backtest(
     candles_by_index: Dict[str, List[Candle]],
+    vix_map: Optional[Dict[datetime, float]] = None,
     start_date: Optional[date] = None,
     end_date: Optional[date] = None,
     max_trades_per_index: int = 2,
     daily_loss_limit: float = 10000.0,
 ) -> List[Dict[str, Any]]:
+    vix_lookup = vix_map or {}
     """
     Chronological Hybrid Live-Parity Backtest (zero lookahead):
       - NIFTY     (Option A): Sequential no-overlap, max 2/day, ORB + VWAP + RSI(14) + Daily Bias.
@@ -398,16 +509,24 @@ def run_hybrid_live_parity_backtest(
                 sig_type = "CE" if ce_signal else "PE"
                 entry_spot = candle.close
                 atm_strike = int(round(entry_spot / spec.strike_step) * spec.strike_step)
-                baseline_atm_premium = 125.0 if idx == "NIFTY" else 260.0
-                p0 = baseline_atm_premium + 1.0
+                expiry_d = get_target_expiry(idx, sess_date)
+                iv_mult = 1.12 if idx == "BANKNIFTY" else 1.0
+                vix_now = vix_lookup.get(candle.timestamp, 14.5)
+                sigma_now = max(0.09, (vix_now / 100.0) * iv_mult)
+                t_entry = _time_to_expiry_years(candle.timestamp, expiry_d)
+                bs_entry = bs_option_price(entry_spot, atm_strike, t_entry, sigma_now, sig_type)
+                p0 = round(bs_entry + 1.0, 2)  # Real Black-Scholes ATM premium + ₹1 entry slippage
                 total_qty = spec.lot_size * day_lots
 
                 res = _simulate_single_trade_exit(
                     index_name=idx,
                     spec=spec,
                     sig_type=sig_type,
+                    strike=atm_strike,
+                    expiry_date=expiry_d,
                     entry_candle=candle,
                     day_candles=dc,
+                    vix_map=vix_lookup,
                     total_qty=total_qty,
                     p0=p0,
                 )
@@ -591,8 +710,14 @@ def main() -> None:
             else ("N/A", "N/A")
         )
 
+    vix_map = load_vix_map()
+    if (not vix_map or args.force) and client is not None:
+        vix_map = fetch_vix_from_shoonya(client, max(start_d, date(2026, 3, 10)), end_d)
+    print(f"  [INDIAVIX] Using {len(vix_map)} Shoonya 5m VIX bars for Black-Scholes option pricing", flush=True)
+
     all_trades = run_hybrid_live_parity_backtest(
         candles_by_index,
+        vix_map=vix_map,
         start_date=start_d,
         end_date=end_d,
         max_trades_per_index=args.max_per_index,
