@@ -159,8 +159,19 @@ class CompatibleNorenApi:
                 logger.warning("Shoonya API returned 401 on %s; attempting automatic re-auth...", endpoint)
                 if self._reauth_callback():
                     return self._post(endpoint, body, _retry=False)
-            resp.raise_for_status()
-            res = resp.json()
+
+            # Shoonya Noren API frequently returns HTTP 400/404 with a JSON body {"stat":"Not_Ok","emsg":"..."}.
+            # Parse JSON before raise_for_status() so callers get Shoonya's real rejection reason instead of raw 400/404.
+            res: Any = None
+            try:
+                res = resp.json()
+            except ValueError:
+                res = None
+
+            if res is None:
+                resp.raise_for_status()
+                return {}
+
             if isinstance(res, dict) and res.get("stat") == "Not_Ok" and _retry and self._reauth_callback:
                 emsg = str(res.get("emsg") or "").lower()
                 if any(err in emsg for err in ("session", "invalid session", "not logged in", "expired")):

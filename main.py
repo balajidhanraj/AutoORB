@@ -486,6 +486,8 @@ class TradingSystemOrchestrator:
             strike = int(m.group(2))
             opt_type = "CE" if "C" in m.group(3) else "PE"
             try:
+                if self.mapper.cached_count == 0:
+                    self.run_instrument_cache()
                 resolved_c = self.mapper.select_option_contract(idx_name, float(strike), opt_type)
                 if resolved_c and resolved_c.tradingsymbol:
                     tsym = resolved_c.tradingsymbol
