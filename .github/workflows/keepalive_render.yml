@@ -2,8 +2,10 @@ name: Keep Render Free Tier Awake (IST Active Hours)
 
 on:
   schedule:
-    # Daily 02:00-18:50 UTC == 07:30-00:20 IST (every 10 minutes)
-    - cron: "*/10 2-18 * * *"
+    # Mon-Fri NSE market prep & session: every 5 min from 02:00-11:55 UTC (07:30-17:25 IST)
+    - cron: "*/5 2-11 * * 1-5"
+    # Evenings & weekends: every 10 min from 12:00-18:50 UTC (17:30-00:20 IST)
+    - cron: "*/10 12-18 * * *"
   workflow_dispatch:
 
 jobs:
@@ -14,5 +16,5 @@ jobs:
         env:
           RENDER_APP_URL: ${{ vars.RENDER_APP_URL || secrets.RENDER_APP_URL || 'https://autoorb-eu.onrender.com' }}
         run: |
-          curl -fsS --max-time 45 "${RENDER_APP_URL%/}/health"
+          curl -fsS --retry 2 --retry-delay 5 --max-time 45 "${RENDER_APP_URL%/}/health"
           echo ""

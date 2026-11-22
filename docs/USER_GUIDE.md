@@ -2,136 +2,76 @@
 
 ## Overview
 
-The **Shoonya Automated ORB Trading Terminal** is an institutional-grade, algorithmic options trading system engineered for **NIFTY** and **BANKNIFTY** index options. It executes the **Master Alpha 15% Strategy** using the official Shoonya (Finvasia) API, delivering disciplined, risk-governed automated execution with sub-second WebSocket telemetry.
+The **Shoonya Automated ORB Trading Terminal (AutoORB)** is an institutional-grade, algorithmic options trading system engineered for **NIFTY** and **BANKNIFTY** index options. It runs the **Option 2 Dual-Engine Strategy** using the official Finvasia Shoonya API with a strict **Global 1-Order Lock (`₹1,00,000` capital safe)**, `India VIX >= 12.0` filter on both indices, and **Supertrend(10,3)** confirmation & trailing.
 
 ---
 
-## 1. Master Alpha 15% Strategy Blueprint
+## 1. Option 2 Dual-Engine Strategy Blueprint
 
-The Master Alpha 15% Strategy is calibrated from 180 days (6 months) of tick-by-tick market data, designed to target consistent ~15% monthly return on trading capital while preserving capital through strict drawdowns guards.
+Calibrated on 1 full year (`2025-11-20` to `2026-11-20`) of real Shoonya 5-minute spot and India VIX data (**214 trades**, **+₹2,84,818 net**, **PF 1.76**, **Max DD -₹44,803**, **10/12 profitable months**):
 
 ```
-09:15                      09:45             10:00                          13:15          15:15
-  |--------------------------|-----------------|------------------------------|--------------|
-      30-Min ORB Lock          Morning Shakeout      Institutional Scan Window    Decay Avoidance    EOD Square-Off
-     (Calculate ORH/ORL)        (No Orders)         (5-Gate Active Breakout)       (No New Orders)   (Auto Exit)
+08:40        08:55        09:14        09:45       10:00                          13:15          15:15
+  |------------|------------|------------|-----------|------------------------------|--------------|
+Auto OAuth   NFO Cache    WS + 7D      30m ORB Lock  Option 2 Dual-Engine Scan      No New       EOD Square-Off
+ (120s retry)             Backfill     (BNF Range)   (NF H1 + BNF 5-Gate, VIX>=12)  Entries      & 15:35 CSV
 ```
 
 ### Core Execution Rules
 
-1. **30-Minute Opening Range (09:15 – 09:45 IST)**:
-   - High (ORH) and Low (ORL) are calculated from six 5-minute candles.
-   - **Range Filter Gate**: The opening range must be between **0.20% and 0.85%**. Narrow ranges (< 0.20%) indicate dead markets; wide ranges (> 0.85%) indicate exhaustion and are skipped.
+1. **Global Entry Window & Volatility Gate (10:00 – 13:15 IST, India VIX ≥ 12.0)**:
+   - Both **NIFTY** and **BANKNIFTY** scan from **10:00 IST to 13:15 IST**, avoiding `09:30–09:55` opening whipsaws and afternoon theta decay.
+   - **India VIX ≥ 12.0** is enforced across **both** NIFTY and BANKNIFTY to skip dead low-volatility chop.
+   - **Global 1-Order Lock**: Only **one active position** across NIFTY + BANKNIFTY is held at a time (`Max 4 trades/day` global).
 
-2. **Institutional Entry Scan Window (10:00 – 13:15 IST)**:
-   - No breakout orders are permitted between 09:45 and 10:00 IST. This eliminates over 70% of morning retail fakeout traps and sudden reversals.
-   - New entries cease at **13:15 IST** to avoid afternoon choppy theta decay.
+2. **NIFTY — Hybrid H1 Engine (`15m HTF Swing Break + Supertrend(10,3)`, Max 2/day)**:
+   - Uses non-repainting **15-minute HTF Swing High (`15m RED`) / Swing Low (`15m GRN`)** levels (`swing_len=2`) with a `+0.1 × 15m ATR(14)` breakout buffer.
+   - Entry triggers on a 5m close breaking `15m RED` (CE) or `15m GRN` (PE) confirmed by **5m Supertrend(10,3)** (`dir == +1` for CE / `-1` for PE).
+   - **Stop Loss**: Dual protection — Spot `0.5 × 15m ATR` stop (`SPOT_ATR_SL`) plus hard **`35.0 pt`** option SL cap (`STOP_LOSS`).
+   - **Pure Supertrend Runner Trail**: Skips early breakeven/T1 partial cuts and trails full quantity until a 5m spot close crosses the Supertrend(10,3) line.
+   - *1-Year Verified Performance*: `105` trades, `35.2%` WR, **PF `1.83`**, **+₹1,86,347** net, Max DD `-₹32,152`.
 
-3. **5-Gate Breakout Verification**:
-   Before an order is triggered, all 5 gates must simultaneously pass:
-   - **Gate 1 (Sys/Slot)**: System active, market hours valid, trades taken < 2.
-   - **Gate 2 (India VIX >= 12.0)**: Sufficient implied volatility to support option premium expansion.
-   - **Gate 3 (Range 0.20%–0.85%)**: Opening range within statistical breakout boundary.
-   - **Gate 4 (Spot Breakout + Intraday VWAP)**:
-     - For **CE (Call)**: 5M candle close > ORH and close > VWAP and close >= Previous Day Close (PDC).
-     - For **PE (Put)**: 5M candle close < ORL and close < VWAP and close <= Previous Day Close (PDC).
-   - **Gate 5 (Wilder RSI Momentum)**:
-     - For **CE**: Wilder RSI(14) > 60.0.
-     - For **PE**: Wilder RSI(14) < 40.0.
+3. **BANKNIFTY — 5-Gate 30m ORB + Supertrend(10,3) (`Stop-on-SL`)**:
+   - **30-Minute Opening Range (`09:15 – 09:45 IST`)**: Six 5m candles; range filter **`0.20% – 0.85%`**.
+   - **5-Gate + Institutional Filters**:
+     - **Gate 1 (Sys)**: System active, `India VIX >= 12.0`, `< 4` global trades/day, no prior `STOP_LOSS` on BANKNIFTY today, no active position in either index.
+     - **Gate 2 (VIX)**: `India VIX >= 12.0`.
+     - **Gate 3 (ORB + VWAP + PDC)**: 5m close breaks `ORH` (CE) / `ORL` (PE), aligned with intraday `VWAP` and Previous Day Close (`PDC`).
+     - **Gate 4 (Momentum & Candle Structure)**: Wilder `RSI(14)` `> 60` (CE) / `< 40` (PE), aligned with `20-EMA` and candle body ratio `>= 40%`.
+     - **Gate 5 (Supertrend 10,3)**: Aligned with 5m `Supertrend(10,3)`.
+   - **Bracket & Exit Trail**:
+     - Fixed Initial Stop Loss: **`45.0 points`**.
+     - Breakeven Lock: **`+45.0 points`** gain moves SL to entry cost.
+     - Target 1 (50% Book): **`+80.0 points`** books 50% of lots; remaining quantity trails on **5m Supertrend(10,3) Line Close**.
+   - *1-Year Verified Performance*: `109` trades, `38.5%` WR, **PF `1.65`**, **+₹98,472** net, Max DD `-₹22,278`.
 
-4. **Option Contract Selection**:
-   - Automatically resolves the current weekly expiry contract.
-   - Selects the nearest round ATM strike for highest liquidity and delta (~0.58).
-   - Default product type: **NRML** (Normal margin), switchable to **MIS** (Intraday).
-
-5. **Widened Stop Loss & Bracket Lifecycle**:
-   - **NIFTY**:
-     - Initial Stop Loss: **25.0 points** (widened from 20 points to withstand spot wicks).
-     - Breakeven Trigger: At **+20 points** gain, initial SL is automatically trailed to entry price (cost).
-     - Target 1: At **+40 points** gain, **50% of lots are booked**, and the remaining 50% lots trail upward.
-   - **BANKNIFTY**:
-     - Initial Stop Loss: **50.0 points**.
-     - Breakeven Trigger: At **+40 points** gain, SL moved to breakeven.
-     - Target 1: At **+80 points** gain, 50% booked, remaining trail.
-
-6. **Tuesday Expiry Sizing Boost**:
-   - **Tuesdays**: Capital allocation increases to **75%** (typically 3 lots) to capitalize on favorable risk-to-reward dynamics on expiry day.
-   - **Mon/Wed/Thu/Fri**: Capital allocation is **50%** (typically 2 lots).
-
-7. **Risk Governance & Weekly Loss Guard**:
-   - **Max Trades Per Day**: Exactly 2 trades per session.
-   - **Max Daily Loss Limit**: -₹5,000 (breach triggers immediate Emergency Kill-Switch).
-   - **Weekly Loss Guard**: If 2 losing trades occur in a calendar week, position sizing drops to 1 lot or halts until next Monday to protect accumulated capital.
+4. **Option Contract Selection & Tuesday Expiry Boost**:
+   - **NIFTY**: Spot `NSE|26000`, `65` qty/lot, Weekly Tuesday expiry (`NRML` default).
+   - **BANKNIFTY**: Spot `NSE|26009`, `30` qty/lot, Monthly Last Tuesday expiry (`NRML` default).
+   - **Position Sizing**: **2 lots** (`Mon/Wed/Thu/Fri`, 50% allocation) and **3 lots** on **Tuesdays** (75% allocation).
+   - **Daily Risk Cap**: **`-₹10,000`** MTM kill-switch auto-liquidates and halts on breach.
 
 ---
 
 ## 2. Settings & Parameter Reference
 
-| Setting | Options / Values | Description |
+| Setting | Default Value | Description |
 | :--- | :--- | :--- |
-| **Trading Mode** | `LIVE` / `PAPER` | `LIVE` routes real orders to Shoonya via API. `PAPER` simulates fills with real-time slippage. |
-| **Default Product** | `NRML` / `MIS` | `NRML` prevents auto-square-off by broker; `MIS` utilizes intraday leverage margins. |
-| **Capital Allocation** | 50% (75% Tue) | Dynamically allocates available funds from broker terminal (Live) or assigned capital (Paper). |
-| **NIFTY Lots** | 1 to 10 (Default: 2-3) | Lot size: 65 qty per lot. |
-| **BANKNIFTY Lots** | 1 to 10 (Default: 2-3) | Lot size: 30 qty per lot. |
-| **Daily Loss Limit** | -₹5,000 | Hard risk barrier; initiates broker order cancellation and position square-off. |
-| **Max Trades / Day** | 2 | Maximum trade attempts permitted per session. |
+| **Trading Mode** | `LIVE` / `PAPER` | `LIVE` routes real orders to Shoonya via API. `PAPER` simulates fills cleanly. |
+| **Default Product** | `NRML` (`M`) | `NRML` prevents broker auto-square-off; switchable to `MIS` (`I`) per index. |
+| **Capital Base** | `₹1,00,000` | Enforces Global 1-Order Lock so ₹1L capital is sufficient across both indices. |
+| **NIFTY Engine** | Hybrid H1 (`10:00–13:15`) | `65` qty/lot, max `2`/day, Spot `0.5×ATR` (`35pt` cap), Pure ST(10,3) Close Trail. |
+| **BANKNIFTY Engine** | 5-Gate 30m ORB (`10:00–13:15`) | `30` qty/lot, `45pt` SL, `+45` BE, `+80` T1 (50%), ST(10,3) Line Trail. |
+| **Daily Loss Limit** | `-₹10,000` | Hard risk barrier; cancels pending orders & liquidates open legs immediately. |
+| **Max Trades / Day** | `4` Global (`2` NIFTY H1) | Maximum automated trades per session. |
 
 ---
 
-## 3. Terminal Navigation & Controls
+## 3. Unattended Daily Workflow (Mon–Fri, No Manual Intervention)
 
-### Top Telemetry Bar
-* **MODE Pill**: Displays current execution mode (`LIVE` in green, `PAPER` in amber). Click to toggle.
-* **Client / User Pill**: Displays active Shoonya Client ID. Click to open the **Multi-User Account Switcher**.
-* **OAuth Status**: Shows session token validity. Click to trigger fresh OAuth login.
-* **WS**: Live WebSocket market stream connection state (`ONLINE` or `OFFLINE`).
-* **Header Buttons**:
-  - `🔊 / 🔇 Sound`: Toggles Web Audio chimes for trade entries, targets, and risk alerts.
-  - `🔔 Bell`: Opens the event notification history drawer.
-  - `🎨 Theme`: Opens the Appearance Settings (choose from 9 color palettes and 4 typography styles).
-  - `⚡ BROKER ORDER`: Opens the manual Quick Order ticket.
-  - `KILL SWITCH`: Emergency cancellation of all open orders and immediate market square-off.
-
-### Tab 1: Radar & Signals Cockpit
-* **Cockpit Columns**:
-  1. **NIFTY Spot & Auto-Order Radar**: Live spot price, 09:15-09:45 ORH/ORL, 5-gate readiness progress bar, ATM contract candidate, lot selector, and manual order button.
-  2. **BANKNIFTY Spot & Auto-Order Radar**: Same layout for Bank Nifty options.
-  3. **Shoonya Broker, Funds & Daily Timeline**: Displays real-time broker cash, margin used, net available margin, and institutional milestone timeline.
-* **Live Execution Stream**: Located right below the 3 cockpit cards, displays color-coded real-time log messages (`[ORDER]`, `[SIGNAL]`, `[WARN]`, `[ERROR]`) with auto-scroll and quick filter chips.
-
-### Tab 2: Positions & Books
-* **Active Bracket Positions**: Displays open strategy bracket trades, current LTP, stop loss trigger, target prices, and live unrealized P&L.
-* **Completed Strategy Trades Ledger**: Comprehensive table of all trades executed today and seeded backtest history with a dedicated **Mode** column (`LIVE`, `PAPER`, or `BACKTEST`), filter tabs (`All`, `Live`, `Paper`, `Backtest`), and **Download CSV** export.
-
-### Tab 3: Terminal Logs
-* Full-height audit console showing complete session logs with search/filter, auto-scroll toggle, copy to clipboard, and manual refresh.
-
-### Tab 4: Analytics & Backtest
-* Interactive 6-month backtest analytics dashboard featuring equity curves, monthly breakdown, win/loss distributions, and alpha metrics.
-
----
-
-## 4. Multi-User Account Switching
-
-1. Click the **Switch User** button in the header.
-2. Select a preset (e.g., `FA53975`) or input custom credentials:
-   - **User ID** (Client Code)
-   - **Password**
-   - **TOTP Secret** (32-character Google Authenticator key)
-   - **API Key**
-   - **Account ID**
-   - **Secret Key** (SHA-256 HMAC key)
-3. Click **Authenticate & Switch Session**.
-4. The terminal validates the credentials, fetches a fresh token, reconciles broker margins, and switches live order routing.
-
----
-
-## 5. Daily Trading Workflow
-
-1. **08:45 – 09:10 IST**: Open terminal at `http://localhost:8000`. Verify `WS: ONLINE` and broker cash margin.
-2. **09:15 – 09:45 IST**: Strategy observes market open. The 30-minute opening range is established. At 09:45, badges change to `ORB LOCKED`.
-3. **09:45 – 10:00 IST**: Strategy rests during morning shakeout.
-4. **10:00 – 13:15 IST**: Institutional scan window active. When all 5 gates pass on a 5-minute candle close, an entry order is placed automatically.
-5. **Trade Execution**: Stop loss and Target 1 bracket orders are managed automatically. Audio chimes and desktop push notifications alert you of trade milestones.
-6. **15:15 IST**: Any surviving open positions are automatically squared off before market close.
+1. **08:40 IST (`Auto OAuth Login`)**: Direct TOTP + OAuth login (with Selenium fallback and **120s automatic retry** if transient errors occur).
+2. **08:55 IST (`NFO Contract Cache`)**: Downloads and indexes Shoonya NFO option strikes & expiries (retries every `60s` if count is `0`).
+3. **09:14 IST (`WS & 7D Backfill`)**: Connects Shoonya WebSocket for `NIFTY`, `BANKNIFTY`, and `INDIAVIX`, backfills **7 days** of 5m candles, warms up `15m HTF Swings`, `ATR(14)`, `RSI(14)`, `20-EMA`, and `Supertrend(10,3)`.
+4. **09:45 IST (`30-Min ORB Lock`)**: Locks BANKNIFTY `09:15–09:45` Opening Range (`ORH`/`ORL`) and range filter (`0.20%–0.85%`).
+5. **10:00 – 13:15 IST (`Dual-Engine Scan`)**: Evaluates every closed 5m candle for both NIFTY Hybrid H1 and BANKNIFTY 5-Gate ORB with `VIX >= 12.0` and Global 1-Order Lock.
+6. **15:15 – 15:35 IST (`Auto EOD Square-Off & Report`)**: Squares off any open positions at `15:15 IST`, exports CSV logs, and dispatches Telegram EOD summary at `15:35 IST`.

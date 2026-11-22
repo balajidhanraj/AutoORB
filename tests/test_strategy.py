@@ -534,6 +534,7 @@ def test_nf_bnf_30m_max4_global_single_order_defaults(tmp_path: Path) -> None:
     assert prod_settings.max_trades_per_day == 4
     assert prod_settings.orb_window_minutes == 30
     assert prod_settings.entry_start_time == time(10, 0, 0)
+    assert prod_settings.nifty_htf_entry_start_time == time(10, 0, 0)
     assert prod_settings.entry_cutoff_time == time(13, 15, 0)
     assert prod_settings.require_vwap_slope is False
     assert prod_settings.dynamic_sl_pct == 0.0
@@ -1095,11 +1096,15 @@ def test_nifty_htf_swing_hybrid_strategy_and_spot_sl(tmp_path: Path) -> None:
     assert htf_c == 24540.0
     assert htf_a is not None and htf_a > 0
 
-    # VIX < 12 blocks signal
-    assert strat.evaluate_candle_close("NIFTY", day2_seq[-1], all_bars, india_vix=11.4, current_time_ist=day2_seq[-1].timestamp) is None
+    # 09:35 bar is blocked by default 10:00 Option 2 entry_start_time
+    assert strat.evaluate_candle_close("NIFTY", day2_seq[-1], all_bars, india_vix=14.0, current_time_ist=_ist_dt(2026, 11, 16, 9, 40)) is None
 
-    # Valid VIX >= 12 fires HTF_SWING_HYBRID CE signal with Spot ATR SL & 35pt cap
-    sig = strat.evaluate_candle_close("NIFTY", day2_seq[-1], all_bars, india_vix=14.0, current_time_ist=day2_seq[-1].timestamp)
+    # After 10:00 IST: VIX < 12 blocks signal, VIX >= 12 fires HTF_SWING_HYBRID CE
+    break_1005 = Candle(_ist_dt(2026, 11, 16, 10, 5), 24538, 24595, 24535, 24590, is_closed=True)
+    all_bars_1005 = bars + day2_seq[:-1] + [break_1005]
+    assert strat.evaluate_candle_close("NIFTY", break_1005, all_bars_1005, india_vix=11.4, current_time_ist=_ist_dt(2026, 11, 16, 10, 10)) is None
+
+    sig = strat.evaluate_candle_close("NIFTY", break_1005, all_bars_1005, india_vix=14.0, current_time_ist=_ist_dt(2026, 11, 16, 10, 10))
     assert sig is not None
     assert sig.strategy_mode == "HTF_SWING_HYBRID"
     assert sig.signal_type == "CE"
@@ -1136,4 +1141,61 @@ def test_nifty_htf_swing_hybrid_strategy_and_spot_sl(tmp_path: Path) -> None:
     assert pos_b is not None  # Trade #2 allowed even after Trade #1 hit SL
     rm._close_position_record_locked(pos_b, exit_price=190.0, exit_reason="SUPERTREND_TRAIL")
     assert rm.execute_entry(sig, option_ltp=150.0, lots=2) is None  # Trade #3 blocked by max 2/day cap
+
+
+def test_scheduler_unattended_retry_and_reset_resilience(tmp_path: Path) -> None:
+    """Verify unattended scheduler resets after 08:40, retries failed auth/cache/ws, and backfills 7D."""
+    settings = _make_settings(
+        tmp_path,
+        mode="LIVE",
+        shoonya_user_id="USR1",
+        shoonya_password="pwd",
+        shoonya_totp_secret=pyotp.random_base32(),
+        shoonya_secret_key="sec",
+    )
+    orch = TradingSystemOrchestrator(settings=settings)
+    mon_day = date(2026, 11, 23)
+    fri_day = date(2026, 11, 20)
+    orch._milestone_done["auth"] = fri_day
+
+    # 1. At 08:45 IST (after 08:40 auth_time): daily reset must still clear stale milestones and reset for today;
+    #    failed login must NOT mark auth DONE and must retry after cooldown.
+    orch.run_daily_login = MagicMock(return_value=None)  # type: ignore[method-assign]
+    orch.step_scheduler(now_ist=_ist_dt(2026, 11, 23, 8, 45, 0))
+    assert orch._milestone_done.get("reset") == mon_day
+    assert "auth" not in orch._milestone_done  # failed login did not mark auth DONE
+    assert orch.run_daily_login.call_count == 1
+
+    # Retry succeeds once cooldown expires
+    orch._last_auth_attempt = 0.0
+    orch.run_daily_login = MagicMock(return_value="TOK_MON")  # type: ignore[method-assign]
+    orch.step_scheduler(now_ist=_ist_dt(2026, 11, 23, 8, 48, 0))
+    assert orch._milestone_done.get("auth") == mon_day
+
+    # 2. At 08:56 IST: cache returning 0 contracts does NOT mark cache DONE; retry > 0 marks DONE
+    orch.run_instrument_cache = MagicMock(return_value=0)  # type: ignore[method-assign]
+    orch.step_scheduler(now_ist=_ist_dt(2026, 11, 23, 8, 56, 0))
+    assert "cache" not in orch._milestone_done
+    orch._last_cache_attempt = 0.0
+    orch.run_instrument_cache = MagicMock(return_value=1500)  # type: ignore[method-assign]
+    orch.step_scheduler(now_ist=_ist_dt(2026, 11, 23, 8, 58, 0))
+    assert orch._milestone_done.get("cache") == mon_day
+
+    # 3. At 09:15 IST: WS pending handshake does NOT mark ws DONE; once connected it marks DONE
+    orch.run_ws_connect_and_backfill = MagicMock()  # type: ignore[method-assign]
+    orch.client.ws_connected = False
+    orch.step_scheduler(now_ist=_ist_dt(2026, 11, 23, 9, 15, 0))
+    assert "ws" not in orch._milestone_done
+    orch.client.ws_connected = True
+    orch.step_scheduler(now_ist=_ist_dt(2026, 11, 23, 9, 15, 5))
+    assert orch._milestone_done.get("ws") == mon_day
+    assert orch.run_ws_connect_and_backfill.call_count == 1
+
+    # 4. Verify _backfill_all_indices uses lookback_days=7 and warms HTF/indicators
+    for b in orch.candle_builders.values():
+        b.backfill_from_api = MagicMock(return_value=0)  # type: ignore[method-assign]
+    orch._backfill_all_indices()
+    for b in orch.candle_builders.values():
+        assert b.backfill_from_api.call_args.kwargs["lookback_days"] == 7
+
 

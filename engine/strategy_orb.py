@@ -179,6 +179,42 @@ class ORBStrategy:
             )
         return state
 
+    def warm_indicators_from_candles(
+        self,
+        index_name: str,
+        candles: Sequence[Candle],
+    ) -> ORBState:
+        """Warm up ORB/Hybrid HTF Swing, VWAP, RSI(14), and Supertrend(10,3) from backfilled candles."""
+        state = self.states[index_name]
+        candles_seq = [c for c in candles if c.is_closed] or list(candles)
+        if not candles_seq:
+            return state
+
+        last_c = candles_seq[-1]
+        ts_ist = last_c.timestamp.astimezone(IST) if last_c.timestamp.tzinfo else IST.localize(last_c.timestamp)
+        state.last_spot = float(last_c.close)
+        state.last_vwap = calculate_intraday_vwap(candles_seq, session_date=ts_ist.date())
+        state.last_rsi = calculate_wilder_rsi([c.close for c in candles_seq], period=14)
+        st_period = int(getattr(self.settings, "supertrend_period", 10) or 10)
+        st_mult = float(getattr(self.settings, "supertrend_multiplier", 3.0) or 3.0)
+        st_val, st_dir = calculate_supertrend(candles_seq[-60:], period=st_period, multiplier=st_mult)
+        state.last_supertrend = st_val
+        state.last_supertrend_dir = st_dir
+
+        if index_name == "NIFTY" and getattr(self.settings, "nifty_use_htf_swing_hybrid", False):
+            state.strategy_mode = "HTF_SWING_HYBRID"
+            swing_len = int(getattr(self.settings, "nifty_htf_swing_len", 2) or 2)
+            series = build_htf_15m_series(candles_seq, swing_len=swing_len, atr_period=14)
+            if series:
+                htf_c, htf_f, htf_a, htf_b = series[-1]
+                state.htf_swing_high = round(htf_c, 2) if htf_c is not None else None
+                state.htf_swing_low = round(htf_f, 2) if htf_f is not None else None
+                state.htf_atr = round(htf_a, 2) if htf_a is not None else None
+                state.htf_bias = int(htf_b)
+        else:
+            state.strategy_mode = "ORB_5GATE"
+        return state
+
     def evaluate_candle_close(
         self,
         index_name: str,
@@ -402,7 +438,7 @@ class ORBStrategy:
         state.htf_atr = round(htf_a, 2) if htf_a is not None else None
         state.htf_bias = int(htf_b)
 
-        entry_start = getattr(self.settings, "nifty_htf_entry_start_time", time(9, 30, 0))
+        entry_start = getattr(self.settings, "nifty_htf_entry_start_time", time(10, 0, 0))
         entry_end = getattr(self.settings, "entry_cutoff_time", time(13, 15, 0))
         check_t = current_time_ist.time() if current_time_ist is not None else candle_ist.time()
         if not (entry_start <= check_t <= entry_end):

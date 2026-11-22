@@ -1,15 +1,13 @@
-"""Fetch 5-minute historical spot & India VIX candles from Shoonya and run the BANKNIFTY-ONLY 15m ORB backtest.
+"""Fetch 5-minute historical spot & India VIX candles from Shoonya and run Dual-Engine Option 2 backtest.
 
 Live-Parity Strategy (matches config/settings.py, engine/strategy_orb.py & engine/risk_manager.py 1-to-1):
-  - Instrument : BANKNIFTY ONLY (NIFTY disabled for intraday option buying).
-  - ORB Window : 15 minutes (09:15 - 09:30 IST), range filter 0.15% - 0.90%.
-  - Entry Time : 09:35 - 12:30 IST (morning institutional momentum window).
-  - Filters    : Sloping VWAP (>= 0.02% over 15m), Wilder RSI(14) > 60 / < 40, Daily Bias, 20-EMA, Body >= 0.40.
-  - Pyramiding : Max 4 trades/day on BANKNIFTY; BE-Locked Pyramiding (new leg allowed while open legs exist
-                 ONLY if ALL open legs have already locked SL at Breakeven).
-  - Risk Rules : Dynamic 15% premium SL (floor 45 pts, cap min(140 pts, 90% of Rs 10,000 / qty)),
-                 BE at +15%, Target-1 (50% exit) at +30%, Step Trailing SL (+15% steps), Stop on SL, Rs 10k daily risk.
-  - Pricing    : Black-Scholes driven by real Shoonya Spot, exact NSE Tuesday Expiry DTE, and Shoonya India VIX.
+  - Global Lock : Strict single-active-order lock (Rs 1,00,000 capital safe, Max 4 trades/day, Rs 10k daily risk cap).
+  - Entry Window: 10:00 - 13:15 IST with India VIX >= 12.0 applied identically to NIFTY & BANKNIFTY.
+  - NIFTY (H1)  : 15m HTF Swing Break (swing_len=2, 0.1*ATR buffer) + Supertrend(10,3) Confirm & Pure Close Trail,
+                  Spot 0.5*15m ATR SL (capped at 35pt option SL), Max 2 trades/day.
+  - BANKNIFTY   : 5-Gate 30m ORB (09:15-09:45, range 0.20%-0.85%) + Daily Bias + 20-EMA + Body >= 0.40 +
+                  Supertrend(10,3) Confirm & Line Close Trail, Fixed 45pt SL / +45pt BE / +80pt T1 (50%), Stop-on-SL.
+  - Pricing     : Black-Scholes driven by real Shoonya Spot, exact NSE Tuesday Expiry DTE, and Shoonya India VIX.
 """
 
 from __future__ import annotations
@@ -595,7 +593,7 @@ def run_nf_bnf_sequential_backtest(
 
             if day_halted or trades_today_global >= max_trades_per_day:
                 continue
-            if not (time(9, 30) <= ts.time() <= time(13, 15)):
+            if not (time(10, 0) <= ts.time() <= time(13, 15)):
                 continue
             # Strict GLOBAL single-active-order lock: hold ALL new signals while ANY order is running
             if global_active_exit_ts is not None:
@@ -672,8 +670,11 @@ def run_nf_bnf_sequential_backtest(
                         opt_sl_cap=35.0,
                     )
                 else:
-                    # BANKNIFTY: Keep exact proven 5-Gate 30m ORB (10:00-13:15) + Supertrend(10,3)
+                    # BANKNIFTY: 5-Gate 30m ORB (10:00-13:15) + India VIX >= 12 + Supertrend(10,3)
                     if not (time(10, 0) <= ts.time() <= time(13, 15)):
+                        continue
+                    vix_now = vix_lookup.get(ts, 14.5)
+                    if vix_now < 12.0:
                         continue
                     if sl_hit_by_idx[idx] or orb_info.get(idx) is None:
                         continue
@@ -720,7 +721,6 @@ def run_nf_bnf_sequential_backtest(
                     sig_type = "CE" if ce_signal else "PE"
                     atm_strike = int(round(candle.close / spec.strike_step) * spec.strike_step)
                     expiry_d = get_target_expiry(idx, sess_date)
-                    vix_now = vix_lookup.get(ts, 14.5)
                     sigma_now = max(0.09, (vix_now / 100.0) * 1.12)
                     t_entry = _time_to_expiry_years(ts, expiry_d)
                     p0 = round(bs_option_price(candle.close, atm_strike, t_entry, sigma_now, sig_type) + 1.0, 2)
@@ -926,7 +926,7 @@ def main() -> None:
                 )
 
     print_report(
-        f"NIFTY + BANKNIFTY 30m ORB BACKTEST (Global 1-Order Lock, Max {args.max_trades}/day, Rs 1L Cap)",
+        f"OPTION 2 DUAL-ENGINE BACKTEST (10:00-13:15, VIX>=12, ST(10,3), Max {args.max_trades}/day, Rs 1L Lock)",
         all_trades,
         date_ranges,
     )
@@ -950,7 +950,7 @@ def main() -> None:
             writer.writeheader()
             writer.writerows(all_trades)
 
-    print(f"Saved {len(all_trades)} verified BANKNIFTY trades -> {full_path}, {min_path}, {csv_path}", flush=True)
+    print(f"Saved {len(all_trades)} verified Option 2 dual-engine trades -> {full_path}, {min_path}, {csv_path}", flush=True)
 
 
 if __name__ == "__main__":

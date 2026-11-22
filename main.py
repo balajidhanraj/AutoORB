@@ -15,7 +15,7 @@ import uvicorn
 from broker.auth import ShoonyaAuthenticator
 from broker.instrument_mapper import InstrumentMapper, round_to_strike
 from broker.shoonya_client import ShoonyaClient
-from config.settings import INDEX_SPECS, INDIA_VIX_KEY, IST, AppSettings, load_settings
+from config.settings import INDEX_SPECS, INDIA_VIX_EXCHANGE, INDIA_VIX_KEY, INDIA_VIX_TOKEN, IST, AppSettings, load_settings
 from engine.candle_builder import Candle, CandleBuilder
 from engine.risk_manager import RiskManager
 from engine.strategy_orb import ORBStrategy
@@ -73,6 +73,10 @@ class TradingSystemOrchestrator:
         # Track daily schedule milestones by IST date and manual user overrides
         self._milestone_done: Dict[str, date] = {}
         self._milestone_overrides: Dict[str, Tuple[date, str, dt_time]] = {}
+        self._last_auth_attempt: float = 0.0
+        self._last_cache_attempt: float = 0.0
+        self._last_ws_attempt: float = 0.0
+        self._last_ws_attempt_date: Optional[date] = None
         self.public_ip: str = "detecting..."
         self.previous_public_ip: str = ""
         self._last_ip_check_monotonic: float = time.monotonic()
@@ -203,7 +207,7 @@ class TradingSystemOrchestrator:
         labels = {
             "auth": "Auto OAuth Login",
             "cache": "NFO Contract Cache",
-            "ws": "WS & 3D Backfill",
+            "ws": "WS & 7D Backfill",
             "orb_lock": f"{self.settings.orb_window_minutes}-Min ORB Lock",
             "scanner": "Institutional Breakout Scan",
             "squareoff": "Auto EOD Square-Off",
@@ -238,8 +242,8 @@ class TradingSystemOrchestrator:
                 sched_t = self._milestone_scheduled_time(k)
                 if sched_t is not None and now_t >= sched_t:
                     self._milestone_overrides[k] = (today, "PENDING", now_t)
-            logger.info("Daily startup milestones (OAuth, NFO Cache=%d, WS/Backfill) restarted by user", cnt)
-            return True, f"Restarted morning milestones (OAuth, {cnt} NFO contracts, WS & 3D backfill)."
+            logger.info("Daily startup milestones (OAuth, NFO Cache=%d, WS/7D Backfill) restarted by user", cnt)
+            return True, f"Restarted morning milestones (OAuth, {cnt} NFO contracts, WS & 7D backfill)."
 
         if key not in labels:
             return False, f"Unknown milestone '{milestone_key}'."
@@ -287,7 +291,7 @@ class TradingSystemOrchestrator:
             self.run_ws_connect_and_backfill()
             self._mark_milestone("ws", today)
             self._milestone_overrides["ws"] = (today, "DONE", now_t)
-            return True, "WS & 3D Backfill restarted."
+            return True, "WS & 7D Backfill restarted."
 
         if key == "orb_lock":
             for builder in self.candle_builders.values():
@@ -361,6 +365,16 @@ class TradingSystemOrchestrator:
     ) -> None:
         """Evaluate closed 5-minute spot candles for ORB + VWAP + RSI breakout."""
         vix = self.client.get_ltp(INDIA_VIX_KEY)
+        if vix is None:
+            try:
+                q = self.client.get_quotes(INDIA_VIX_EXCHANGE, INDIA_VIX_TOKEN)
+                if isinstance(q, dict):
+                    raw_lp = q.get("lp") or q.get("c")
+                    if raw_lp is not None and float(raw_lp) > 0:
+                        vix = float(raw_lp)
+                        self.client.update_ltp(INDIA_VIX_KEY, vix)
+            except Exception as exc:
+                logger.debug("Fallback REST VIX lookup failed: %s", exc)
         signal = self.strategy.evaluate_candle_close(
             index_name=index_name,
             closed_candle=closed_candle,
@@ -398,7 +412,17 @@ class TradingSystemOrchestrator:
     def _backfill_all_indices(self) -> None:
         now_ist = datetime.now(IST)
         for name, builder in self.candle_builders.items():
-            builder.backfill_from_api(self.client, lookback_days=3, now_ist=now_ist)
+            builder.backfill_from_api(self.client, lookback_days=7, now_ist=now_ist)
+            self.strategy.warm_indicators_from_candles(name, builder.get_candles())
+        if self.client.get_ltp(INDIA_VIX_KEY) is None:
+            try:
+                q = self.client.get_quotes(INDIA_VIX_EXCHANGE, INDIA_VIX_TOKEN)
+                if isinstance(q, dict):
+                    raw_lp = q.get("lp") or q.get("c")
+                    if raw_lp is not None and float(raw_lp) > 0:
+                        self.client.update_ltp(INDIA_VIX_KEY, float(raw_lp))
+            except Exception as exc:
+                logger.debug("REST VIX quote backfill skipped: %s", exc)
         if now_ist.weekday() < 5 and now_ist.time() >= self.settings.orb_end_time:
             if not all(self.strategy.get_state(n).is_locked for n in INDEX_SPECS):
                 self.run_lock_orb(now_ist)
@@ -913,27 +937,66 @@ class TradingSystemOrchestrator:
 
         # Skip trading schedule on weekends (Mon=0..Fri=4)
         if dt.weekday() < 5:
-            if current_t < self.settings.auth_time and self._milestone_ready("reset", today, current_t):
-                self._milestone_done.clear()
-                self._milestone_overrides.clear()
-                self.strategy.reset_daily(today)
-                self.risk_manager.reset_daily()
-                self._mark_milestone("reset", today)
+            if self._milestone_ready("reset", today, current_t):
+                if not self.risk_manager.positions:
+                    self._milestone_done = {k: v for k, v in self._milestone_done.items() if v == today}
+                    self._milestone_overrides = {
+                        k: v for k, v in self._milestone_overrides.items() if v[0] == today
+                    }
+                    self.strategy.reset_daily(today)
+                    self.risk_manager.reset_daily()
+                    self._mark_milestone("reset", today)
 
             if current_t >= self.settings.auth_time and self._milestone_ready("auth", today, current_t):
-                logger.info("Scheduled 08:40 IST Auto OAuth Login triggered")
-                self.run_daily_login(force_refresh=True)
-                self._mark_milestone("auth", today)
+                now_ts = time.time()
+                if now_ts - getattr(self, "_last_auth_attempt", 0.0) >= 120.0:
+                    self._last_auth_attempt = now_ts
+                    logger.info("Scheduled 08:40 IST Auto OAuth Login triggered")
+                    need_refresh = self.auth.last_token_date != today.strftime("%Y-%m-%d")
+                    token = self.run_daily_login(force_refresh=need_refresh)
+                    paper_no_creds = self.settings.mode == "PAPER" and not self.settings.shoonya_user_id
+                    if token or paper_no_creds or current_t >= self.settings.market_close_time:
+                        self._mark_milestone("auth", today)
+                    else:
+                        logger.warning("Auto OAuth Login incomplete; scheduler will retry in 120s")
 
             if current_t >= self.settings.instrument_cache_time and self._milestone_ready("cache", today, current_t):
-                logger.info("Scheduled 08:55 IST NFO Contract Cache triggered")
-                self.run_instrument_cache()
-                self._mark_milestone("cache", today)
+                now_ts = time.time()
+                if now_ts - getattr(self, "_last_cache_attempt", 0.0) >= 60.0:
+                    self._last_cache_attempt = now_ts
+                    logger.info("Scheduled 08:55 IST NFO Contract Cache triggered")
+                    cnt = self.run_instrument_cache()
+                    if cnt > 0 or current_t >= self.settings.market_close_time:
+                        self._mark_milestone("cache", today)
+                    else:
+                        logger.warning("NFO Contract Cache returned 0 contracts; scheduler will retry in 60s")
 
             if current_t >= self.settings.ws_connect_time and self._milestone_ready("ws", today, current_t):
-                logger.info("Scheduled 09:14 IST WS & 3D Backfill triggered")
-                self.run_ws_connect_and_backfill()
-                self._mark_milestone("ws", today)
+                if getattr(self, "_last_ws_attempt_date", None) == today and self.client.ws_connected:
+                    self._mark_milestone("ws", today)
+                else:
+                    auth_ready = (
+                        self.settings.mode == "PAPER"
+                        or self._milestone_done.get("auth") == today
+                        or self.auth.last_token_date == today.strftime("%Y-%m-%d")
+                        or bool(self.settings.shoonya_access_token)
+                    )
+                    now_ts = time.time()
+                    if (auth_ready or current_t >= self.settings.market_close_time) and (
+                        now_ts - getattr(self, "_last_ws_attempt", 0.0) >= 30.0
+                    ):
+                        self._last_ws_attempt = now_ts
+                        self._last_ws_attempt_date = today
+                        logger.info("Scheduled 09:14 IST WS & 7D Backfill triggered")
+                        self.run_ws_connect_and_backfill()
+                        if (
+                            self.client.ws_connected
+                            or self.settings.mode == "PAPER"
+                            or current_t >= self.settings.market_close_time
+                        ):
+                            self._mark_milestone("ws", today)
+                        else:
+                            logger.warning("WS connection pending/retrying; scheduler will recheck in 30s")
 
             if current_t >= self.settings.orb_end_time and self._milestone_ready("orb_lock", today, current_t):
                 if current_t >= self.settings.market_close_time:
@@ -1025,7 +1088,7 @@ class TradingSystemOrchestrator:
         vix_ready = (vix is not None and vix >= self.settings.min_india_vix)
         if is_hybrid:
             orb_ready = bool(st.htf_swing_high is not None and st.htf_swing_low is not None and st.htf_atr is not None)
-            entry_start = getattr(self.settings, "nifty_htf_entry_start_time", dt_time(9, 30, 0))
+            entry_start = getattr(self.settings, "nifty_htf_entry_start_time", dt_time(10, 0, 0))
             entry_end = getattr(self.settings, "entry_cutoff_time", dt_time(13, 15, 0))
             in_window = now_ist.weekday() < 5 and (entry_start <= now_ist.time() <= entry_end)
             buf_pts = (float(getattr(self.settings, "nifty_htf_break_buf_atr", 0.1) or 0.1) * st.htf_atr) if st.htf_atr else 0.0
@@ -1116,7 +1179,7 @@ class TradingSystemOrchestrator:
             radar_summary = (
                 "Hybrid H1 active — Spot ATR SL, 35pt Cap & Supertrend(10,3) Close Trail armed."
                 if is_hybrid
-                else "Auto position active — SL-LMT, Breakeven (+25/+55) & Trailing active."
+                else "5-Gate ORB active — 45pt SL, BE (+45), T1 50% (+80) & Supertrend(10,3) Line Trail armed."
             )
         elif self.risk_manager.halted or self.risk_manager.trades_taken_today >= self.settings.max_trades_per_day:
             radar_state = "HALTED_OR_MAX_TRADES"
@@ -1287,7 +1350,7 @@ class TradingSystemOrchestrator:
             {
                 "key": "ws",
                 "time": "09:14 IST",
-                "label": "WS & 3D Backfill",
+                "label": "WS & 7D Backfill",
                 "status": _ms_status(
                     "ws",
                     self._milestone_done.get("ws") == today
@@ -1332,9 +1395,9 @@ class TradingSystemOrchestrator:
             "next_candle_close_sec": next_candle_close_sec,
             "milestones": milestones,
             "auto_mode_note": (
-                f"Auto orders trigger automatically on 5m candle closes "
-                f"({entry_start.strftime('%H:%M')}-{entry_cutoff.strftime('%H:%M')} IST) "
-                f"in {self.settings.mode} mode when all 5 gates align."
+                f"Option 2 Dual Engine triggers automatically on 5m candle closes "
+                f"({entry_start.strftime('%H:%M')}-{entry_cutoff.strftime('%H:%M')} IST, VIX >= {self.settings.min_india_vix:.0f}, ST 10,3) "
+                f"in {self.settings.mode} mode: NIFTY 15m HTF Swing Hybrid & BANKNIFTY 5-Gate ORB."
             ),
         }
 

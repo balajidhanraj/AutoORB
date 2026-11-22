@@ -1,4 +1,4 @@
-"""Generates the self-contained HTML for the 6-Month Backtest Interactive Dashboard."""
+"""Generates the self-contained HTML for the 1-Year Option 2 Dual-Engine Backtest Interactive Dashboard."""
 
 import json
 from pathlib import Path
@@ -13,7 +13,7 @@ html_template = """<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Shoonya ORB 6-Month Backtest Analytics (NIFTY & BANKNIFTY)</title>
+  <title>Shoonya ORB 1-Year Option 2 Backtest Analytics (NIFTY H1 + BANKNIFTY)</title>
   <script src="https://www.gstatic.com/antigravity/web/dev/tailwindcss.min.js"></script>
   <style>
     :root {
@@ -52,20 +52,20 @@ html_template = """<!DOCTYPE html>
     <div>
       <div class="flex items-center gap-3">
         <h1 class="text-xl md:text-2xl font-bold tracking-tight text-white flex items-center gap-2">
-          <span>📊 Shoonya ORB 6-Month Backtest Analytics</span>
+          <span>📊 Shoonya AutoORB 1-Year Dual-Engine Backtest</span>
         </h1>
-        <span class="badge bg-blue-500/10 text-blue-400 border border-blue-500/30">May 2026 – Nov 2026</span>
+        <span class="badge bg-blue-500/10 text-blue-400 border border-blue-500/30">Nov 2025 – Nov 2026</span>
       </div>
       <p class="text-xs md:text-sm text-[var(--muted)] mt-1">
-        180-day bar-by-bar backtest of 5-gate Opening Range Breakout (ORH/ORL + VWAP + RSI + VIX) on real 5m Shoonya tick candles.
+        1-year bar-by-bar Option 2 backtest (10:00–13:15 IST, India VIX &ge; 12, Supertrend 10,3, Global 1-Order Lock) on Shoonya 5m spot &amp; VIX candles.
       </p>
     </div>
     <div class="flex items-center gap-2 text-xs">
       <span class="px-3 py-1.5 rounded-lg bg-[var(--card)] border border-[var(--card-border)] text-gray-300 font-mono">
-        Capital: <strong>₹2,00,000</strong>
+        Capital: <strong>₹1,00,000</strong>
       </span>
       <span class="px-3 py-1.5 rounded-lg bg-[var(--card)] border border-[var(--card-border)] text-gray-300 font-mono">
-        Lots: <strong>2 Lots (NIFTY 130 / BNF 60)</strong>
+        Lots: <strong>2 Lots (3 Tue Boost)</strong>
       </span>
     </div>
   </div>
@@ -92,10 +92,9 @@ html_template = """<!DOCTYPE html>
       <div>
         <label class="block text-[var(--muted)] mb-1 font-medium">Breakout Entry Window</label>
         <select id="filter-time" onchange="applyFilters()" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-2.5 py-1.5 text-white focus:outline-none focus:border-blue-500">
-          <option value="ALL">All Day (09:30 – 14:15 IST)</option>
-          <option value="SWEET_SPOT" selected>⭐ Sweet Spot (10:15 – 13:15 IST)</option>
-          <option value="AFTER_10">Post-Opening (10:00 – 14:15 IST)</option>
-          <option value="MORNING_ONLY">Morning Trap (09:30 – 10:15 IST)</option>
+          <option value="ALL" selected>All Entries (10:00 – 13:15 IST)</option>
+          <option value="SWEET_SPOT">Midday Focus (10:15 – 13:15 IST)</option>
+          <option value="AFTER_10">After 10:00 (10:00 – 13:15 IST)</option>
         </select>
       </div>
 
@@ -171,7 +170,7 @@ html_template = """<!DOCTYPE html>
         <h3 class="text-sm font-semibold text-white flex items-center gap-2">
           <span>📈 Cumulative Portfolio Equity Curve</span>
         </h3>
-        <span class="text-xs text-[var(--muted)]">₹2,00,000 Initial Capital</span>
+        <span class="text-xs text-[var(--muted)]">₹1,00,000 Initial Capital</span>
       </div>
       <div class="w-full h-64 relative">
         <canvas id="equityCanvas" class="w-full h-full"></canvas>
@@ -197,19 +196,19 @@ html_template = """<!DOCTYPE html>
     <div class="flex items-start gap-3">
       <div class="text-2xl">💡</div>
       <div class="space-y-1">
-        <h4 class="text-sm font-semibold text-blue-300">Empirical 6-Month Backtest Insights &amp; Immediate Improvements</h4>
+        <h4 class="text-sm font-semibold text-blue-300">Empirical 1-Year Option 2 Dual-Engine Results (214 Trades)</h4>
         <div class="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs text-gray-300 mt-2">
           <div class="bg-gray-900/60 p-2.5 rounded-lg border border-gray-800">
-            <strong class="text-amber-400 block mb-1">1. Filter Out 09:30–10:15 Trap</strong>
-            Morning breakouts between 09:30 and 10:15 generated severe whipsaws (Win Rate &lt;30%). Shifting entry start to <strong>10:15 IST</strong> turned both NIFTY and BANKNIFTY deeply profitable (Combined +₹42,957 profit).
+            <strong class="text-emerald-400 block mb-1">1. NIFTY Hybrid H1 (+₹1,86,347)</strong>
+            15m HTF Swing Break (swing_len=2) + VIX &ge; 12 + Supertrend(10,3) Confirm &amp; Pure Trail starting at <strong>10:00 IST</strong> delivered <strong>PF 1.83</strong> across 105 trades.
           </div>
           <div class="bg-gray-900/60 p-2.5 rounded-lg border border-gray-800">
-            <strong class="text-emerald-400 block mb-1">2. Tuesday Expiry Alpha</strong>
-            Tuesdays delivered a staggering <strong>52.4% Win Rate</strong> and +₹25,094 in NIFTY options alone due to explosive gamma expansion with zero theta drag on breakout candles.
+            <strong class="text-blue-400 block mb-1">2. BANKNIFTY 5-Gate + ST (+₹98,472)</strong>
+            30m ORB + VIX &ge; 12 + Supertrend(10,3) delivered <strong>38.5% WR</strong>, <strong>PF 1.65</strong>, and only -₹22,278 max drawdown across 109 trades.
           </div>
           <div class="bg-gray-900/60 p-2.5 rounded-lg border border-gray-800">
-            <strong class="text-blue-400 block mb-1">3. Widen NIFTY SL to 25 pts</strong>
-            NIFTY spot often retests ORH by 30–35 pts before launching. Widening NIFTY's initial option SL from 20 to 25 pts prevents premature stop-outs on valid breakout trends.
+            <strong class="text-amber-400 block mb-1">3. Combined Portfolio (+₹2,84,818)</strong>
+            Global 1-Order Lock on ₹1,00,000 capital achieved <strong>PF 1.76</strong>, -₹44,803 MaxDD (6.36x Return/DD), and <strong>10/12 profitable months</strong>.
           </div>
         </div>
       </div>
@@ -312,7 +311,7 @@ html_template = """<!DOCTYPE html>
       const lossSum = Math.abs(losses.reduce((acc, t) => acc + t.n, 0));
       const pf = lossSum > 0 ? (winSum / lossSum) : (winSum > 0 ? 99.0 : 0.0);
       const winRate = total > 0 ? (wins.length / total * 100) : 0;
-      const roi = (net / 200000) * 100;
+      const roi = (net / 100000) * 100;
       const expectancy = total > 0 ? (net / total) : 0;
 
       // Drawdown
@@ -323,7 +322,7 @@ html_template = """<!DOCTYPE html>
         const dd = peak - cum;
         if (dd > maxDD) maxDD = dd;
       });
-      const ddPct = (maxDD / 200000) * 100;
+      const ddPct = (maxDD / 100000) * 100;
 
       const avgWin = wins.length > 0 ? winSum / wins.length : 0;
       const avgLoss = losses.length > 0 ? lossSum / losses.length : 0;
@@ -465,10 +464,10 @@ html_template = """<!DOCTYPE html>
       ctx.clearRect(0, 0, w, h);
 
       const buckets = [
-        { label: "09:30–10:15", filter: t => t.in < "10:15" },
-        { label: "10:15–11:30", filter: t => t.in >= "10:15" && t.in < "11:30" },
-        { label: "11:30–13:00", filter: t => t.in >= "11:30" && t.in <= "13:00" },
-        { label: "13:00–14:15", filter: t => t.in > "13:00" }
+        { label: "10:00–11:00", filter: t => t.in < "11:00" },
+        { label: "11:00–12:00", filter: t => t.in >= "11:00" && t.in < "12:00" },
+        { label: "12:00–13:00", filter: t => t.in >= "12:00" && t.in <= "13:00" },
+        { label: "13:00–13:15", filter: t => t.in > "13:00" }
       ];
 
       const pnlData = buckets.map(b => {

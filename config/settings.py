@@ -135,7 +135,7 @@ class AppSettings(BaseModel):
     nifty_htf_break_buf_atr: float = Field(default=0.1)
     nifty_htf_stop_atr_mult: float = Field(default=0.5)
     nifty_htf_opt_sl_cap: float = Field(default=35.0)
-    nifty_htf_entry_start_time: time = Field(default=time(9, 30, 0))
+    nifty_htf_entry_start_time: time = Field(default=time(10, 0, 0))
     nifty_htf_max_trades_per_day: int = Field(default=2)
     banknifty_be_pyramiding: bool = Field(default=False)
     tuesday_expiry_boost: bool = Field(default=True)
@@ -187,6 +187,16 @@ def _parse_bool(raw: str | None, default: bool = True) -> bool:
     return raw.strip().lower() in {"1", "true", "yes", "y", "on"}
 
 
+def _parse_hhmm(raw: str | None, default: time) -> time:
+    if not raw:
+        return default
+    try:
+        parts = raw.strip().split(":")
+        return time(int(parts[0]), int(parts[1]) if len(parts) > 1 else 0, 0)
+    except Exception:
+        return default
+
+
 def load_settings(env_path: str | Path | None = None) -> AppSettings:
     """Load settings from optional .env file and OS environment variables."""
     if env_path is not None:
@@ -235,6 +245,7 @@ def load_settings(env_path: str | Path | None = None) -> AppSettings:
         nifty_htf_break_buf_atr=float(os.getenv("NIFTY_HTF_BREAK_BUF_ATR", "0.1") or 0.1),
         nifty_htf_stop_atr_mult=float(os.getenv("NIFTY_HTF_STOP_ATR_MULT", "0.5") or 0.5),
         nifty_htf_opt_sl_cap=float(os.getenv("NIFTY_HTF_OPT_SL_CAP", "35.0") or 35.0),
+        nifty_htf_entry_start_time=_parse_hhmm(os.getenv("NIFTY_HTF_ENTRY_START_TIME"), time(10, 0, 0)),
         nifty_htf_max_trades_per_day=int(os.getenv("NIFTY_HTF_MAX_TRADES_PER_DAY", "2") or 2),
         banknifty_be_pyramiding=_parse_bool(os.getenv("BANKNIFTY_BE_PYRAMIDING"), default=False),
         tuesday_expiry_boost=_parse_bool(os.getenv("TUESDAY_EXPIRY_BOOST"), default=True),
