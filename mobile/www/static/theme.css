@@ -1,66 +1,93 @@
-/* Obsidian Velocity Terminal — Shared Design System (Dark default + Light toggle) */
+/* AutoORB × Tradetron ATP-AI Institutional Design System (Dark default + Light toggle) */
 
 :root {
   color-scheme: dark;
 
-  --rgb-background: 15 19 28;
-  --rgb-surface: 15 19 28;
-  --rgb-surface-dim: 15 19 28;
-  --rgb-surface-bright: 53 57 67;
-  --rgb-surface-container-lowest: 10 14 23;
-  --rgb-surface-container-low: 24 27 37;
-  --rgb-surface-container: 28 31 41;
-  --rgb-surface-container-high: 38 42 52;
-  --rgb-surface-container-highest: 49 53 63;
-  --rgb-surface-variant: 49 53 63;
+  /* Tradetron ATP-AI Dark Tokens (Reverse-Engineered from tradetron.tech/css/atp-ai/app.bundle.css) */
+  --paper: #0A0A0F;
+  --paper-2: #1A1A24;
+  --paper-3: #1E1B39;
+  --surface: #12121A;
+  --ink: #EDEDF2;
+  --ink-soft: #C7C7D4;
+  --slate: #8B8B9E;
+  --slate-soft: #6F6F82;
+  --rule: #1F1F2A;
+  --rule-strong: #2A2A38;
+  --signal: #6366F1;
+  --signal-soft: #A5B4FC;
+  --signal-fill: #5B54E8;
+  --signal-tint: #1E1B39;
+  --signal-tint-strong: #272253;
+  --positive: #10B981;
+  --positive-soft: rgba(16, 185, 129, 0.16);
+  --negative: #F05252;
+  --negative-soft: rgba(240, 82, 82, 0.16);
+  --mint: #0C2B22;
+  --lilac: #1E1B39;
+  --peach: #2B2118;
+  --field: #1A1A24;
 
-  --rgb-on-surface: 223 226 239;
-  --rgb-on-background: 223 226 239;
-  --rgb-on-surface-variant: 185 202 196;
-  --rgb-inverse-surface: 223 226 239;
-  --rgb-inverse-on-surface: 44 48 58;
+  /* Mapped RGB tokens for Tailwind utility compatibility */
+  --rgb-background: 10 10 15;
+  --rgb-surface: 18 18 26;
+  --rgb-surface-dim: 10 10 15;
+  --rgb-surface-bright: 42 42 56;
+  --rgb-surface-container-lowest: 10 10 15;
+  --rgb-surface-container-low: 18 18 26;
+  --rgb-surface-container: 26 26 36;
+  --rgb-surface-container-high: 32 32 45;
+  --rgb-surface-container-highest: 42 42 56;
+  --rgb-surface-variant: 42 42 56;
 
-  --rgb-outline: 131 148 143;
-  --rgb-outline-variant: 58 74 70;
-  --rgb-surface-tint: 0 223 193;
+  --rgb-on-surface: 237 237 242;
+  --rgb-on-background: 237 237 242;
+  --rgb-on-surface-variant: 155 155 174;
+  --rgb-inverse-surface: 237 237 242;
+  --rgb-inverse-on-surface: 18 18 26;
 
-  --rgb-primary: 215 255 243;
-  --rgb-on-primary: 0 56 47;
-  --rgb-primary-container: 0 245 212;
-  --rgb-on-primary-container: 0 32 26;
-  --rgb-inverse-primary: 0 107 91;
-  --rgb-primary-fixed: 38 254 220;
-  --rgb-primary-fixed-dim: 0 223 193;
-  --rgb-on-primary-fixed: 0 32 26;
-  --rgb-on-primary-fixed-variant: 0 81 68;
+  --rgb-outline: 111 111 130;
+  --rgb-outline-variant: 42 42 56;
+  --rgb-surface-tint: 99 102 241;
 
-  --rgb-secondary: 255 178 186;
-  --rgb-on-secondary: 103 0 32;
-  --rgb-secondary-container: 212 0 75;
-  --rgb-on-secondary-container: 255 230 232;
-  --rgb-secondary-fixed: 255 217 220;
-  --rgb-secondary-fixed-dim: 255 178 186;
-  --rgb-on-secondary-fixed: 64 0 17;
-  --rgb-on-secondary-fixed-variant: 145 0 48;
+  --rgb-primary: 165 180 252;
+  --rgb-on-primary: 255 255 255;
+  --rgb-primary-container: 99 102 241;
+  --rgb-on-primary-container: 255 255 255;
+  --rgb-inverse-primary: 79 70 229;
+  --rgb-primary-fixed: 129 140 248;
+  --rgb-primary-fixed-dim: 99 102 241;
+  --rgb-on-primary-fixed: 255 255 255;
+  --rgb-on-primary-fixed-variant: 224 231 255;
 
-  --rgb-tertiary: 255 245 235;
-  --rgb-on-tertiary: 66 44 0;
-  --rgb-tertiary-container: 255 212 139;
-  --rgb-on-tertiary-container: 126 88 0;
-  --rgb-tertiary-fixed: 255 222 169;
-  --rgb-tertiary-fixed-dim: 255 186 39;
+  --rgb-secondary: 252 165 165;
+  --rgb-on-secondary: 127 29 29;
+  --rgb-secondary-container: 220 38 38;
+  --rgb-on-secondary-container: 254 242 242;
+  --rgb-secondary-fixed: 254 202 202;
+  --rgb-secondary-fixed-dim: 248 113 113;
+  --rgb-on-secondary-fixed: 69 10 10;
+  --rgb-on-secondary-fixed-variant: 153 27 27;
+
+  --rgb-tertiary: 253 230 138;
+  --rgb-on-tertiary: 69 26 3;
+  --rgb-tertiary-container: 245 158 11;
+  --rgb-on-tertiary-container: 120 53 15;
+  --rgb-tertiary-fixed: 253 230 138;
+  --rgb-tertiary-fixed-dim: 245 158 11;
   --rgb-on-tertiary-fixed: 39 25 0;
   --rgb-on-tertiary-fixed-variant: 94 65 0;
 
-  --rgb-error: 255 180 171;
+  --rgb-error: 248 113 113;
   --rgb-on-error: 105 0 5;
-  --rgb-error-container: 147 0 10;
-  --rgb-on-error-container: 255 218 214;
+  --rgb-error-container: 185 28 28;
+  --rgb-on-error-container: 254 226 226;
 
-  --c-profit: #00f5d4;
-  --c-loss: #ff5b7f;
-  --c-amber: #ffb703;
-  --c-glass-bg: rgba(10, 14, 23, 0.86);
+  --c-profit: #10B981;
+  --c-loss: #F05252;
+  --c-amber: #F59E0B;
+  --c-signal: #6366F1;
+  --c-glass-bg: rgba(18, 18, 26, 0.92);
   --c-glass-border: rgba(255, 255, 255, 0.08);
 
   /* Responsive Typography Scale (calibrated for 15" laptops by default) */
@@ -124,65 +151,91 @@
 [data-theme="light"] {
   color-scheme: light;
 
-  --rgb-background: 250 249 255;
-  --rgb-surface: 250 249 255;
-  --rgb-surface-dim: 215 217 231;
-  --rgb-surface-bright: 250 249 255;
+  /* Tradetron ATP-AI Light Tokens */
+  --paper: #FAFAFB;
+  --paper-2: #F2F2F5;
+  --paper-3: #EEEDFD;
+  --surface: #FFFFFF;
+  --ink: #0B0B10;
+  --ink-soft: #3F3F4E;
+  --slate: #6B6B7B;
+  --slate-soft: #8A8A99;
+  --rule: #E5E7EB;
+  --rule-strong: #DCDEE5;
+  --signal: #4F46E5;
+  --signal-soft: #4338CA;
+  --signal-fill: #4F46E5;
+  --signal-tint: #EEEDFD;
+  --signal-tint-strong: #E0E7FF;
+  --positive: #047857;
+  --positive-soft: #ECFDF5;
+  --negative: #DC2626;
+  --negative-soft: #FEF2F2;
+  --mint: #F0FDF9;
+  --lilac: #F5F3FF;
+  --peach: #FFF7ED;
+  --field: #FFFFFF;
+
+  --rgb-background: 250 250 251;
+  --rgb-surface: 255 255 255;
+  --rgb-surface-dim: 242 242 245;
+  --rgb-surface-bright: 255 255 255;
   --rgb-surface-container-lowest: 255 255 255;
-  --rgb-surface-container-low: 241 243 255;
-  --rgb-surface-container: 235 237 251;
-  --rgb-surface-container-high: 229 232 245;
-  --rgb-surface-container-highest: 223 226 239;
-  --rgb-surface-variant: 223 226 239;
+  --rgb-surface-container-low: 255 255 255;
+  --rgb-surface-container: 242 242 245;
+  --rgb-surface-container-high: 235 236 242;
+  --rgb-surface-container-highest: 229 231 235;
+  --rgb-surface-variant: 229 231 235;
 
-  --rgb-on-surface: 24 27 37;
-  --rgb-on-background: 24 27 37;
-  --rgb-on-surface-variant: 58 74 70;
-  --rgb-inverse-surface: 44 48 58;
-  --rgb-inverse-on-surface: 238 240 254;
+  --rgb-on-surface: 11 11 16;
+  --rgb-on-background: 11 11 16;
+  --rgb-on-surface-variant: 107 107 123;
+  --rgb-inverse-surface: 18 18 26;
+  --rgb-inverse-on-surface: 250 250 251;
 
-  --rgb-outline: 106 123 118;
-  --rgb-outline-variant: 185 202 196;
-  --rgb-surface-tint: 0 107 91;
+  --rgb-outline: 138 138 153;
+  --rgb-outline-variant: 220 222 229;
+  --rgb-surface-tint: 79 70 229;
 
-  --rgb-primary: 0 107 91;
+  --rgb-primary: 79 70 229;
   --rgb-on-primary: 255 255 255;
-  --rgb-primary-container: 0 245 212;
-  --rgb-on-primary-container: 0 32 26;
-  --rgb-inverse-primary: 0 223 193;
-  --rgb-primary-fixed: 0 107 91;
-  --rgb-primary-fixed-dim: 0 140 120;
-  --rgb-on-primary-fixed: 0 32 26;
-  --rgb-on-primary-fixed-variant: 0 81 68;
+  --rgb-primary-container: 79 70 229;
+  --rgb-on-primary-container: 255 255 255;
+  --rgb-inverse-primary: 99 102 241;
+  --rgb-primary-fixed: 79 70 229;
+  --rgb-primary-fixed-dim: 67 56 202;
+  --rgb-on-primary-fixed: 255 255 255;
+  --rgb-on-primary-fixed-variant: 238 237 253;
 
-  --rgb-secondary: 185 0 64;
+  --rgb-secondary: 220 38 38;
   --rgb-on-secondary: 255 255 255;
-  --rgb-secondary-container: 227 23 84;
-  --rgb-on-secondary-container: 255 251 255;
-  --rgb-secondary-fixed: 255 217 220;
-  --rgb-secondary-fixed-dim: 255 178 186;
-  --rgb-on-secondary-fixed: 64 0 17;
-  --rgb-on-secondary-fixed-variant: 145 0 48;
+  --rgb-secondary-container: 220 38 38;
+  --rgb-on-secondary-container: 255 255 255;
+  --rgb-secondary-fixed: 254 226 226;
+  --rgb-secondary-fixed-dim: 248 113 113;
+  --rgb-on-secondary-fixed: 69 10 10;
+  --rgb-on-secondary-fixed-variant: 153 27 27;
 
-  --rgb-tertiary: 125 88 0;
+  --rgb-tertiary: 180 83 9;
   --rgb-on-tertiary: 255 255 255;
-  --rgb-tertiary-container: 255 212 139;
-  --rgb-on-tertiary-container: 126 88 0;
-  --rgb-tertiary-fixed: 125 88 0;
-  --rgb-tertiary-fixed-dim: 217 148 0;
+  --rgb-tertiary-container: 254 243 199;
+  --rgb-on-tertiary-container: 120 53 15;
+  --rgb-tertiary-fixed: 180 83 9;
+  --rgb-tertiary-fixed-dim: 217 119 6;
   --rgb-on-tertiary-fixed: 39 25 0;
   --rgb-on-tertiary-fixed-variant: 94 65 0;
 
-  --rgb-error: 186 26 26;
+  --rgb-error: 220 38 38;
   --rgb-on-error: 255 255 255;
-  --rgb-error-container: 255 218 214;
-  --rgb-on-error-container: 147 0 10;
+  --rgb-error-container: 254 226 226;
+  --rgb-on-error-container: 153 27 27;
 
-  --c-profit: #007a67;
-  --c-loss: #c81048;
-  --c-amber: #b37400;
-  --c-glass-bg: rgba(255, 255, 255, 0.88);
-  --c-glass-border: rgba(24, 27, 37, 0.08);
+  --c-profit: #047857;
+  --c-loss: #DC2626;
+  --c-amber: #D97706;
+  --c-signal: #4F46E5;
+  --c-glass-bg: rgba(255, 255, 255, 0.94);
+  --c-glass-border: rgba(11, 11, 16, 0.08);
 }
 
 @layer base {
@@ -191,8 +244,9 @@
     padding: 0;
     max-width: 100%;
     overflow-x: clip;
-    background-color: rgb(var(--rgb-background));
-    color: rgb(var(--rgb-on-surface));
+    background-color: var(--paper);
+    color: var(--ink);
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
     -webkit-text-size-adjust: 100%;
     text-size-adjust: 100%;
     font-optical-sizing: auto;
@@ -211,9 +265,9 @@
 .font-title-sm { font-size: var(--fs-title-sm); line-height: 1.32; }
 .font-body-md { font-size: var(--fs-body-md); line-height: 1.45; }
 .font-body-sm { font-size: var(--fs-body-sm); line-height: 1.4; }
-.font-data-mono-lg { font-size: var(--fs-mono-lg); line-height: 1.25; letter-spacing: -0.02em; }
-.font-data-mono-md { font-size: var(--fs-mono-md); line-height: 1.3; letter-spacing: -0.01em; }
-.font-data-mono-sm { font-size: var(--fs-mono-sm); line-height: 1.35; }
+.font-data-mono-lg { font-size: var(--fs-mono-lg); line-height: 1.25; letter-spacing: -0.02em; font-family: 'JetBrains Mono', monospace; }
+.font-data-mono-md { font-size: var(--fs-mono-md); line-height: 1.3; letter-spacing: -0.01em; font-family: 'JetBrains Mono', monospace; }
+.font-data-mono-sm { font-size: var(--fs-mono-sm); line-height: 1.35; font-family: 'JetBrains Mono', monospace; }
 .font-label-caps { font-size: var(--fs-label-caps); line-height: 1.2; letter-spacing: var(--ls-label-caps); }
 
 .tabular-nums {
@@ -232,15 +286,19 @@
   color: var(--c-amber);
 }
 
+.text-signal {
+  color: var(--signal);
+}
+
 .glass-header {
   background: var(--c-glass-bg);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border-bottom: 1px solid var(--c-glass-border);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  border-bottom: 1px solid var(--rule);
 }
 
 .glass-panel {
-  border: 1px solid var(--c-glass-border);
+  border: 1px solid var(--rule);
 }
 
 .pt-safe {
@@ -277,16 +335,16 @@
   background: transparent;
 }
 .thin-scroll::-webkit-scrollbar-thumb {
-  background: rgba(131, 148, 143, 0.3);
+  background: rgba(139, 139, 158, 0.3);
   border-radius: 9999px;
 }
 
 @keyframes pulseUp {
-  0% { background-color: rgba(0, 245, 212, 0.25); }
+  0% { background-color: rgba(16, 185, 129, 0.25); }
   100% { background-color: transparent; }
 }
 @keyframes pulseDown {
-  0% { background-color: rgba(255, 51, 102, 0.25); }
+  0% { background-color: rgba(240, 82, 82, 0.25); }
   100% { background-color: transparent; }
 }
 .pulse-up {
@@ -311,10 +369,512 @@ input[type="range"].obsidian-range::-webkit-slider-thumb {
   width: 18px;
   height: 18px;
   border-radius: 50%;
-  background: rgb(var(--rgb-primary-container));
+  background: var(--signal);
   cursor: pointer;
-  border: 2px solid rgb(var(--rgb-surface-container-lowest));
-  box-shadow: 0 0 10px rgba(0, 245, 212, 0.6);
+  border: 2px solid var(--surface);
+  box-shadow: 0 0 10px rgba(99, 102, 241, 0.55);
+}
+
+/* =====================================================================
+   TRADETRON ATP-AI DASHBOARD CLONE ARCHITECTURE
+   (Reverse-Engineered via REA from https://tradetron.tech/user/dashboard)
+   ===================================================================== */
+
+/* Tradetron Pulsing Neural Synapse Logo Dots (.tt-brainfx) */
+.tt-brainfx {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 4px 6px;
+  border-radius: 8px;
+  background: var(--signal-tint);
+  border: 1px solid rgba(99, 102, 241, 0.3);
+}
+.tt-brainfx span {
+  width: 5px;
+  height: 5px;
+  border-radius: 9999px;
+  background: var(--signal);
+  animation: ttSynapse 1.8s ease-in-out infinite;
+}
+.tt-brainfx span:nth-child(2) {
+  background: var(--positive);
+  animation-delay: 0.3s;
+}
+.tt-brainfx span:nth-child(3) {
+  background: var(--signal-soft);
+  animation-delay: 0.6s;
+}
+@keyframes ttSynapse {
+  0%, 100% { transform: scale(0.85); opacity: 0.55; }
+  50% { transform: scale(1.25); opacity: 1; }
+}
+
+/* Tradetron Market Ticker Bar (.h-ticker) */
+.h-ticker {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 32px;
+  padding: 0 4px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: var(--ink-soft);
+  overflow-x: auto;
+}
+.h-ticker__pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  background: var(--positive-soft);
+  color: var(--positive);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  flex-shrink: 0;
+}
+.h-ticker__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.18);
+}
+.h-ticker__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 10px;
+  border-radius: 6px;
+  background: var(--paper-2);
+  border: 1px solid var(--rule);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.h-ticker__sym {
+  font-family: 'Inter', sans-serif;
+  font-weight: 600;
+  color: var(--ink);
+  font-size: 11px;
+}
+
+/* Tradetron Summary Toolbar & Cards (.db-sum__toolbar, .db-cards, .db-card, .db-sum) */
+.db-sum__toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.db-exitall {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 14px;
+  border-radius: 8px;
+  background: #DC2626;
+  color: #FFFFFF;
+  border: 1px solid #DC2626;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.1s ease;
+  box-shadow: 0 2px 10px rgba(220, 38, 38, 0.28);
+}
+.db-exitall:hover {
+  background: #B91C1C;
+  border-color: #B91C1C;
+}
+.db-cards {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+@media (max-width: 1024px) {
+  .db-cards {
+    grid-template-columns: 1fr;
+  }
+}
+.db-card {
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: 12px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  position: relative;
+  overflow: hidden;
+}
+.db-card--accent {
+  background: linear-gradient(135deg, var(--surface) 0%, var(--signal-tint) 100%);
+  border-color: rgba(99, 102, 241, 0.35);
+}
+.db-sum {
+  background: linear-gradient(180deg, var(--mint) 0%, var(--surface) 75%);
+  border: 1px solid var(--rule);
+  border-radius: 12px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 8px;
+}
+.db-sum__tag {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--positive);
+  background: var(--surface);
+  border: 1px solid rgba(16, 185, 129, 0.35);
+  padding: 2px 7px;
+  border-radius: 5px;
+  letter-spacing: 0.08em;
+}
+.db-chip {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--paper-2);
+  color: var(--ink-soft);
+}
+.db-chip.up {
+  background: var(--positive-soft);
+  color: var(--positive);
+}
+.db-chip.down {
+  background: var(--negative-soft);
+  color: var(--negative);
+}
+
+/* Tradetron Deployed Strategies Panel (.db-panel, .db-scope, .db-strat-head, .db-strat) */
+.db-panel {
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: 14px;
+  overflow: visible;
+  box-shadow: 0 8px 24px -12px rgba(0, 0, 0, 0.35);
+}
+.db-panel__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--rule);
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.db-scope {
+  display: inline-flex;
+  background: var(--paper-2);
+  padding: 3px;
+  border-radius: 9px;
+  gap: 2px;
+  border: 1px solid var(--rule);
+}
+.db-scope__tab {
+  padding: 5px 11px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--slate);
+  cursor: pointer;
+  border: 0;
+  background: transparent;
+  transition: all 0.15s ease;
+}
+.db-scope__tab.is-active {
+  background: var(--surface);
+  color: var(--ink);
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
+}
+.db-filter {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+.db-filter input {
+  padding: 6px 12px 6px 30px;
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  font-size: 12.5px;
+  background: var(--paper);
+  color: var(--ink);
+  min-width: 220px;
+}
+.db-filter input:focus {
+  outline: none;
+  border-color: var(--signal);
+  box-shadow: 0 0 0 3px var(--signal-tint);
+}
+
+/* 8-Column Tradetron Strategy Table Header & Row */
+.db-strat-head {
+  display: none;
+}
+@media (min-width: 1120px) {
+  .db-strat-head {
+    display: grid;
+    grid-template-columns: minmax(270px, 2.15fr) minmax(120px, 0.9fr) minmax(135px, 1fr) minmax(130px, 0.95fr) minmax(110px, 0.8fr) minmax(105px, 0.8fr) minmax(115px, 0.9fr) 215px;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 16px;
+    background: var(--paper-2);
+    border-bottom: 1px solid var(--rule);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10.5px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--slate);
+    font-weight: 600;
+  }
+}
+
+.db-strat {
+  border-bottom: 1px solid var(--rule);
+  transition: background 0.15s ease;
+}
+.db-strat:last-child {
+  border-bottom: 0;
+}
+.db-strat__row {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+  padding: 13px 16px;
+  align-items: center;
+}
+@media (min-width: 1120px) {
+  .db-strat__row {
+    grid-template-columns: minmax(270px, 2.15fr) minmax(120px, 0.9fr) minmax(135px, 1fr) minmax(130px, 0.95fr) minmax(110px, 0.8fr) minmax(105px, 0.8fr) minmax(115px, 0.9fr) 215px;
+  }
+}
+.db-strat__row:hover {
+  background: rgba(99, 102, 241, 0.04);
+}
+.db-serial {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--slate);
+  background: var(--paper-2);
+  border: 1px solid var(--rule);
+  border-radius: 5px;
+  padding: 2px 6px;
+  flex-shrink: 0;
+}
+.db-strat__legs {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--rule);
+  background: var(--paper-2);
+  color: var(--ink-soft);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.db-strat__legs:hover,
+.db-strat__legs.is-open {
+  border-color: var(--signal);
+  color: var(--signal);
+  background: var(--signal-tint);
+}
+.db-strat__name {
+  font-weight: 600;
+  font-size: 13.5px;
+  color: var(--ink);
+  letter-spacing: -0.01em;
+}
+.db-strat__chip {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+.db-strat__chip--live {
+  background: var(--positive-soft);
+  color: var(--positive);
+  border: 1px solid rgba(16, 185, 129, 0.35);
+}
+.db-strat__chip--paper {
+  background: var(--lilac);
+  color: var(--signal);
+  border: 1px solid rgba(99, 102, 241, 0.35);
+}
+
+/* Tradetron Multiplier Select & Stepper */
+.db-mult-select {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ink);
+  background: var(--paper-2);
+  border: 1px solid var(--rule-strong);
+  border-radius: 7px;
+  padding: 4px 8px;
+  cursor: pointer;
+}
+.db-mult-select:focus {
+  outline: none;
+  border-color: var(--signal);
+}
+
+/* Tradetron Status Badges (.db-status) */
+.db-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10.5px;
+  font-weight: 700;
+  padding: 3px 9px;
+  border-radius: 999px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.db-status::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.db-status--ok {
+  background: var(--positive-soft);
+  color: var(--positive);
+}
+.db-status--warn {
+  background: var(--peach);
+  color: var(--c-amber);
+}
+.db-status--signal {
+  background: var(--signal-tint);
+  color: var(--signal-soft);
+}
+.db-status--paused {
+  background: var(--paper-2);
+  color: var(--slate);
+}
+.db-status--err {
+  background: var(--negative-soft);
+  color: var(--negative);
+}
+
+/* Tradetron Strategy Row Action Buttons (.db-rowact) */
+.db-rowact {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  height: 28px;
+  padding: 0 9px;
+  border-radius: 6px;
+  border: 1px solid var(--rule);
+  background: var(--surface);
+  color: var(--ink-soft);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+.db-rowact:hover {
+  border-color: var(--ink);
+  color: var(--ink);
+  background: var(--paper-2);
+}
+.db-rowact--oneclick {
+  color: var(--signal);
+  border-color: rgba(99, 102, 241, 0.45);
+  background: var(--signal-tint);
+}
+.db-rowact--oneclick:hover {
+  background: var(--signal);
+  color: #FFFFFF;
+  border-color: var(--signal);
+}
+.db-rowact--ce {
+  color: var(--positive);
+  border-color: rgba(16, 185, 129, 0.4);
+  background: var(--positive-soft);
+}
+.db-rowact--ce:hover {
+  background: var(--positive);
+  color: #FFFFFF;
+}
+.db-rowact--pe {
+  color: var(--negative);
+  border-color: rgba(240, 82, 82, 0.4);
+  background: var(--negative-soft);
+}
+.db-rowact--pe:hover {
+  background: var(--negative);
+  color: #FFFFFF;
+}
+.db-rowact--danger {
+  color: var(--negative);
+  border-color: rgba(220, 38, 38, 0.35);
+}
+.db-rowact--danger:hover {
+  background: #DC2626;
+  color: #FFFFFF;
+  border-color: #DC2626;
+}
+
+/* Tradetron Expandable Positions & 5-Gate Radar Drawer (.db-strat__positions, .db-postbl) */
+.db-strat__positions {
+  padding: 12px 16px 16px;
+  background: var(--paper);
+  border-top: 1px dashed var(--rule);
+}
+.db-postbl {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.db-postbl th {
+  text-align: left;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--slate);
+  font-weight: 600;
+  padding: 8px 12px;
+  background: var(--paper-2);
+  border-bottom: 1px solid var(--rule);
+}
+.db-postbl td {
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--rule);
+  color: var(--ink-soft);
+  font-family: 'JetBrains Mono', monospace;
+  font-variant-numeric: tabular-nums;
+}
+.db-postbl tbody tr:last-child td {
+  border-bottom: 0;
 }
 
 /* Universal Action & Button Loading Spinners */
@@ -352,10 +912,10 @@ input[type="range"].obsidian-range::-webkit-slider-thumb {
   gap: 8px;
   padding: 6px 14px;
   border-radius: 9999px;
-  background: rgba(15, 19, 28, 0.94);
-  color: var(--c-profit);
-  border: 1px solid rgba(0, 245, 212, 0.38);
-  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.55), 0 0 14px rgba(0, 245, 212, 0.18);
+  background: rgba(18, 18, 26, 0.95);
+  color: var(--signal-soft);
+  border: 1px solid rgba(99, 102, 241, 0.45);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.55), 0 0 14px rgba(99, 102, 241, 0.22);
   font-family: 'JetBrains Mono', monospace;
   font-size: 11px;
   font-weight: 600;
@@ -369,7 +929,8 @@ input[type="range"].obsidian-range::-webkit-slider-thumb {
 
 [data-theme="light"] #autoorb-global-loader {
   background: rgba(255, 255, 255, 0.96);
-  border-color: rgba(0, 122, 103, 0.35);
+  color: var(--signal);
+  border-color: rgba(79, 70, 229, 0.35);
   box-shadow: 0 6px 20px rgba(24, 27, 37, 0.16);
 }
 

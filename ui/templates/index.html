@@ -32,9 +32,10 @@
     <div class="sticky top-0 left-0 right-0 z-40 glass-header">
       <div class="h-14 max-w-[1440px] mx-auto px-4 lg:px-6 flex items-center justify-between gap-3">
         <div class="flex items-center gap-2.5 min-w-0">
-          <img src="/static/icon-192.png" alt="AutoORB" class="w-8 h-8 rounded-lg object-cover shadow-[0_0_12px_rgba(0,245,212,0.3)] shrink-0"/>
+          <img src="/static/icon-192.png" alt="AutoORB" class="w-8 h-8 rounded-lg object-cover shadow-[0_0_12px_rgba(99,102,241,0.35)] shrink-0"/>
+          <span class="tt-brainfx" aria-hidden="true"><span></span><span></span><span></span></span>
           <span class="font-headline-md text-[16px] font-bold tracking-tight text-on-surface">AutoORB</span>
-          <span class="hidden sm:inline font-label-caps text-on-surface-variant uppercase tracking-widest">Shoonya ORB</span>
+          <span class="hidden sm:inline font-label-caps text-on-surface-variant uppercase tracking-widest">Tradetron ATP-AI &bull; Shoonya ORB</span>
         </div>
 
         <div class="flex items-center gap-2 shrink-0">
@@ -135,42 +136,47 @@
     </footer>
   </section>
 
-  <!-- FIXED 2-TIER WORKSTATION HEADER (Hidden until authenticated) -->
+  <!-- FIXED 2-TIER TRADETRON ATP-AI WORKSTATION HEADER (Hidden until authenticated) -->
   <header id="desk-app-header" class="hidden fixed top-0 left-0 right-0 z-40 glass-header shadow-[0_2px_16px_rgba(0,0,0,0.45)]">
     <div class="w-full max-w-[1600px] mx-auto px-3 lg:px-4 xl:px-5 flex flex-col justify-between py-1">
-      <!-- Row 1: Brand, Telemetry Pills, Live MTM, Action Buttons, User Avatar -->
+      <!-- Row 1: Tradetron ATP-AI Brand (.tt-brainfx), Nav Tabs, Broker Tally, Live MTM, Action Buttons, Profile -->
       <div class="h-11 flex items-center justify-between gap-2 min-w-0">
-        <div class="flex items-center gap-2 min-w-0">
+        <div class="flex items-center gap-2.5 min-w-0">
           <div class="flex items-center gap-2 shrink-0">
-            <img src="/static/icon-192.png" alt="AutoORB" class="w-7 h-7 rounded-lg object-cover shadow-[0_0_10px_rgba(0,245,212,0.3)]"/>
+            <img src="/static/icon-192.png" alt="AutoORB" class="w-7 h-7 rounded-lg object-cover shadow-[0_0_10px_rgba(99,102,241,0.35)]"/>
+            <span class="tt-brainfx" title="Tradetron ATP-AI Engine"><span></span><span></span><span></span></span>
             <div class="flex flex-col">
-              <span class="font-headline-md text-[15px] font-bold tracking-tight text-primary leading-none">SHOONYA</span>
-              <span class="font-label-caps text-on-surface-variant uppercase tracking-wider leading-none mt-0.5">ORB Terminal</span>
+              <span class="font-headline-md text-[15px] font-bold tracking-tight text-on-surface leading-none">AutoORB</span>
+              <span class="font-label-caps text-on-surface-variant uppercase tracking-wider leading-none mt-0.5">Tradetron Dashboard</span>
             </div>
           </div>
 
-          <div class="hidden 2xl:flex items-center gap-1 px-2 py-0.5 rounded bg-surface-container-high shrink-0">
-            <span class="font-label-caps text-on-surface-variant">SEBI ID:</span>
-            <span id="hdr-sebi-id" class="font-data-mono-sm text-primary font-bold">--</span>
-          </div>
-
-          <div class="flex items-center gap-1.5 px-2 py-0.5 rounded bg-surface-container shrink-0">
-            <span id="hdr-ws-dot" class="w-2 h-2 rounded-full bg-primary-container animate-pulse"></span>
-            <span id="hdr-ping" class="font-data-mono-sm text-on-surface font-semibold tabular-nums">--ms</span>
-            <span id="hdr-ws-label" class="hidden md:inline font-label-caps text-profit uppercase">FEED SYNC</span>
-          </div>
-
-          <div class="hidden md:flex px-2 py-0.5 rounded bg-surface-container-high items-center gap-1.5 shrink-0">
-            <span class="font-label-caps text-on-surface-variant">PHASE</span>
-            <span id="hdr-phase" class="font-data-mono-sm font-bold px-1.5 py-0.5 rounded bg-surface-container-lowest text-profit">STANDBY</span>
-          </div>
+          <nav id="desktop-nav" class="flex items-center gap-1 h-9 overflow-x-auto no-scrollbar ml-1">
+            <button data-tab="radar" type="button" class="desk-tab h-full px-3 flex items-center gap-1.5 font-body-sm text-body-sm bg-surface-container-high text-primary font-bold border-b-2 border-primary-container transition-colors tracking-wide cursor-pointer whitespace-nowrap rounded-t">
+              <span class="material-symbols-outlined text-[15px]">dashboard</span>
+              <span>Deployed Dashboard</span>
+            </button>
+            <button data-tab="positions" type="button" class="desk-tab h-full px-3 flex items-center gap-1.5 font-body-sm text-body-sm text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low transition-colors tracking-wide cursor-pointer whitespace-nowrap rounded-t">
+              <span class="material-symbols-outlined text-[15px]">account_balance_wallet</span>
+              <span>Positions &amp; Books</span>
+              <span id="nav-pos-badge" class="hidden px-1.5 py-0.5 rounded-full bg-primary-container text-on-primary-fixed font-label-caps text-[9px] font-bold">0</span>
+            </button>
+            <button data-tab="logs" type="button" class="desk-tab h-full px-3 flex items-center gap-1.5 font-body-sm text-body-sm text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low transition-colors tracking-wide cursor-pointer whitespace-nowrap rounded-t">
+              <span class="material-symbols-outlined text-[15px]">terminal</span>
+              <span>Terminal Logs</span>
+            </button>
+            <button data-tab="analytics" type="button" class="desk-tab h-full px-3 flex items-center gap-1.5 font-body-sm text-body-sm text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low transition-colors tracking-wide cursor-pointer whitespace-nowrap rounded-t">
+              <span class="material-symbols-outlined text-[15px]">analytics</span>
+              <span>Backtest &amp; Reports</span>
+            </button>
+          </nav>
         </div>
 
         <div class="flex items-center gap-1.5 shrink-0">
           <!-- Live Net MTM & Avail Cash Capsule -->
-          <div class="hidden xl:flex items-center gap-3 px-2.5 py-0.5 rounded bg-surface-container-low glass-panel">
+          <div class="hidden xl:flex items-center gap-3 px-2.5 py-0.5 rounded-lg bg-surface-container-low glass-panel">
             <div class="flex flex-col text-right">
-              <span class="font-label-caps text-on-surface-variant uppercase leading-none">NET MTM</span>
+              <span class="font-label-caps text-on-surface-variant uppercase leading-none">TOTAL P&amp;L</span>
               <span id="hdr-mtm" class="font-data-mono-md font-bold text-profit leading-tight tabular-nums">₹0.00</span>
             </div>
             <div class="w-px h-6 bg-surface-container-highest"></div>
@@ -180,30 +186,30 @@
             </div>
           </div>
 
-          <!-- Header Actions (Compact for 15" laptops) -->
+          <!-- Header Actions -->
           <div class="flex items-center gap-1">
-            <button id="btn-hdr-manual" type="button" class="h-7 px-2 rounded bg-surface-container-high hover:bg-surface-bright text-on-surface flex items-center gap-1 transition-colors cursor-pointer whitespace-nowrap" title="Manual Broker Order">
+            <button id="btn-hdr-manual" type="button" class="h-7 px-2 rounded-md bg-surface-container-high hover:bg-surface-bright text-on-surface flex items-center gap-1 transition-colors cursor-pointer whitespace-nowrap" title="Manual Broker Order">
               <span class="material-symbols-outlined text-[15px] text-profit">bolt</span>
-              <span class="hidden xl:inline font-label-caps tracking-wide">MANUAL</span>
+              <span class="hidden xl:inline font-label-caps tracking-wide">ONE-CLICK</span>
             </button>
-            <button id="btn-hdr-config" type="button" class="h-7 px-2 rounded bg-surface-container-high hover:bg-surface-bright text-on-surface flex items-center gap-1 transition-colors cursor-pointer whitespace-nowrap" title="Strategy Config">
+            <button id="btn-hdr-config" type="button" class="h-7 px-2 rounded-md bg-surface-container-high hover:bg-surface-bright text-on-surface flex items-center gap-1 transition-colors cursor-pointer whitespace-nowrap" title="ORB Timings &amp; Strategy Config">
               <span class="material-symbols-outlined text-[15px] text-on-surface-variant">tune</span>
-              <span class="hidden xl:inline font-label-caps tracking-wide">CONFIG</span>
+              <span class="hidden xl:inline font-label-caps tracking-wide">TIMINGS</span>
             </button>
-            <button id="btn-hdr-guide" type="button" class="h-7 px-2 rounded bg-surface-container-high hover:bg-surface-bright text-on-surface flex items-center gap-1 transition-colors cursor-pointer whitespace-nowrap" title="Strategy & User Guide">
+            <button id="btn-hdr-guide" type="button" class="h-7 px-2 rounded-md bg-surface-container-high hover:bg-surface-bright text-on-surface flex items-center gap-1 transition-colors cursor-pointer whitespace-nowrap" title="Strategy &amp; User Guide">
               <span class="material-symbols-outlined text-[15px] text-amber-tactical">menu_book</span>
               <span class="hidden 2xl:inline font-label-caps tracking-wide">GUIDE</span>
             </button>
-            <button id="btn-hdr-broker" type="button" class="h-7 px-2 rounded bg-surface-container hover:bg-surface-high flex items-center gap-1 cursor-pointer whitespace-nowrap" title="Broker Session & Multi-Account">
-              <span id="hdr-broker-dot" class="w-1.5 h-1.5 rounded-full bg-amber-tactical"></span>
-              <span id="hdr-broker-label" class="font-label-caps text-primary">SHOONYA</span>
+            <button id="btn-hdr-broker" type="button" class="h-7 px-2.5 rounded-full bg-surface-container hover:bg-surface-high border border-outline-variant/40 flex items-center gap-1.5 cursor-pointer whitespace-nowrap" title="Broker Session &amp; Multi-Account">
+              <span id="hdr-broker-dot" class="w-2 h-2 rounded-full bg-amber-tactical"></span>
+              <span id="hdr-broker-label" class="font-label-caps text-on-surface font-bold">SHOONYA</span>
             </button>
-            <button id="btn-hdr-theme" type="button" class="w-7 h-7 rounded bg-surface-container hover:bg-surface-high text-on-surface-variant hover:text-on-surface flex items-center justify-center transition-colors cursor-pointer" title="Toggle Dark/Light Theme">
+            <button id="btn-hdr-theme" type="button" class="w-7 h-7 rounded-md bg-surface-container hover:bg-surface-high text-on-surface-variant hover:text-on-surface flex items-center justify-center transition-colors cursor-pointer" title="Toggle Dark/Light Theme">
               <span id="hdr-theme-icon" class="material-symbols-outlined text-[16px]">light_mode</span>
             </button>
-            <button id="btn-hdr-kill" type="button" class="h-7 px-2 rounded bg-secondary-container hover:bg-error-container text-on-secondary-container hover:text-on-error-container flex items-center gap-1 shadow-[0_0_10px_rgba(212,0,75,0.35)] transition-all font-bold cursor-pointer whitespace-nowrap" title="Emergency Kill Switch">
+            <button id="btn-hdr-kill" type="button" class="h-7 px-2.5 rounded-md bg-secondary-container hover:bg-error-container text-on-secondary-container flex items-center gap-1 shadow-[0_2px_10px_rgba(220,38,38,0.3)] transition-all font-bold cursor-pointer whitespace-nowrap" title="Emergency Exit All &amp; Kill Switch">
               <span class="material-symbols-outlined text-[15px]">power_settings_new</span>
-              <span class="hidden xl:inline font-label-caps tracking-wide">KILL</span>
+              <span class="hidden xl:inline font-label-caps tracking-wide">EXIT ALL</span>
             </button>
           </div>
 
@@ -211,9 +217,9 @@
             <span class="material-symbols-outlined text-[14px]">notifications_active</span>
             <span class="bg-notify-label">BG LIVE</span>
           </button>
-          <button id="btn-hdr-user" type="button" class="h-7 px-2 rounded-full bg-primary/15 border border-primary/30 text-primary flex items-center gap-1 hover:bg-primary/25 transition-colors cursor-pointer whitespace-nowrap" title="Account & Multi-User Auth">
+          <button id="btn-hdr-user" type="button" class="h-7 px-2.5 rounded-full bg-primary/15 border border-primary/30 text-primary flex items-center gap-1 hover:bg-primary/25 transition-colors cursor-pointer whitespace-nowrap" title="Account &amp; Multi-User Auth">
             <span class="material-symbols-outlined text-[16px]">person</span>
-            <span id="hdr-user-label" class="hidden 2xl:inline font-label-caps">SIGN IN</span>
+            <span id="hdr-user-label" class="hidden 2xl:inline font-label-caps font-bold">SIGN IN</span>
           </button>
           <button id="btn-hdr-logout" type="button" onclick="signOutUser()" class="h-7 px-2 rounded-full bg-secondary-container/25 border border-secondary/30 text-loss flex items-center gap-1 hover:bg-secondary-container/40 transition-colors cursor-pointer whitespace-nowrap" title="Sign Out to Landing Page">
             <span class="material-symbols-outlined text-[15px]">logout</span>
@@ -222,37 +228,45 @@
         </div>
       </div>
 
-      <!-- Row 2: 4 Workspace Navigation Tabs & Live Index Summary -->
+      <!-- Row 2: Tradetron Market Ticker Bar (.h-ticker) -->
       <div class="h-9 flex items-center justify-between border-t border-surface-container-high gap-2">
-        <nav id="desktop-nav" class="flex items-center gap-1 h-full overflow-x-auto no-scrollbar">
-          <button data-tab="radar" type="button" class="desk-tab h-full px-3 flex items-center gap-1.5 font-body-sm text-body-sm bg-surface-container-high text-primary font-bold border-b-2 border-primary-container transition-colors tracking-wide cursor-pointer whitespace-nowrap">
-            <span class="material-symbols-outlined text-[15px]">radar</span>
-            <span>Radar &amp; Signals</span>
-          </button>
-          <button data-tab="positions" type="button" class="desk-tab h-full px-3 flex items-center gap-1.5 font-body-sm text-body-sm text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low transition-colors tracking-wide cursor-pointer whitespace-nowrap">
-            <span class="material-symbols-outlined text-[15px]">account_balance_wallet</span>
-            <span>Positions &amp; Books</span>
-            <span id="nav-pos-badge" class="hidden px-1.5 py-0.5 rounded-full bg-primary-container text-on-primary-fixed font-label-caps text-[9px] font-bold">0</span>
-          </button>
-          <button data-tab="logs" type="button" class="desk-tab h-full px-3 flex items-center gap-1.5 font-body-sm text-body-sm text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low transition-colors tracking-wide cursor-pointer whitespace-nowrap">
-            <span class="material-symbols-outlined text-[15px]">terminal</span>
-            <span>Terminal Logs</span>
-          </button>
-          <button data-tab="analytics" type="button" class="desk-tab h-full px-3 flex items-center gap-1.5 font-body-sm text-body-sm text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low transition-colors tracking-wide cursor-pointer whitespace-nowrap">
-            <span class="material-symbols-outlined text-[15px]">analytics</span>
-            <span>Analytics &amp; Backtest</span>
-          </button>
-        </nav>
+        <div class="h-ticker no-scrollbar flex-1">
+          <span class="h-ticker__pill">
+            <span id="hdr-ws-dot" class="h-ticker__dot"></span>
+            <span id="hdr-ws-label">LIVE FEED</span>
+            <span id="hdr-ping" class="opacity-80 tabular-nums">--ms</span>
+          </span>
+          <span class="h-ticker__item">
+            <span class="h-ticker__sym">NIFTY 50</span>
+            <span id="hdr-index-range" class="font-bold text-profit tabular-nums">--</span>
+          </span>
+          <span class="h-ticker__item">
+            <span class="h-ticker__sym">BANKNIFTY</span>
+            <span id="hdr-bnf-ticker" class="font-bold text-profit tabular-nums">--</span>
+          </span>
+          <span class="h-ticker__item">
+            <span class="h-ticker__sym">INDIA VIX</span>
+            <span id="hdr-vix-ticker" class="font-bold text-primary tabular-nums">--</span>
+          </span>
+          <span class="h-ticker__item">
+            <span class="text-on-surface-variant">PHASE:</span>
+            <span id="hdr-phase" class="font-bold text-profit">STANDBY</span>
+          </span>
+          <span class="h-ticker__item hidden 2xl:inline-flex">
+            <span class="text-on-surface-variant">SEBI ID:</span>
+            <span id="hdr-sebi-id" class="font-bold text-primary">--</span>
+          </span>
+        </div>
 
-        <div class="hidden md:flex items-center gap-3 shrink-0">
+        <div class="flex items-center gap-2 shrink-0">
           <div class="flex items-center gap-1">
-            <span class="font-label-caps text-on-surface-variant uppercase">ORB:</span>
-            <span id="hdr-index-range" class="font-data-mono-sm text-on-surface font-semibold tabular-nums">NIFTY --</span>
+            <span class="font-label-caps text-on-surface-variant uppercase">EXECUTION:</span>
+            <button id="hdr-mode-pill" type="button" class="px-2 py-0.5 rounded bg-surface-container-high font-label-caps font-bold text-profit cursor-pointer hover:opacity-80">PAPER</button>
           </div>
-          <div class="flex items-center gap-1">
-            <span class="font-label-caps text-on-surface-variant uppercase">MODE:</span>
-            <button id="hdr-mode-pill" type="button" class="px-1.5 py-0.5 rounded bg-surface-container-high font-label-caps font-bold text-profit cursor-pointer hover:opacity-80">PAPER</button>
-          </div>
+          <a href="/backtest" class="hidden sm:inline-flex px-2 py-0.5 rounded bg-surface-container hover:bg-surface-high font-label-caps text-on-surface-variant hover:text-on-surface items-center gap-1 whitespace-nowrap">
+            <span class="material-symbols-outlined text-[13px] text-primary">query_stats</span>
+            <span>1Y BACKTEST</span>
+          </a>
           <a href="/app" class="px-2 py-0.5 rounded bg-surface-container hover:bg-surface-high font-label-caps text-on-surface-variant hover:text-on-surface flex items-center gap-1 whitespace-nowrap">
             <span class="material-symbols-outlined text-[13px]">smartphone</span>
             <span>MOBILE UI</span>
@@ -263,125 +277,182 @@
   </header>
 
   <!-- MAIN WORKSPACE (Hidden until authenticated) -->
-  <main id="desk-app-main" class="hidden w-full pt-[98px] pb-8 px-3 lg:px-4 xl:px-5 max-w-[1440px] mx-auto">
+  <main id="desk-app-main" class="hidden w-full pt-[98px] pb-8 px-3 lg:px-4 xl:px-5 max-w-[1520px] mx-auto">
 
-    <!-- ==================== TAB 1: RADAR & SIGNALS ==================== -->
+    <!-- ==================== TAB 1: TRADETRON /USER/DASHBOARD — DEPLOYED STRATEGIES ==================== -->
     <section id="view-radar" class="desk-view flex flex-col gap-3.5">
-      <!-- Top Telemetry Ribbon -->
-      <div class="w-full bg-surface-container-low glass-panel rounded-xl p-3 shadow-xl flex flex-col xl:flex-row items-stretch xl:items-center justify-between gap-3 relative overflow-hidden">
-        <div class="absolute -right-16 -top-16 w-56 h-56 rounded-full bg-primary-container/5 blur-3xl pointer-events-none"></div>
 
-        <!-- Cluster A & B -->
-        <div class="flex items-center gap-space-lg flex-wrap">
-          <div class="flex items-center gap-space-sm">
-            <div class="w-10 h-10 rounded-lg bg-surface-container flex items-center justify-center text-profit shadow-inner">
-              <span class="material-symbols-outlined text-[24px]">monetization_on</span>
-            </div>
-            <div class="flex flex-col">
-              <div class="flex items-center gap-space-xs">
-                <span class="font-label-caps text-label-caps text-on-surface-variant uppercase">TOTAL MTM (TODAY)</span>
-                <span id="rad-roi-badge" class="px-1.5 py-0.5 rounded bg-primary-container/15 text-profit font-label-caps text-label-caps font-bold">0.00% ROI</span>
-              </div>
-              <div class="flex items-baseline gap-space-xs flex-wrap">
-                <span id="rad-total-mtm" class="font-headline-md text-headline-md font-bold text-profit tracking-tight tabular-nums">₹0.00</span>
-                <span id="rad-mtm-split" class="font-data-mono-sm text-data-mono-sm text-on-surface-variant tabular-nums">(R: ₹0.00 | UR: ₹0.00)</span>
-              </div>
-            </div>
+      <!-- Tradetron Dashboard Top Toolbar (.db-sum__toolbar) -->
+      <div class="db-sum__toolbar">
+        <div class="flex items-center gap-2.5 flex-wrap">
+          <h1 class="font-headline-md text-[19px] font-bold text-on-surface tracking-tight">Deployed Strategies</h1>
+          <span class="db-sum__tag">INR</span>
+          <span id="tt-exec-mode-badge" class="db-strat__chip db-strat__chip--paper">LIVE OFFLINE (PAPER)</span>
+          <span class="font-data-mono-sm text-on-surface-variant">IST: <b id="rad-ist-time" class="text-on-surface tabular-nums">--</b></span>
+        </div>
+
+        <div class="flex items-center gap-2 flex-wrap">
+          <button id="btn-rad-ticket" type="button" class="db-rowact db-rowact--oneclick h-8 px-3">
+            <span class="material-symbols-outlined text-[15px]">bolt</span>
+            <span>One-Click Broker Ticket</span>
+          </button>
+          <button id="btn-rad-tune" type="button" class="db-rowact h-8 px-2.5" title="Adjust ORB Anchor &amp; Cutoff">
+            <span class="material-symbols-outlined text-[15px]">schedule</span>
+            <span id="rad-orb-window">ORB: 09:15 - 09:45</span>
+            <span class="opacity-60">&bull;</span>
+            <span id="rad-cutoff">CUTOFF 13:15 IST</span>
+          </button>
+          <button id="btn-rad-reset-cap" type="button" class="db-rowact h-8 px-2.5" title="Reset Daily Trade Counter">
+            <span class="material-symbols-outlined text-[15px]">restart_alt</span>
+            <span>Reset Counter</span>
+          </button>
+          <button id="btn-rad-refresh" type="button" class="db-rowact h-8 px-2.5">
+            <span class="material-symbols-outlined text-[15px]">refresh</span>
+            <span>Refresh</span>
+          </button>
+          <button type="button" onclick="openModal('modal-kill')" class="db-exitall" title="Emergency Square-Off All Deployed Strategies">
+            <span class="material-symbols-outlined text-[15px]">power_settings_new</span>
+            <span>Exit All</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Tradetron 3-Column Summary Cards (.db-cards) -->
+      <div class="db-cards">
+        <!-- Card 1: Total P&L (Tradetron Accent Card) -->
+        <div class="db-card db-card--accent">
+          <div class="flex items-center justify-between gap-2">
+            <span class="font-label-caps text-on-surface-variant uppercase font-bold tracking-wider">TOTAL MTM P&amp;L (TODAY)</span>
+            <span id="rad-roi-badge" class="db-chip up">0.00% ROI</span>
           </div>
+          <div class="flex items-baseline justify-between gap-2 my-0.5 flex-wrap">
+            <span id="rad-total-mtm" class="font-display-lg text-[26px] font-bold text-profit tracking-tight tabular-nums">₹0.00</span>
+            <span id="rad-mtm-split" class="font-data-mono-sm text-on-surface-variant tabular-nums">(R: ₹0.00 | UR: ₹0.00)</span>
+          </div>
+          <div class="flex items-center justify-between text-[11px] font-data-mono-sm text-on-surface-variant pt-1 border-t border-outline-variant/25">
+            <span>Single-Order Lock: <b class="text-profit">₹1,00,000 Safe</b></span>
+            <span>Allocated: <b id="rad-capital" class="text-on-surface tabular-nums">₹1,00,000</b></span>
+          </div>
+        </div>
 
-          <div class="hidden sm:block w-px h-9 bg-surface-container-highest"></div>
-
-          <div class="flex items-center gap-space-lg">
-            <div class="flex flex-col">
-              <span class="font-label-caps text-label-caps text-on-surface-variant uppercase">ALLOCATED CAPITAL</span>
-              <span id="rad-capital" class="font-data-mono-md text-data-mono-md text-on-surface font-semibold tabular-nums">₹0</span>
+        <!-- Card 2: Deployed Strategies & Quota Summary (.db-sum) -->
+        <div class="db-sum">
+          <div class="flex items-center justify-between gap-2">
+            <div class="flex items-center gap-2">
+              <span class="db-sum__tag">DEPLOYED</span>
+              <span class="font-label-caps text-on-surface-variant uppercase font-bold">5-GATE ORB + SUPERTREND (10,3)</span>
             </div>
-            <div class="flex flex-col">
-              <span class="font-label-caps text-label-caps text-on-surface-variant uppercase">INDIA VIX</span>
-              <div class="flex items-center gap-1.5">
-                <span id="rad-vix" class="font-data-mono-md text-data-mono-md text-profit font-bold tabular-nums">--</span>
-                <span id="rad-vix-badge" class="px-1.5 py-0.5 rounded bg-surface-container text-primary font-label-caps text-label-caps uppercase">--</span>
-              </div>
+            <span id="rad-quota-state" class="db-status db-status--ok">READY</span>
+          </div>
+          <div class="grid grid-cols-3 gap-2 my-0.5 font-data-mono-sm tabular-nums">
+            <div class="p-2 rounded-lg bg-surface-container-low/80 border border-outline-variant/25">
+              <span class="font-label-caps text-on-surface-variant block">ACTIVE INDICES</span>
+              <b id="tt-active-strats-cnt" class="text-[15px] text-on-surface">2 / 2</b>
             </div>
-            <div class="flex flex-col">
-              <span class="font-label-caps text-label-caps text-on-surface-variant uppercase">IST CLOCK</span>
-              <span id="rad-ist-time" class="font-data-mono-sm text-data-mono-sm text-on-surface-variant tabular-nums">--</span>
+            <div class="p-2 rounded-lg bg-surface-container-low/80 border border-outline-variant/25">
+              <span class="font-label-caps text-on-surface-variant block">OPEN LEGS</span>
+              <b id="tt-open-legs-cnt" class="text-[15px] text-primary">0 ACTIVE</b>
+            </div>
+            <div class="p-2 rounded-lg bg-surface-container-low/80 border border-outline-variant/25">
+              <span class="font-label-caps text-on-surface-variant block">DAILY QUOTA</span>
+              <b id="rad-quota-label" class="text-[13px] text-profit">CAP: 0/2 TRADES</b>
             </div>
           </div>
         </div>
 
-        <!-- Cluster C: Quota, Eval Timer, Window -->
-        <div class="flex items-center gap-space-sm flex-wrap justify-between xl:justify-end">
-          <div class="flex items-center gap-space-xs px-space-sm py-1.5 rounded-lg bg-surface-container">
-            <span class="material-symbols-outlined text-profit text-[18px]">verified_user</span>
-            <div class="flex flex-col">
-              <span id="rad-quota-label" class="font-label-caps text-label-caps text-on-surface-variant uppercase">CAP: 0/2 TRADES</span>
-              <span id="rad-quota-state" class="font-label-caps text-label-caps text-profit font-bold">READY</span>
-            </div>
-            <button id="btn-rad-reset-cap" type="button" class="ml-2 px-2 py-1 rounded bg-surface-container-high hover:bg-surface-bright font-label-caps text-label-caps text-primary hover:text-profit transition-colors cursor-pointer">
-              RESET COUNTER
-            </button>
-          </div>
-
-          <div class="flex items-center gap-space-xs px-space-sm py-1.5 rounded-lg bg-surface-container">
-            <span class="relative flex h-2.5 w-2.5">
-              <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary-container opacity-75"></span>
-              <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-primary-container"></span>
+        <!-- Card 3: Volatility, Next Candle Eval & Risk Guardrail (.db-card) -->
+        <div class="db-card">
+          <div class="flex items-center justify-between gap-2">
+            <span class="font-label-caps text-on-surface-variant uppercase font-bold">MARKET REGIME &amp; GUARDRAILS</span>
+            <span class="inline-flex items-center gap-1.5 font-data-mono-sm text-primary font-bold tabular-nums">
+              <span class="w-2 h-2 rounded-full bg-primary-container animate-ping"></span>
+              <span>5M EVAL: <span id="rad-candle-timer">--</span></span>
             </span>
-            <div class="flex flex-col">
-              <span class="font-label-caps text-label-caps text-on-surface-variant uppercase">ENGINE EVAL</span>
-              <span class="font-data-mono-sm text-data-mono-sm text-primary font-bold tabular-nums">CANDLE IN: <span id="rad-candle-timer">--</span></span>
+          </div>
+          <div class="grid grid-cols-3 gap-2 my-0.5 font-data-mono-sm tabular-nums">
+            <div class="p-2 rounded-lg bg-surface-container-low/80 border border-outline-variant/25">
+              <span class="font-label-caps text-on-surface-variant block">INDIA VIX</span>
+              <div class="flex items-center gap-1.5">
+                <b id="rad-vix" class="text-[15px] text-profit">--</b>
+                <span id="rad-vix-badge" class="px-1.5 py-0.5 rounded bg-surface-container text-[9px] font-label-caps text-primary">--</span>
+              </div>
+            </div>
+            <div class="p-2 rounded-lg bg-surface-container-low/80 border border-outline-variant/25">
+              <span class="font-label-caps text-on-surface-variant block">MAX DAILY LOSS</span>
+              <b id="tt-sum-maxloss" class="text-[14px] text-loss">-₹5,000</b>
+            </div>
+            <div class="p-2 rounded-lg bg-surface-container-low/80 border border-outline-variant/25">
+              <span class="font-label-caps text-on-surface-variant block">TRAILING ENGINE</span>
+              <b class="text-[12px] text-profit">ST (10, 3) LINE</b>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tradetron Deployed Strategies Table Panel (.db-panel) -->
+      <div class="db-panel">
+        <!-- Panel Header: Scope Tabs, Index Toggles, Filter & Drawer Toggle -->
+        <div class="db-panel__head">
+          <div class="flex items-center gap-3 flex-wrap">
+            <div class="db-scope" role="tablist">
+              <button type="button" onclick="setTtScope('ALL')" data-ttscope="ALL" class="tt-scope-btn db-scope__tab is-active">All (<span id="tt-cnt-all">2</span>)</button>
+              <button type="button" onclick="setTtScope('ACTIVE')" data-ttscope="ACTIVE" class="tt-scope-btn db-scope__tab">Active (<span id="tt-cnt-active">2</span>)</button>
+              <button type="button" onclick="setTtScope('OPEN')" data-ttscope="OPEN" class="tt-scope-btn db-scope__tab">Entered / Open (<span id="tt-cnt-open">0</span>)</button>
+              <button type="button" onclick="setTtScope('PAUSED')" data-ttscope="PAUSED" class="tt-scope-btn db-scope__tab">Paused (<span id="tt-cnt-paused">0</span>)</button>
+            </div>
+
+            <!-- Inline Index Enable Switches -->
+            <div class="flex items-center gap-2 px-2.5 py-1 rounded-lg bg-surface-container-low border border-outline-variant/30 font-data-mono-sm">
+              <span class="font-label-caps text-on-surface-variant">DEPLOYED INDICES:</span>
+              <label class="inline-flex items-center gap-1 cursor-pointer select-none">
+                <input id="tt-chk-nifty" type="checkbox" checked onchange="toggleSingleIndex('NIFTY', this.checked)" class="w-3.5 h-3.5 accent-indigo-500 rounded cursor-pointer"/>
+                <span class="font-bold text-on-surface">NIFTY</span>
+              </label>
+              <label class="inline-flex items-center gap-1 cursor-pointer select-none ml-1">
+                <input id="tt-chk-bnf" type="checkbox" checked onchange="toggleSingleIndex('BANKNIFTY', this.checked)" class="w-3.5 h-3.5 accent-indigo-500 rounded cursor-pointer"/>
+                <span class="font-bold text-on-surface">BANKNIFTY</span>
+              </label>
             </div>
           </div>
 
-          <div class="flex items-center gap-space-xs px-space-sm py-1.5 rounded-lg bg-surface-container">
-            <span class="material-symbols-outlined text-on-surface-variant text-[18px]">schedule</span>
-            <div class="flex flex-col">
-              <span id="rad-orb-window" class="font-label-caps text-label-caps text-on-surface-variant uppercase">ORB: 09:15 - 09:45</span>
-              <span id="rad-cutoff" class="font-data-mono-sm text-data-mono-sm text-on-surface">CUTOFF 13:15 IST</span>
+          <div class="flex items-center gap-2 flex-wrap">
+            <div class="db-filter">
+              <span class="material-symbols-outlined text-[15px] text-on-surface-variant absolute left-2.5">search</span>
+              <input id="tt-strat-search" type="text" oninput="renderRadarCards()" placeholder="Search deployed strategy, index, symbol..."/>
             </div>
-            <button id="btn-rad-tune" type="button" class="p-1 rounded hover:bg-surface-bright text-on-surface-variant hover:text-primary transition-colors cursor-pointer" title="Adjust ORB Anchor & Cutoff">
-              <span class="material-symbols-outlined text-[18px]">tune</span>
+            <button type="button" onclick="toggleAllTtDrawers()" class="db-rowact h-8 px-2.5">
+              <span class="material-symbols-outlined text-[15px]">unfold_more</span>
+              <span id="tt-expand-lbl">Collapse Radar &amp; Legs</span>
             </button>
           </div>
         </div>
+
+        <!-- Tradetron 8-Column Table Header (.db-strat-head) -->
+        <div class="db-strat-head">
+          <div>STRATEGY</div>
+          <div>EXECUTION</div>
+          <div>BROKER &amp; PRODUCT</div>
+          <div>COUNTER / 5-GATE</div>
+          <div>MULTIPLIER</div>
+          <div>STATUS</div>
+          <div class="text-right">P&amp;L (INR)</div>
+          <div class="text-right">ACTIONS</div>
+        </div>
+
+        <!-- Deployed Strategy Rows Container (#radar-cards-grid) -->
+        <div id="radar-cards-grid" class="flex flex-col divide-y divide-outline-variant/25"></div>
       </div>
 
-      <!-- Radar Sub-Header -->
-      <div class="flex flex-wrap items-center justify-between gap-space-sm px-space-xs">
-        <div class="flex items-center gap-space-sm">
-          <h1 class="font-headline-md text-headline-md font-bold text-on-surface tracking-tight">Active Breakout Radar</h1>
-          <span class="px-2 py-0.5 rounded bg-surface-container-high text-profit font-label-caps text-label-caps uppercase font-bold tracking-wider">NIFTY &amp; BANKNIFTY</span>
-          <span class="hidden md:inline-flex items-center gap-1.5 font-label-caps text-label-caps text-on-surface-variant">
-            <span class="w-1.5 h-1.5 rounded-full bg-primary-container"></span>
-            5-GATE INSTITUTIONAL FILTER
-          </span>
-        </div>
-        <div class="flex items-center gap-space-xs">
-          <button id="btn-rad-ticket" type="button" class="px-space-md py-1.5 rounded bg-primary-container hover:bg-primary-fixed text-on-primary-fixed font-title-sm text-body-sm font-bold flex items-center gap-space-xs transition-all shadow-[0_0_15px_rgba(0,245,212,0.3)] cursor-pointer">
-            <span class="material-symbols-outlined text-[18px]">add_circle</span>
-            <span>BROKER TICKET</span>
-          </button>
-          <button id="btn-rad-refresh" type="button" class="px-space-sm py-1.5 rounded bg-surface-container-high hover:bg-surface-bright text-on-surface font-label-caps text-label-caps flex items-center gap-1 transition-colors cursor-pointer">
-            <span class="material-symbols-outlined text-[16px]">refresh</span>
-            <span>REFRESH SCANNER</span>
-          </button>
-        </div>
-      </div>
-
-      <!-- 2-COLUMN LIVE RADAR CARDS (NIFTY & BANKNIFTY) -->
-      <div id="radar-cards-grid" class="grid grid-cols-1 lg:grid-cols-2 gap-space-lg w-full items-start"></div>
-
-      <!-- Lower Section: Live Radar Telemetry Stream -->
-      <div class="bg-surface-container-low glass-panel rounded-xl p-space-md shadow-xl flex flex-col gap-space-sm">
+      <!-- Lower Section: Live Tradetron Notification & Signal Log Stream -->
+      <div class="bg-surface-container-low glass-panel rounded-xl p-3.5 shadow-xl flex flex-col gap-2">
         <div class="flex items-center justify-between">
           <div class="flex items-center gap-2">
             <span class="material-symbols-outlined text-profit text-[18px]">sensors</span>
-            <h2 class="font-title-sm text-title-sm text-on-surface">Live Engine &amp; Signal Stream</h2>
+            <h2 class="font-title-sm text-title-sm font-bold text-on-surface">Live Notification &amp; Execution Log Stream</h2>
           </div>
           <button onclick="switchDesktopTab('logs')" type="button" class="font-label-caps text-label-caps text-profit hover:underline cursor-pointer">OPEN FULL TERMINAL LOGS &rarr;</button>
         </div>
-        <div id="rad-live-events" class="bg-surface-container-lowest rounded-lg p-space-sm font-data-mono-sm text-data-mono-sm space-y-1 max-h-52 overflow-y-auto thin-scroll"></div>
+        <div id="rad-live-events" class="bg-surface-container-lowest rounded-lg p-2.5 font-data-mono-sm text-data-mono-sm space-y-1 max-h-48 overflow-y-auto thin-scroll"></div>
       </div>
     </section>
 
@@ -1088,7 +1159,44 @@
       let manualSide = 'B';
       let slTargetIndex = 'NIFTY';
       let deskPollTimer = null;
+      let ttScope = 'ALL';
+      let ttAllDrawersOpen = true;
+      const ttDrawerState = { NIFTY: true, BANKNIFTY: true };
       const spotHistory = { NIFTY: [], BANKNIFTY: [] };
+
+      window.setTtScope = (scope) => {
+        ttScope = scope;
+        document.querySelectorAll('.tt-scope-btn').forEach(btn => {
+          btn.classList.toggle('is-active', btn.getAttribute('data-ttscope') === scope);
+        });
+        renderRadarCards();
+      };
+
+      window.toggleTtDrawer = (idx) => {
+        ttDrawerState[idx] = !ttDrawerState[idx];
+        renderRadarCards();
+      };
+
+      window.toggleAllTtDrawers = () => {
+        ttAllDrawersOpen = !ttAllDrawersOpen;
+        ttDrawerState.NIFTY = ttAllDrawersOpen;
+        ttDrawerState.BANKNIFTY = ttAllDrawersOpen;
+        const lbl = document.getElementById('tt-expand-lbl');
+        if (lbl) lbl.textContent = ttAllDrawersOpen ? 'Collapse Radar & Legs' : 'Expand Radar & Legs';
+        renderRadarCards();
+      };
+
+      window.toggleSingleIndex = async (idx, checked) => {
+        const en = snap.enabled_indices || { NIFTY: true, BANKNIFTY: true };
+        const nf = idx === 'NIFTY' ? Boolean(checked) : (en.NIFTY !== false);
+        const bnf = idx === 'BANKNIFTY' ? Boolean(checked) : (en.BANKNIFTY !== false);
+        try {
+          const r = await A.api.setEnabledIndices(nf, bnf);
+          snap = r.snapshot || snap;
+          renderAll();
+          A.showToast(r.message || `${idx} deployment ${checked ? 'activated' : 'paused'}`, r.ok ? 'info' : 'warn');
+        } catch (e) { A.showToast(e.message, 'error'); }
+      };
 
       function startDesktopPolling() {
         if (deskPollTimer) clearInterval(deskPollTimer);
@@ -1190,29 +1298,58 @@
         modePill.className = `px-2 py-0.5 rounded bg-surface-container-high font-label-caps text-label-caps font-bold cursor-pointer hover:opacity-80 ${snap.mode === 'LIVE' ? 'text-loss' : 'text-profit'}`;
 
         const nif = snap.indices.NIFTY || {};
-        document.getElementById('hdr-index-range').textContent = `NIFTY ${A.fmtNum(nif.spot_ltp, 2)} [H: ${A.fmtNum(nif.orh, 1)} / L: ${A.fmtNum(nif.orl, 1)}]`;
+        const bnf = snap.indices.BANKNIFTY || {};
+        document.getElementById('hdr-index-range').textContent = `${A.fmtNum(nif.spot_ltp, 2)} [H:${A.fmtNum(nif.orh, 0)} L:${A.fmtNum(nif.orl, 0)}]`;
+        const bnfTick = document.getElementById('hdr-bnf-ticker');
+        if (bnfTick) bnfTick.textContent = `${A.fmtNum(bnf.spot_ltp, 2)} [H:${A.fmtNum(bnf.orh, 0)} L:${A.fmtNum(bnf.orl, 0)}]`;
+        const vixTick = document.getElementById('hdr-vix-ticker');
+        if (vixTick) vixTick.textContent = snap.india_vix ? Number(snap.india_vix).toFixed(2) : '--';
 
         const posCount = (snap.positions || []).length;
         const posBadge = document.getElementById('nav-pos-badge');
         posBadge.textContent = String(posCount);
         posBadge.classList.toggle('hidden', posCount === 0);
 
-        // Radar Tab
+        // Tradetron Dashboard Summary Strip
+        const isLiveMode = snap.mode === 'LIVE';
+        const execBadge = document.getElementById('tt-exec-mode-badge');
+        if (execBadge) {
+          execBadge.textContent = isLiveMode ? 'LIVE AUTO' : 'LIVE OFFLINE (PAPER)';
+          execBadge.className = `db-strat__chip ${isLiveMode ? 'db-strat__chip--live' : 'db-strat__chip--paper'}`;
+        }
+
         const radMtm = document.getElementById('rad-total-mtm');
         radMtm.textContent = A.fmtSignedINR(mtm);
-        radMtm.className = `font-headline-md text-headline-md font-bold tracking-tight tabular-nums ${mtm >= 0 ? 'text-profit' : 'text-loss'}`;
+        radMtm.className = `font-display-lg text-[26px] font-bold tracking-tight tabular-nums ${mtm >= 0 ? 'text-profit' : 'text-loss'}`;
         document.getElementById('rad-mtm-split').textContent = `(R: ${A.fmtSignedINR(realized)} | UR: ${A.fmtSignedINR(unrealized)})`;
-        document.getElementById('rad-roi-badge').textContent = `${roi >= 0 ? '+' : ''}${roi.toFixed(2)}% ROI`;
+        const roiBadge = document.getElementById('rad-roi-badge');
+        roiBadge.textContent = `${roi >= 0 ? '+' : ''}${roi.toFixed(2)}% ROI`;
+        roiBadge.className = `db-chip ${roi >= 0 ? 'up' : 'down'}`;
         document.getElementById('rad-capital').textContent = A.fmtINR(cap, 0);
         document.getElementById('rad-vix').textContent = snap.india_vix ? Number(snap.india_vix).toFixed(2) : '--';
         document.getElementById('rad-vix-badge').textContent = !snap.india_vix ? 'WAIT' : snap.india_vix >= 12 ? 'OPTIMAL' : 'LOW VIX';
         document.getElementById('rad-ist-time').textContent = snap.ist_time || '--';
         document.getElementById('rad-quota-label').textContent = `CAP: ${snap.trades_taken || 0}/${snap.max_trades || 2} TRADES`;
-        document.getElementById('rad-quota-state').textContent = snap.halted ? (snap.halt_reason || 'HALTED') : (snap.trades_taken >= snap.max_trades ? 'MAX REACHED' : 'READY');
+        const qState = document.getElementById('rad-quota-state');
+        qState.textContent = snap.halted ? (snap.halt_reason || 'HALTED') : (snap.trades_taken >= snap.max_trades ? 'MAX REACHED' : 'READY');
+        qState.className = `db-status ${snap.halted ? 'db-status--err' : (snap.trades_taken >= snap.max_trades ? 'db-status--warn' : 'db-status--ok')}`;
         const nextSec = snap.schedule && snap.schedule.next_candle_close_sec;
         document.getElementById('rad-candle-timer').textContent = nextSec ? `${nextSec}s` : 'CLOSED';
         document.getElementById('rad-orb-window').textContent = `ORB: ${snap.orb_start_time || '09:15'} - ${snap.orb_end_time || '09:45'}`;
         document.getElementById('rad-cutoff').textContent = `CUTOFF ${snap.entry_cutoff_time || '13:15'} IST`;
+
+        const enIdx = snap.enabled_indices || { NIFTY: true, BANKNIFTY: true };
+        const ttChkNf = document.getElementById('tt-chk-nifty');
+        const ttChkBnf = document.getElementById('tt-chk-bnf');
+        if (ttChkNf && typeof enIdx.NIFTY === 'boolean') ttChkNf.checked = enIdx.NIFTY;
+        if (ttChkBnf && typeof enIdx.BANKNIFTY === 'boolean') ttChkBnf.checked = enIdx.BANKNIFTY;
+        const activeStratsCnt = (enIdx.NIFTY !== false ? 1 : 0) + (enIdx.BANKNIFTY !== false ? 1 : 0);
+        const actEl = document.getElementById('tt-active-strats-cnt');
+        if (actEl) actEl.textContent = `${activeStratsCnt} / 2`;
+        const legsEl = document.getElementById('tt-open-legs-cnt');
+        if (legsEl) legsEl.textContent = `${posCount} ACTIVE`;
+        const maxLossSum = document.getElementById('tt-sum-maxloss');
+        if (maxLossSum) maxLossSum.textContent = `-${A.fmtINR(snap.max_daily_loss || 5000, 0)}`;
 
         renderRadarCards();
         renderRadarEvents();
@@ -1223,7 +1360,47 @@
       function renderRadarCards() {
         const grid = document.getElementById('radar-cards-grid');
         const entries = Object.entries(snap.indices || {});
-        grid.innerHTML = entries.map(([idx, info]) => {
+        const positions = snap.positions || [];
+        const closedTrades = snap.completed_trades || [];
+        const enMap = snap.enabled_indices || { NIFTY: true, BANKNIFTY: true };
+        const broker = snap.broker || {};
+        const isLiveMode = snap.mode === 'LIVE';
+        const q = ((document.getElementById('tt-strat-search') && document.getElementById('tt-strat-search').value) || '').trim().toLowerCase();
+
+        // Update scope tab counters
+        let cntAll = entries.length, cntActive = 0, cntOpen = 0, cntPaused = 0;
+        entries.forEach(([idx]) => {
+          const isEn = enMap[idx] !== false;
+          const hasPos = positions.some(p => p.index_name === idx);
+          if (isEn) cntActive += 1; else cntPaused += 1;
+          if (hasPos) cntOpen += 1;
+        });
+        const setCnt = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = String(v); };
+        setCnt('tt-cnt-all', cntAll);
+        setCnt('tt-cnt-active', cntActive);
+        setCnt('tt-cnt-open', cntOpen);
+        setCnt('tt-cnt-paused', cntPaused);
+
+        const filteredEntries = entries.filter(([idx, info]) => {
+          const isEn = enMap[idx] !== false;
+          const hasPos = positions.some(p => p.index_name === idx);
+          if (ttScope === 'ACTIVE' && !isEn) return false;
+          if (ttScope === 'OPEN' && !hasPos) return false;
+          if (ttScope === 'PAUSED' && isEn) return false;
+          if (q) {
+            const r = info.radar || {};
+            const hay = `${idx} 5-gate orb supertrend ${r.actual_symbol_ce || ''} ${r.actual_symbol_pe || ''} ${r.radar_state || ''}`.toLowerCase();
+            if (!hay.includes(q)) return false;
+          }
+          return true;
+        });
+
+        if (!filteredEntries.length) {
+          grid.innerHTML = '<div class="py-10 text-center text-on-surface-variant font-body-sm">No deployed strategies match the active scope or filter.</div>';
+          return;
+        }
+
+        grid.innerHTML = filteredEntries.map(([idx, info], sIdx) => {
           const r = info.radar || {};
           const ltp = info.spot_ltp;
           if (ltp) {
@@ -1233,90 +1410,234 @@
               if (arr.length > 30) arr.shift();
             }
           }
-          const isBull = (info.orh && ltp && ltp >= info.orh) || (r.radar_state === 'IMMINENT_CE_BREAKOUT');
-          const isBear = (info.orl && ltp && ltp <= info.orl) || (r.radar_state === 'IMMINENT_PE_BREAKOUT');
-          const accentBar = isBear ? 'from-secondary-container via-secondary to-transparent' : 'from-primary-container via-primary-fixed to-transparent';
+          const isEnabled = enMap[idx] !== false;
+          const isBear = (info.orl && ltp && ltp <= info.orl) || (r.radar_state === 'IMMINENT_PE_BREAKOUT') || (info.supertrend_dir === -1);
           const stateBadge = esc((r.radar_state || 'SCANNING').replace(/_/g, ' '));
           const readiness = Number(r.readiness_pct || 0);
+          const stDir = info.supertrend_dir ?? r.supertrend_dir;
+          const stVal = info.supertrend_value ?? r.supertrend_value ?? info.supertrend;
+          const stOk = stDir === 1 || stDir === -1;
+          const stBadgeTxt = stDir === 1 ? `ST BULL (${A.fmtNum(stVal, 1)})` : stDir === -1 ? `ST BEAR (${A.fmtNum(stVal, 1)})` : `ST(10,3) ${stVal ? A.fmtNum(stVal, 1) : 'SYNC'}`;
           const gates = [
             ['SYS', r.system_ready],
             ['VIX', r.vix_ready],
             ['ORB', r.orb_ready],
             ['PRICE', r.ce_price_ok || r.pe_price_ok],
-            ['RSI', r.ce_rsi_ok || r.pe_rsi_ok]
+            ['RSI', r.ce_rsi_ok || r.pe_rsi_ok],
+            ['ST(10,3)', stOk || Boolean(r.ce_price_ok || r.pe_price_ok)]
           ];
-          const lots = r.lots || 1;
+          const lots = Number(r.lots || 1);
+          const lotSize = Number(r.lot_size || (idx === 'NIFTY' ? 65 : 30));
+          const totalQty = Number(r.total_qty || (lots * lotSize));
           const prd = r.product_type || 'M';
           const distStr = r.dist_to_orh !== null && r.dist_to_orh !== undefined
             ? `ORH ${r.dist_to_orh > 0 ? '+' : ''}${r.dist_to_orh}`
             : '--';
 
-          return `<div class="bg-surface-container-low glass-panel rounded-xl p-3.5 shadow-xl flex flex-col gap-3 relative overflow-hidden">
-            <div class="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r ${accentBar}"></div>
-            <div class="flex items-start justify-between gap-2">
-              <div class="min-w-0">
+          // Positions & P&L specific to this deployed strategy
+          const idxPositions = positions.filter(p => p.index_name === idx);
+          const idxClosed = closedTrades.filter(t => (t.index_name || '').toUpperCase() === idx || (t.tradingsymbol || '').toUpperCase().startsWith(idx));
+          const openPnl = idxPositions.reduce((acc, p) => acc + Number(p.realized_pnl || 0) + Number(p.unrealized_pnl || 0), 0);
+          const closedPnl = idxClosed.reduce((acc, t) => acc + Number(t.net_pnl || 0), 0);
+          const stratPnl = openPnl + closedPnl;
+          const runCounter = idxPositions.length + idxClosed.length + 1;
+
+          // Status badge class & label
+          let statusCls = 'db-status--ok';
+          let statusTxt = 'ACTIVE';
+          if (snap.halted) {
+            statusCls = 'db-status--err';
+            statusTxt = 'HALTED';
+          } else if (!isEnabled) {
+            statusCls = 'db-status--paused';
+            statusTxt = 'PAUSED';
+          } else if (idxPositions.length > 0) {
+            statusCls = 'db-status--ok';
+            statusTxt = 'LIVE ENTERED';
+          } else if (readiness >= 80) {
+            statusCls = 'db-status--signal';
+            statusTxt = 'ARMED ' + readiness + '%';
+          } else {
+            statusCls = 'db-status--warn';
+            statusTxt = stateBadge;
+          }
+
+          const drawerOpen = ttDrawerState[idx] !== false;
+          const multOptions = [1, 2, 3, 4, 5, 6, 8, 10, 15, 20, 25];
+          if (!multOptions.includes(lots)) multOptions.push(lots);
+          multOptions.sort((a, b) => a - b);
+
+          return `<div class="db-strat ${!isEnabled ? 'opacity-75' : ''}">
+            <!-- Tradetron 8-Column Deployed Strategy Row (.db-strat__row) -->
+            <div class="db-strat__row">
+              <!-- Col 1: Strategy Identity & Drawer Trigger -->
+              <div class="flex flex-col gap-1 min-w-0">
                 <div class="flex items-center gap-1.5 flex-wrap">
-                  <h2 class="font-headline-md text-headline-md font-bold text-on-surface">${esc(idx)}</h2>
-                  <span class="px-1.5 py-0.5 rounded bg-surface-container-high text-on-surface-variant font-label-caps text-label-caps">NSE SPOT</span>
-                  <span class="px-1.5 py-0.5 rounded bg-primary-container/15 text-profit font-label-caps text-label-caps font-bold">${stateBadge}</span>
+                  <span class="db-serial">#${sIdx + 1}</span>
+                  <button type="button" onclick="toggleTtDrawer('${idx}')" class="db-strat__legs ${drawerOpen ? 'is-open' : ''}" title="Toggle Open Legs &amp; 5-Gate Radar">
+                    <span>${drawerOpen ? '▾' : '▸'}</span>
+                    <span>${idxPositions.length} Leg${idxPositions.length === 1 ? '' : 's'} &bull; Radar</span>
+                  </button>
+                  <span class="db-strat__name truncate">${esc(idx)} &mdash; 5-Gate ORB + Supertrend(10,3)</span>
+                  <span class="db-strat__chip ${isLiveMode ? 'db-strat__chip--live' : 'db-strat__chip--paper'}">${isLiveMode ? 'LIVE AUTO' : 'PAPER'}</span>
                 </div>
-                <span class="font-label-caps text-label-caps text-on-surface-variant mt-0.5 block truncate">LOT ${r.lot_size || '--'} &bull; TOTAL ${r.total_qty || '--'} QTY &bull; EST MARGIN ${A.fmtINR(r.est_margin || 0, 0)}</span>
+                <div class="flex items-center gap-2 text-[11px] font-data-mono-sm text-on-surface-variant flex-wrap">
+                  <span>Spot: <b class="${isBear ? 'text-loss' : 'text-profit'} tabular-nums">${A.fmtNum(ltp, 2)}</b></span>
+                  <span>&bull;</span>
+                  <span>${esc(stBadgeTxt)}</span>
+                  <span>&bull;</span>
+                  <span>Est. Margin: <b class="text-on-surface">${A.fmtINR(r.est_margin || 0, 0)}</b></span>
+                </div>
               </div>
-              <div class="text-right shrink-0">
-                <span class="font-data-mono-lg text-[17px] xl:text-[19px] font-bold ${isBear ? 'text-loss' : 'text-profit'} tabular-nums">${A.fmtNum(ltp, 2)}</span>
-                <span class="font-data-mono-sm text-on-surface-variant block">${esc(info.last_signal || 'NO SIGNAL')}</span>
-              </div>
-            </div>
 
-            <div class="w-full h-12 bg-surface-container-lowest/80 rounded-lg px-2 py-1">
-              ${A.buildSparklineSvg(spotHistory[idx], info.orh, info.orl, !isBear)}
-            </div>
-
-            <div class="grid grid-cols-3 sm:grid-cols-6 gap-1.5 bg-surface-container rounded-lg p-1.5 font-data-mono-sm tabular-nums">
-              <div class="p-1.5 rounded bg-surface-container-low/80"><span class="font-label-caps text-on-surface-variant block">ORH</span><b class="text-profit">${A.fmtNum(info.orh, 2)}</b></div>
-              <div class="p-1.5 rounded bg-surface-container-low/80"><span class="font-label-caps text-on-surface-variant block">ORL</span><b class="text-loss">${A.fmtNum(info.orl, 2)}</b></div>
-              <div class="p-1.5 rounded bg-surface-container-low/80"><span class="font-label-caps text-on-surface-variant block">RANGE</span><b class="text-amber-tactical">${info.range_pct !== null && info.range_pct !== undefined ? info.range_pct.toFixed(2) + '%' : '--'}</b></div>
-              <div class="p-1.5 rounded bg-surface-container-low/80"><span class="font-label-caps text-on-surface-variant block">VWAP</span><b class="text-on-surface">${A.fmtNum(info.vwap, 1)}</b></div>
-              <div class="p-1.5 rounded bg-surface-container-low/80"><span class="font-label-caps text-on-surface-variant block">RSI 14</span><b class="${(info.rsi || 50) > 60 ? 'text-profit' : (info.rsi || 50) < 40 ? 'text-loss' : 'text-on-surface'}">${info.rsi !== null && info.rsi !== undefined ? Number(info.rsi).toFixed(1) : '--'}</b></div>
-              <div class="p-1.5 rounded bg-surface-container-low/80"><span class="font-label-caps text-on-surface-variant block">DIST</span><b class="text-on-surface">${esc(distStr)}</b></div>
-            </div>
-
-            <!-- 5-Gate Readiness Pipeline -->
-            <div class="space-y-1.5">
-              <div class="flex items-center justify-between font-label-caps">
-                <span class="text-on-surface-variant">5-GATE BREAKOUT READINESS</span>
-                <span class="text-profit font-bold">${readiness}%</span>
-              </div>
-              <div class="w-full h-2 rounded-full bg-surface-container-highest overflow-hidden">
-                <div class="h-full bg-primary-container rounded-full transition-all duration-300" style="width:${readiness}%"></div>
-              </div>
-              <div class="flex items-center gap-1.5 flex-wrap pt-0.5">
-                ${gates.map(([gName, ok]) => `<span class="px-2 py-0.5 rounded font-label-caps text-[10px] font-bold ${ok ? 'bg-primary-container/20 text-profit' : 'bg-surface-container text-on-surface-variant'}">${ok ? '✓' : '•'} ${gName}</span>`).join('')}
-              </div>
-              <p class="font-body-sm text-on-surface-variant">${esc(r.radar_summary || '')}</p>
-            </div>
-
-            <!-- Candidates & Execution Controls -->
-            <div class="bg-surface-container rounded-lg p-space-sm space-y-2">
-              <div class="grid grid-cols-2 gap-2 font-data-mono-sm">
-                <div class="truncate"><span class="text-profit font-bold">CE:</span> <span class="text-on-surface">${esc(r.actual_symbol_ce || r.candidate_ce || '--')}</span></div>
-                <div class="truncate"><span class="text-loss font-bold">PE:</span> <span class="text-on-surface">${esc(r.actual_symbol_pe || r.candidate_pe || '--')}</span></div>
-              </div>
-              <div class="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-outline-variant/30">
+              <!-- Col 2: Execution Type & Active/Paused Switch -->
+              <div class="flex flex-col gap-1">
                 <div class="flex items-center gap-1.5">
-                  <button onclick="stepLots('${idx}', ${Math.max(1, lots - 1)})" type="button" class="w-7 h-7 rounded bg-surface-container-high hover:bg-surface-bright font-bold cursor-pointer">-</button>
-                  <span class="font-data-mono-sm font-bold px-1.5">${lots} LOT${lots > 1 ? 'S' : ''}</span>
-                  <button onclick="stepLots('${idx}', ${Math.min(50, lots + 1)})" type="button" class="w-7 h-7 rounded bg-surface-container-high hover:bg-surface-bright font-bold cursor-pointer">+</button>
-                  <div class="flex rounded bg-surface-container-lowest p-0.5 ml-1 font-label-caps">
-                    <button onclick="setPrd('${idx}','I')" type="button" class="px-2 py-1 rounded ${prd === 'I' ? 'bg-primary-container text-on-primary-fixed font-bold' : 'text-on-surface-variant'} cursor-pointer">MIS</button>
-                    <button onclick="setPrd('${idx}','M')" type="button" class="px-2 py-1 rounded ${prd === 'M' ? 'bg-primary-container text-on-primary-fixed font-bold' : 'text-on-surface-variant'} cursor-pointer">NRML</button>
+                  <label class="inline-flex items-center gap-1.5 cursor-pointer select-none font-data-mono-sm">
+                    <input type="checkbox" ${isEnabled ? 'checked' : ''} onchange="toggleSingleIndex('${idx}', this.checked)" class="w-3.5 h-3.5 accent-indigo-500 rounded cursor-pointer"/>
+                    <span class="font-bold ${isEnabled ? 'text-profit' : 'text-on-surface-variant'}">${isEnabled ? 'DEPLOYED' : 'PAUSED'}</span>
+                  </label>
+                </div>
+                <span class="font-label-caps text-on-surface-variant">NFO ATM CE/PE</span>
+              </div>
+
+              <!-- Col 3: Broker & Product Switcher -->
+              <div class="flex flex-col gap-1">
+                <div class="flex items-center gap-1.5 font-data-mono-sm">
+                  <span class="w-2 h-2 rounded-full ${broker.connected ? 'bg-primary-container' : 'bg-amber-tactical'}"></span>
+                  <span class="font-bold text-on-surface truncate">${esc(broker.user_id || snap.user_id || 'Shoonya')}</span>
+                </div>
+                <div class="inline-flex rounded bg-surface-container p-0.5 w-fit font-label-caps">
+                  <button onclick="setPrd('${idx}','M')" type="button" class="px-1.5 py-0.5 rounded ${prd === 'M' ? 'bg-primary-container text-on-primary-fixed font-bold' : 'text-on-surface-variant'} cursor-pointer">NRML</button>
+                  <button onclick="setPrd('${idx}','I')" type="button" class="px-1.5 py-0.5 rounded ${prd === 'I' ? 'bg-primary-container text-on-primary-fixed font-bold' : 'text-on-surface-variant'} cursor-pointer">MIS</button>
+                </div>
+              </div>
+
+              <!-- Col 4: Run Counter & 5-Gate Readiness Bar -->
+              <div class="flex flex-col gap-1">
+                <div class="flex items-center justify-between font-data-mono-sm">
+                  <span class="text-on-surface font-bold">Run #${runCounter}</span>
+                  <span class="text-profit font-bold">${readiness}%</span>
+                </div>
+                <div class="w-full h-1.5 rounded-full bg-surface-container-highest overflow-hidden">
+                  <div class="h-full bg-primary-container rounded-full transition-all duration-300" style="width:${readiness}%"></div>
+                </div>
+                <span class="font-label-caps text-on-surface-variant truncate">${gates.filter(g => g[1]).length}/${gates.length} Gates Ready</span>
+              </div>
+
+              <!-- Col 5: Tradetron Multiplier Selector (1x..25x) -->
+              <div class="flex flex-col gap-1">
+                <div class="flex items-center gap-1">
+                  <button onclick="stepLots('${idx}', ${Math.max(1, lots - 1)})" type="button" class="w-6 h-6 rounded bg-surface-container-high hover:bg-surface-bright font-bold cursor-pointer text-xs">-</button>
+                  <select onchange="stepLots('${idx}', Number(this.value))" class="db-mult-select" aria-label="${idx} Multiplier">
+                    ${multOptions.map(m => `<option value="${m}" ${m === lots ? 'selected' : ''}>${m}x</option>`).join('')}
+                  </select>
+                  <button onclick="stepLots('${idx}', ${Math.min(50, lots + 1)})" type="button" class="w-6 h-6 rounded bg-surface-container-high hover:bg-surface-bright font-bold cursor-pointer text-xs">+</button>
+                </div>
+                <span class="font-data-mono-sm text-[11px] text-on-surface-variant tabular-nums">${totalQty} Qty (${lotSize}/lot)</span>
+              </div>
+
+              <!-- Col 6: Tradetron Status Pill -->
+              <div>
+                <span class="db-status ${statusCls}">${statusTxt}</span>
+                <span class="font-data-mono-sm text-[10px] text-on-surface-variant block mt-0.5 truncate">${esc(info.last_signal || 'NO SIGNAL')}</span>
+              </div>
+
+              <!-- Col 7: Strategy P&L (INR) -->
+              <div class="text-left xl:text-right">
+                <div class="font-data-mono-lg text-[16px] font-bold tabular-nums ${stratPnl >= 0 ? 'text-profit' : 'text-loss'}">${A.fmtSignedINR(stratPnl)}</div>
+                <span class="font-data-mono-sm text-[10.5px] text-on-surface-variant tabular-nums">${idxPositions.length ? 'Live MTM' : (idxClosed.length ? `${idxClosed.length} Closed` : ' Standby')}</span>
+              </div>
+
+              <!-- Col 8: Tradetron Quick Action Bar -->
+              <div class="flex items-center justify-start xl:justify-end gap-1 flex-wrap">
+                <button onclick="triggerAuto('${idx}','CE_BUY')" type="button" class="db-rowact db-rowact--ce" title="Trigger ATM Call Option Buy">CE</button>
+                <button onclick="triggerAuto('${idx}','PE_BUY')" type="button" class="db-rowact db-rowact--pe" title="Trigger ATM Put Option Buy">PE</button>
+                <button onclick="triggerAuto('${idx}','AUTO')" type="button" class="db-rowact db-rowact--oneclick" title="Auto-Evaluate 5-Gate ORB Breakout">AUTO</button>
+                <button onclick="exitPos('${idx}')" type="button" class="db-rowact db-rowact--danger" title="Square Off Active ${idx} Position">Exit</button>
+              </div>
+            </div>
+
+            <!-- Tradetron Expandable Positions & 5-Gate Radar Drawer (.db-strat__positions) -->
+            <div class="db-strat__positions ${drawerOpen ? '' : 'hidden'} space-y-3">
+              <!-- Part A: Active Leg Positions Table (.db-postbl) -->
+              ${idxPositions.length > 0 ? `
+                <div class="overflow-x-auto">
+                  <table class="db-postbl">
+                    <thead>
+                      <tr>
+                        <th>Active Leg Instrument</th>
+                        <th>State</th>
+                        <th>Qty</th>
+                        <th>Entry Avg</th>
+                        <th>Live LTP</th>
+                        <th>Breakeven / T1</th>
+                        <th>Supertrend Trail SL</th>
+                        <th>Leg P&amp;L</th>
+                        <th class="text-right">Leg Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      ${idxPositions.map(p => {
+                        const pMtm = Number(p.realized_pnl || 0) + Number(p.unrealized_pnl || 0);
+                        return `<tr>
+                          <td class="font-bold text-on-surface">${esc(p.tradingsymbol)} <span class="text-profit text-[10px]">(${esc(p.signal_type || 'LONG')})</span></td>
+                          <td><span class="db-status db-status--ok">${esc(p.state)}</span></td>
+                          <td>${p.remaining_qty} / ${p.initial_qty}</td>
+                          <td>₹${Number(p.entry_avg_price).toFixed(2)}</td>
+                          <td class="font-bold text-profit">₹${Number(p.last_ltp).toFixed(2)}</td>
+                          <td>₹${Number(p.breakeven_target).toFixed(1)} / ₹${Number(p.target1_price).toFixed(1)}</td>
+                          <td class="font-bold text-loss">₹${Number(p.sl_trigger_price).toFixed(2)}</td>
+                          <td class="font-bold ${pMtm >= 0 ? 'text-profit' : 'text-loss'}">${A.fmtSignedINR(pMtm)}</td>
+                          <td class="text-right space-x-1">
+                            <button onclick="openSlModal('${esc(p.index_name)}','${esc(p.tradingsymbol)}',${p.sl_trigger_price},${p.entry_avg_price},${p.last_ltp})" type="button" class="db-rowact">Modify SL</button>
+                            <button onclick="exitPos('${esc(p.index_name)}')" type="button" class="db-rowact db-rowact--danger">Exit Leg</button>
+                          </td>
+                        </tr>`;
+                      }).join('')}
+                    </tbody>
+                  </table>
+                </div>
+              ` : `
+                <div class="flex flex-wrap items-center justify-between gap-2 px-3 py-2 rounded-lg bg-surface-container-low border border-outline-variant/25 font-data-mono-sm text-on-surface-variant">
+                  <div class="flex items-center gap-2">
+                    <span class="material-symbols-outlined text-[16px] text-primary">radar</span>
+                    <span>No active open leg for <b class="text-on-surface">${esc(idx)}</b> &bull; Armed ATM Candidates:</span>
+                  </div>
+                  <div class="flex items-center gap-3 flex-wrap">
+                    <span><b class="text-profit">CE:</b> <span class="text-on-surface">${esc(r.actual_symbol_ce || r.candidate_ce || '--')}</span></span>
+                    <span><b class="text-loss">PE:</b> <span class="text-on-surface">${esc(r.actual_symbol_pe || r.candidate_pe || '--')}</span></span>
                   </div>
                 </div>
-                <div class="flex items-center gap-1.5">
-                  <button onclick="triggerAuto('${idx}','CE_BUY')" type="button" class="px-2.5 py-1.5 rounded bg-primary-container/20 hover:bg-primary-container text-profit hover:text-on-primary-fixed font-label-caps font-bold cursor-pointer">BUY CE</button>
-                  <button onclick="triggerAuto('${idx}','PE_BUY')" type="button" class="px-2.5 py-1.5 rounded bg-secondary-container/25 hover:bg-secondary-container text-loss hover:text-on-secondary-container font-label-caps font-bold cursor-pointer">BUY PE</button>
-                  <button onclick="triggerAuto('${idx}','AUTO')" type="button" class="px-2.5 py-1.5 rounded bg-primary-container hover:bg-primary-fixed text-on-primary-fixed font-label-caps font-bold cursor-pointer">AUTO</button>
+              `}
+
+              <!-- Part B: Intraday Spot Sparkline + 7-Tile ORB & Supertrend(10,3) Telemetry Strip -->
+              <div class="grid grid-cols-1 lg:grid-cols-12 gap-3 items-center">
+                <div class="lg:col-span-4 h-14 bg-surface-container-lowest/90 border border-outline-variant/25 rounded-lg px-2.5 py-1.5 flex flex-col justify-between">
+                  <div class="flex items-center justify-between font-label-caps text-[9.5px] text-on-surface-variant">
+                    <span>${esc(idx)} INTRADAY SPOT &amp; ORB BANDS</span>
+                    <span class="${isBear ? 'text-loss' : 'text-profit'} font-bold">${A.fmtNum(ltp, 2)}</span>
+                  </div>
+                  <div class="h-8">${A.buildSparklineSvg(spotHistory[idx], info.orh, info.orl, !isBear)}</div>
                 </div>
+
+                <div class="lg:col-span-8 grid grid-cols-3 sm:grid-cols-7 gap-1.5 font-data-mono-sm tabular-nums">
+                  <div class="p-2 rounded-lg bg-surface-container-low border border-outline-variant/25"><span class="font-label-caps text-on-surface-variant block">ORH</span><b class="text-profit">${A.fmtNum(info.orh, 2)}</b></div>
+                  <div class="p-2 rounded-lg bg-surface-container-low border border-outline-variant/25"><span class="font-label-caps text-on-surface-variant block">ORL</span><b class="text-loss">${A.fmtNum(info.orl, 2)}</b></div>
+                  <div class="p-2 rounded-lg bg-surface-container-low border border-outline-variant/25"><span class="font-label-caps text-on-surface-variant block">RANGE %</span><b class="text-amber-tactical">${info.range_pct !== null && info.range_pct !== undefined ? info.range_pct.toFixed(2) + '%' : '--'}</b></div>
+                  <div class="p-2 rounded-lg bg-surface-container-low border border-outline-variant/25"><span class="font-label-caps text-on-surface-variant block">VWAP</span><b class="text-on-surface">${A.fmtNum(info.vwap, 1)}</b></div>
+                  <div class="p-2 rounded-lg bg-surface-container-low border border-outline-variant/25"><span class="font-label-caps text-on-surface-variant block">RSI (14)</span><b class="${(info.rsi || 50) > 60 ? 'text-profit' : (info.rsi || 50) < 40 ? 'text-loss' : 'text-on-surface'}">${info.rsi !== null && info.rsi !== undefined ? Number(info.rsi).toFixed(1) : '--'}</b></div>
+                  <div class="p-2 rounded-lg bg-surface-container-low border border-outline-variant/25"><span class="font-label-caps text-on-surface-variant block">ST (10,3)</span><b class="${stDir === -1 ? 'text-loss' : 'text-profit'}">${stVal ? A.fmtNum(stVal, 1) : (stDir === 1 ? 'BULL' : stDir === -1 ? 'BEAR' : 'ACTIVE')}</b></div>
+                  <div class="p-2 rounded-lg bg-surface-container-low border border-outline-variant/25"><span class="font-label-caps text-on-surface-variant block">DIST</span><b class="text-on-surface">${esc(distStr)}</b></div>
+                </div>
+              </div>
+
+              <!-- Part C: 6-Gate Verification Chips & Summary -->
+              <div class="flex flex-wrap items-center justify-between gap-2 pt-1">
+                <div class="flex items-center gap-1.5 flex-wrap">
+                  ${gates.map(([gName, ok]) => `<span class="px-2 py-0.5 rounded font-label-caps text-[10px] font-bold ${ok ? 'bg-primary-container/20 text-profit border border-primary-container/30' : 'bg-surface-container text-on-surface-variant'}">${ok ? '✓' : '•'} ${gName}</span>`).join('')}
+                </div>
+                <span class="font-body-sm text-on-surface-variant">${esc(r.radar_summary || '5-Gate ORB + Supertrend(10,3) trailing active.')}</span>
               </div>
             </div>
           </div>`;

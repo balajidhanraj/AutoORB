@@ -248,21 +248,30 @@
         </div>
       </div>
 
-      <!-- KPI Tactical Grid -->
+      <!-- KPI Tactical Grid (Tradetron Mobile Deployed Summary) -->
       <div class="px-3 grid grid-cols-2 gap-2">
-        <div class="col-span-2 p-3 rounded-xl bg-surface-container-high/90 glass-panel relative overflow-hidden shadow-lg">
-          <div class="absolute -right-4 -bottom-4 w-24 h-24 rounded-full bg-primary-container/10 blur-2xl pointer-events-none"></div>
+        <div class="col-span-2 db-card db-card--accent relative overflow-hidden shadow-lg">
           <div class="flex items-center justify-between mb-1">
-            <span class="font-label-caps text-on-surface-variant uppercase tracking-wider">LIVE TOTAL MTM</span>
-            <span id="m-roi-pill" class="px-1.5 py-0.5 rounded bg-primary-container/15 font-data-mono-sm text-profit font-bold">0.00%</span>
+            <div class="flex items-center gap-1.5">
+              <span class="tt-brainfx"><span></span><span></span><span></span></span>
+              <span class="font-label-caps text-on-surface-variant uppercase tracking-wider font-bold">DEPLOYED P&amp;L (INR)</span>
+            </div>
+            <span id="m-roi-pill" class="db-chip up">0.00%</span>
           </div>
           <div class="flex items-baseline justify-between flex-wrap gap-1 mt-0.5">
-            <span id="m-total-mtm" class="font-headline-md text-[20px] font-bold tracking-tight text-profit tabular-nums">₹0.00</span>
+            <span id="m-total-mtm" class="font-headline-md text-[22px] font-bold tracking-tight text-profit tabular-nums">₹0.00</span>
             <span id="m-realized-txt" class="font-data-mono-sm text-on-surface-variant tabular-nums">Realized: ₹0.00</span>
+          </div>
+          <div class="flex items-center justify-between pt-2 mt-1 border-t border-outline-variant/25">
+            <span class="font-data-mono-sm text-[11px] text-on-surface-variant">Single-Order Lock: <b class="text-profit">₹1L Safe</b></span>
+            <button type="button" onclick="openSheet('sheet-kill')" class="db-exitall h-7 px-2.5 text-[11px]">
+              <span class="material-symbols-outlined text-[13px]">power_settings_new</span>
+              <span>Exit All</span>
+            </button>
           </div>
         </div>
 
-        <div class="p-space-sm rounded-xl bg-surface-container glass-panel flex flex-col justify-between">
+        <div class="p-2.5 rounded-xl bg-surface-container glass-panel flex flex-col justify-between">
           <div class="flex items-center justify-between text-on-surface-variant">
             <span class="font-label-caps uppercase">Broker Cash</span>
             <span class="material-symbols-outlined text-[15px] text-outline">account_balance</span>
@@ -273,9 +282,9 @@
           </div>
         </div>
 
-        <div class="p-space-sm rounded-xl bg-surface-container glass-panel flex flex-col justify-between">
+        <div class="p-2.5 rounded-xl bg-surface-container glass-panel flex flex-col justify-between">
           <div class="flex items-center justify-between text-on-surface-variant">
-            <span class="font-label-caps uppercase">India VIX</span>
+            <span class="font-label-caps uppercase">India VIX &amp; Cap</span>
             <span id="m-vix-badge" class="px-1.5 py-0.5 rounded bg-surface-variant font-label-caps text-profit">--</span>
           </div>
           <div class="mt-1.5 flex items-baseline justify-between">
@@ -286,7 +295,7 @@
       </div>
 
       <!-- Quick Action Pills -->
-      <div class="px-margin flex items-center gap-space-xs overflow-x-auto pb-1 no-scrollbar">
+      <div class="px-3 flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar">
         <button id="btn-mob-bg-notify" type="button" onclick="AutoORB.bg.toggleInteractive()" class="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-primary-container/20 text-profit font-bold shadow-sm cursor-pointer">
           <span class="material-symbols-outlined text-[14px]">notifications_active</span>
           <span class="bg-notify-label font-label-caps">BG LIVE</span>
@@ -301,7 +310,7 @@
         </button>
         <button id="m-pill-manual" type="button" class="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-primary-container text-on-primary-fixed font-bold shadow-sm cursor-pointer">
           <span class="material-symbols-outlined text-[15px]">bolt</span>
-          <span class="font-label-caps font-bold">Quick Manual</span>
+          <span class="font-label-caps font-bold">One-Click</span>
         </button>
         <button id="m-pill-theme" type="button" class="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-surface-container text-on-surface-variant cursor-pointer">
           <span class="material-symbols-outlined text-[14px]">palette</span>
@@ -313,17 +322,17 @@
         </button>
       </div>
 
-      <!-- Radar Feed Header -->
-      <div class="px-margin flex items-center justify-between">
+      <!-- Tradetron Deployed Strategies Header -->
+      <div class="px-3 flex items-center justify-between">
         <div class="flex items-center gap-2">
-          <h2 class="font-headline-md text-[18px] font-bold text-on-surface">Radar Feed</h2>
-          <span class="px-2 py-0.5 rounded-full bg-primary-container/20 text-profit font-label-caps font-semibold">2 INDICES</span>
+          <h2 class="font-headline-md text-[17px] font-bold text-on-surface">Deployed Strategies</h2>
+          <span class="db-sum__tag">2 INDICES</span>
         </div>
         <span id="m-ping-txt" class="font-data-mono-sm text-on-surface-variant tabular-nums">Sync: --ms</span>
       </div>
 
-      <!-- Radar Cards -->
-      <div id="m-radar-cards" class="px-margin space-y-space-md"></div>
+      <!-- Deployed Strategy Cards -->
+      <div id="m-radar-cards" class="px-3 space-y-2.5"></div>
     </section>
 
     <!-- ==================== TAB 2: POSITIONS & ORDERS ==================== -->
@@ -908,60 +917,101 @@
 
       function renderMobileRadarCards() {
         const cont = document.getElementById('m-radar-cards');
-        cont.innerHTML = Object.entries(snap.indices || {}).map(([idx, info]) => {
+        const positions = snap.positions || [];
+        const closedTrades = snap.completed_trades || [];
+        const enMap = snap.enabled_indices || { NIFTY: true, BANKNIFTY: true };
+        const isLiveMode = snap.mode === 'LIVE';
+
+        cont.innerHTML = Object.entries(snap.indices || {}).map(([idx, info], sIdx) => {
           const r = info.radar || {};
           const ltp = info.spot_ltp;
           if (ltp) {
             const arr = spotHist[idx] || (spotHist[idx] = []);
             if (!arr.length || arr[arr.length - 1] !== ltp) { arr.push(ltp); if (arr.length > 24) arr.shift(); }
           }
-          const isBear = r.radar_state === 'IMMINENT_PE_BREAKOUT';
+          const isEnabled = enMap[idx] !== false;
+          const isBear = r.radar_state === 'IMMINENT_PE_BREAKOUT' || info.supertrend_dir === -1;
           const ready = Number(r.readiness_pct || 0);
-          const lots = r.lots || 1;
+          const lots = Number(r.lots || 1);
+          const lotSize = Number(r.lot_size || (idx === 'NIFTY' ? 65 : 30));
           const prd = r.product_type || 'M';
-          const gates = [['SYS', r.system_ready], ['VIX', r.vix_ready], ['ORB', r.orb_ready], ['PX', r.ce_price_ok || r.pe_price_ok], ['RSI', r.ce_rsi_ok || r.pe_rsi_ok]];
+          const stDir = info.supertrend_dir ?? r.supertrend_dir;
+          const stVal = info.supertrend_value ?? r.supertrend_value ?? info.supertrend;
+          const gates = [
+            ['SYS', r.system_ready],
+            ['VIX', r.vix_ready],
+            ['ORB', r.orb_ready],
+            ['PX', r.ce_price_ok || r.pe_price_ok],
+            ['RSI', r.ce_rsi_ok || r.pe_rsi_ok],
+            ['ST(10,3)', stDir === 1 || stDir === -1 || Boolean(r.ce_price_ok || r.pe_price_ok)]
+          ];
 
-          return `<div class="p-3 rounded-xl bg-surface-container glass-panel shadow-md space-y-2 relative overflow-hidden">
-            <div class="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r ${isBear ? 'from-secondary-container' : 'from-primary-container'} to-transparent"></div>
+          const idxPositions = positions.filter(p => p.index_name === idx);
+          const idxClosed = closedTrades.filter(t => (t.index_name || '').toUpperCase() === idx || (t.tradingsymbol || '').toUpperCase().startsWith(idx));
+          const stratPnl = idxPositions.reduce((a, p) => a + Number(p.realized_pnl || 0) + Number(p.unrealized_pnl || 0), 0) +
+                           idxClosed.reduce((a, t) => a + Number(t.net_pnl || 0), 0);
+          const multOpts = [1, 2, 3, 4, 5, 10, 15, 20];
+          if (!multOpts.includes(lots)) multOpts.push(lots);
+          multOpts.sort((a, b) => a - b);
+
+          return `<div class="p-3 rounded-xl bg-surface-container glass-panel shadow-md space-y-2.5 relative overflow-hidden ${!isEnabled ? 'opacity-75' : ''}">
             <div class="flex items-start justify-between gap-2">
               <div class="min-w-0">
-                <div class="flex items-center gap-1.5 min-w-0">
-                  <span class="font-headline-md text-[15px] font-bold text-on-surface shrink-0">${esc(idx)}</span>
-                  <span class="px-1.5 py-0.5 rounded bg-primary-container/15 text-profit font-label-caps font-bold truncate">${esc((r.radar_state || 'SCAN').replace(/_/g, ' '))}</span>
+                <div class="flex items-center gap-1.5 flex-wrap">
+                  <span class="db-serial">#${sIdx + 1}</span>
+                  <span class="font-headline-md text-[15px] font-bold text-on-surface">${esc(idx)} ORB + ST(10,3)</span>
+                  <span class="db-strat__chip ${isLiveMode ? 'db-strat__chip--live' : 'db-strat__chip--paper'}">${isLiveMode ? 'LIVE AUTO' : 'PAPER'}</span>
                 </div>
-                <span class="font-data-mono-sm text-on-surface-variant block truncate">${r.total_qty || '--'} qty &bull; Margin ${A.fmtINR(r.est_margin || 0, 0)}</span>
+                <span class="font-data-mono-sm text-on-surface-variant block truncate mt-0.5">Spot <b class="${isBear ? 'text-loss' : 'text-profit'}">${A.fmtNum(ltp, 2)}</b> &bull; ${r.total_qty || (lots * lotSize)} qty &bull; Margin ${A.fmtINR(r.est_margin || 0, 0)}</span>
               </div>
               <div class="text-right shrink-0">
-                <div class="font-data-mono-lg font-bold ${isBear ? 'text-loss' : 'text-profit'} tabular-nums">${A.fmtNum(ltp, 2)}</div>
-                <div class="font-data-mono-sm text-on-surface-variant">RSI ${info.rsi !== null && info.rsi !== undefined ? Number(info.rsi).toFixed(1) : '--'}</div>
+                <div class="font-data-mono-lg font-bold ${stratPnl >= 0 ? 'text-profit' : 'text-loss'} tabular-nums">${A.fmtSignedINR(stratPnl)}</div>
+                <span class="db-status ${!isEnabled ? 'db-status--paused' : (idxPositions.length ? 'db-status--ok' : 'db-status--warn')}">${!isEnabled ? 'PAUSED' : (idxPositions.length ? 'ENTERED' : esc((r.radar_state || 'SCAN').replace(/_/g, ' ')))}</span>
               </div>
             </div>
 
             <div class="h-10 bg-surface-container-lowest/70 rounded-lg px-1.5 py-1">${A.buildSparklineSvg(spotHist[idx], info.orh, info.orl, !isBear)}</div>
 
-            <div class="grid grid-cols-4 gap-1 p-1.5 rounded bg-surface-container-low text-center font-data-mono-sm tabular-nums">
+            <div class="grid grid-cols-5 gap-1 p-1.5 rounded bg-surface-container-low text-center font-data-mono-sm tabular-nums">
               <div><span class="font-label-caps text-on-surface-variant block">ORH</span><b class="text-profit">${A.fmtNum(info.orh, 0)}</b></div>
               <div><span class="font-label-caps text-on-surface-variant block">ORL</span><b class="text-loss">${A.fmtNum(info.orl, 0)}</b></div>
-              <div><span class="font-label-caps text-on-surface-variant block">RNG</span><b class="text-amber-tactical">${info.range_pct ? info.range_pct.toFixed(2) + '%' : '--'}</b></div>
               <div><span class="font-label-caps text-on-surface-variant block">VWAP</span><b class="text-on-surface">${A.fmtNum(info.vwap, 0)}</b></div>
+              <div><span class="font-label-caps text-on-surface-variant block">RSI</span><b class="text-on-surface">${info.rsi !== null && info.rsi !== undefined ? Number(info.rsi).toFixed(0) : '--'}</b></div>
+              <div><span class="font-label-caps text-on-surface-variant block">ST(10,3)</span><b class="${stDir === -1 ? 'text-loss' : 'text-profit'}">${stVal ? A.fmtNum(stVal, 0) : (stDir === -1 ? 'BEAR' : 'BULL')}</b></div>
             </div>
 
             <div class="space-y-1">
-              <div class="flex justify-between font-label-caps"><span class="text-on-surface-variant">5-GATE READINESS</span><b class="text-profit">${ready}%</b></div>
+              <div class="flex justify-between font-label-caps"><span class="text-on-surface-variant">5-GATE + ST READINESS</span><b class="text-profit">${ready}%</b></div>
               <div class="w-full h-1.5 rounded-full bg-surface-container-highest overflow-hidden"><div class="h-full bg-primary-container rounded-full" style="width:${ready}%"></div></div>
               <div class="flex flex-wrap gap-1 pt-0.5">${gates.map(([g, ok]) => `<span class="px-1.5 py-0.5 rounded font-label-caps text-[9px] ${ok ? 'bg-primary-container/20 text-profit font-bold' : 'bg-surface-container-low text-on-surface-variant'}">${ok ? '✓' : '•'} ${g}</span>`).join('')}</div>
             </div>
 
-            <div class="flex items-center justify-between gap-2 pt-1.5 border-t border-outline-variant/25">
+            ${idxPositions.map(p => {
+              const pMtm = Number(p.realized_pnl || 0) + Number(p.unrealized_pnl || 0);
+              return `<div class="p-2 rounded-lg bg-surface-container-lowest border border-outline-variant/30 flex items-center justify-between gap-2 font-data-mono-sm">
+                <div class="min-w-0">
+                  <div class="font-bold text-on-surface truncate">${esc(p.tradingsymbol)} (${p.remaining_qty}Q)</div>
+                  <div class="text-[10.5px] text-on-surface-variant">Entry ₹${Number(p.entry_avg_price).toFixed(1)} &bull; LTP ₹${Number(p.last_ltp).toFixed(1)} &bull; SL ₹${Number(p.sl_trigger_price).toFixed(1)}</div>
+                </div>
+                <div class="flex items-center gap-1 shrink-0">
+                  <span class="font-bold ${pMtm >= 0 ? 'text-profit' : 'text-loss'}">${A.fmtSignedINR(pMtm)}</span>
+                  <button onclick="mExitPos('${idx}')" type="button" class="db-rowact db-rowact--danger h-6 px-2 text-[10px]">Exit</button>
+                </div>
+              </div>`;
+            }).join('')}
+
+            <div class="flex items-center justify-between gap-1.5 pt-1.5 border-t border-outline-variant/25 flex-wrap">
               <div class="flex items-center gap-1">
-                <button onclick="mStepLots('${idx}',${Math.max(1, lots - 1)})" type="button" class="w-7 h-7 rounded bg-surface-container-high font-bold">-</button>
-                <span class="font-data-mono-sm font-bold px-1">${lots}L</span>
-                <button onclick="mStepLots('${idx}',${Math.min(50, lots + 1)})" type="button" class="w-7 h-7 rounded bg-surface-container-high font-bold">+</button>
-                <button onclick="mSetPrd('${idx}','${prd === 'M' ? 'I' : 'M'}')" type="button" class="ml-1 px-2 py-1 rounded bg-surface-container-lowest font-label-caps text-profit font-bold">${prd === 'M' ? 'NRML' : 'MIS'}</button>
+                <select onchange="mStepLots('${idx}', Number(this.value))" class="db-mult-select text-[11px] py-1 px-1.5" aria-label="${idx} Multiplier">
+                  ${multOpts.map(m => `<option value="${m}" ${m === lots ? 'selected' : ''}>${m}x (${m * lotSize}Q)</option>`).join('')}
+                </select>
+                <button onclick="mSetPrd('${idx}','${prd === 'M' ? 'I' : 'M'}')" type="button" class="px-2 py-1 rounded bg-surface-container-lowest font-label-caps text-profit font-bold">${prd === 'M' ? 'NRML' : 'MIS'}</button>
               </div>
-              <button onclick="mAutoTrigger('${idx}')" type="button" class="px-3 py-1.5 rounded-lg bg-primary-container text-on-primary-fixed font-label-caps font-bold flex items-center gap-1">
-                <span class="material-symbols-outlined text-[14px]">bolt</span>TRIGGER
-              </button>
+              <div class="flex items-center gap-1">
+                <button onclick="mTriggerSide('${idx}','CE_BUY')" type="button" class="db-rowact db-rowact--ce h-7 px-2">CE</button>
+                <button onclick="mTriggerSide('${idx}','PE_BUY')" type="button" class="db-rowact db-rowact--pe h-7 px-2">PE</button>
+                <button onclick="mAutoTrigger('${idx}')" type="button" class="db-rowact db-rowact--oneclick h-7 px-2.5">AUTO</button>
+              </div>
             </div>
           </div>`;
         }).join('');
@@ -1191,6 +1241,7 @@
       window.mStepLots = async (idx, lots) => { try { const r = await A.api.setLots(idx, lots); snap = r.snapshot || snap; renderMobile(); A.showToast(r.message); } catch (e) { A.showToast(e.message, 'error'); } };
       window.mSetPrd = async (idx, prd) => { try { const r = await A.api.setProductType(idx, prd); snap = r.snapshot || snap; renderMobile(); A.showToast(r.message); } catch (e) { A.showToast(e.message, 'error'); } };
       window.mAutoTrigger = async (idx) => { try { const r = await A.api.autoTrigger(idx, 'AUTO'); snap = r.snapshot || snap; renderMobile(); A.showToast(r.message, r.ok ? 'info' : 'warn'); } catch (e) { A.showToast(e.message, 'error'); } };
+      window.mTriggerSide = async (idx, side) => { try { const r = await A.api.autoTrigger(idx, side); snap = r.snapshot || snap; renderMobile(); A.showToast(r.message, r.ok ? 'info' : 'warn'); } catch (e) { A.showToast(e.message, 'error'); } };
       window.mExitPos = async (idx) => { try { const r = await A.api.exitPosition(idx); snap = r.snapshot || snap; renderMobile(); A.showToast(r.message); } catch (e) { A.showToast(e.message, 'error'); } };
       window.setMobileFunds = async (amt) => { try { const r = await A.api.brokerFunds(amt, 'set'); snap = r.snapshot || snap; renderMobile(); A.showToast(r.message); } catch (e) { A.showToast(e.message, 'error'); } };
       window.mControlMilestone = async (mKey, act) => {
