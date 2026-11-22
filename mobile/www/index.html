@@ -28,6 +28,13 @@
       window.tailwind.config = window.AUTOORB_TAILWIND_CONFIG;
     }
   </script>
+  <style>
+    html.autoorb-authed #m-landing-screen,
+    html.autoorb-authed #m-auth-screen { display: none !important; }
+  </style>
+  <script>
+    try { if (localStorage.getItem('autoorb_token')) document.documentElement.classList.add('autoorb-authed'); } catch (_e) {}
+  </script>
 </head>
 <body class="bg-surface text-on-surface antialiased flex flex-col min-h-[100dvh] selection:bg-primary-container selection:text-on-primary-fixed">
 
@@ -1557,6 +1564,7 @@
       };
 
       window.showLandingScreen = function () {
+        document.documentElement.classList.remove('autoorb-authed');
         stopPolling();
         ['sheet-auth', 'sheet-broker', 'sheet-kill', 'sheet-orb', 'sheet-manual', 'sheet-sl', 'sheet-guide'].forEach(closeSheet);
         const passEl = document.getElementById('ma-pass');
@@ -1574,6 +1582,7 @@
       };
 
       window.showLoginScreen = function (defaultSubTab) {
+        document.documentElement.classList.remove('autoorb-authed');
         stopPolling();
         ['sheet-auth', 'sheet-broker', 'sheet-kill', 'sheet-orb', 'sheet-manual', 'sheet-sl', 'sheet-guide'].forEach(closeSheet);
         const passEl = document.getElementById('ma-pass');
@@ -1592,7 +1601,16 @@
         window.scrollTo({ top: 0, behavior: 'smooth' });
       };
 
+      function applyMobileUserProfile(me) {
+        document.getElementById('ma-prof-name').textContent = me.name || 'Trader';
+        document.getElementById('ma-prof-sub').textContent = me.email || me.phone || me.id;
+        document.getElementById('ma-prof-prov').textContent = me.provider || 'user';
+        document.getElementById('mc-user-name').textContent = me.name || 'Trader';
+        document.getElementById('mc-user-sub').textContent = me.email || me.phone || me.provider;
+      }
+
       async function enterAppShell(me) {
+        document.documentElement.classList.add('autoorb-authed');
         const entering = document.getElementById('m-app-header').classList.contains('hidden');
         document.getElementById('m-landing-screen').classList.add('hidden');
         document.getElementById('m-auth-screen').classList.add('hidden');
@@ -1600,11 +1618,7 @@
         document.getElementById('m-app-main').classList.remove('hidden');
         document.getElementById('m-app-nav').classList.remove('hidden');
 
-        document.getElementById('ma-prof-name').textContent = me.name || 'Trader';
-        document.getElementById('ma-prof-sub').textContent = me.email || me.phone || me.id;
-        document.getElementById('ma-prof-prov').textContent = me.provider || 'user';
-        document.getElementById('mc-user-name').textContent = me.name || 'Trader';
-        document.getElementById('mc-user-sub').textContent = me.email || me.phone || me.provider;
+        applyMobileUserProfile(me);
 
         if (entering) {
           switchMobileTab('radar');
@@ -1619,18 +1633,19 @@
           showLandingScreen();
           return;
         }
+        const cached = (A.getCachedUser && A.getCachedUser()) || { name: 'Trader', email: '' };
+        const enterPromise = enterAppShell(cached);
         try {
           const me = await A.api.getMe();
           if (A.setCachedUser) A.setCachedUser(me);
-          await enterAppShell(me);
+          applyMobileUserProfile(me);
+          await enterPromise;
         } catch (err) {
           if (err && err.status === 401) {
             A.setToken('');
             showLandingScreen();
           } else {
-            // Keep mobile session alive across screen lock / network wake
-            const cached = (A.getCachedUser && A.getCachedUser()) || { name: 'Trader', email: '' };
-            await enterAppShell(cached);
+            await enterPromise;
           }
         }
       }

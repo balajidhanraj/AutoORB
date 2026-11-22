@@ -20,6 +20,14 @@
       window.tailwind.config = window.AUTOORB_TAILWIND_CONFIG;
     }
   </script>
+  <style>
+    html.autoorb-authed #desk-landing-screen { display: none !important; }
+    html.autoorb-authed #desk-app-header,
+    html.autoorb-authed #desk-app-main { display: block; }
+  </style>
+  <script>
+    try { if (localStorage.getItem('autoorb_token')) document.documentElement.classList.add('autoorb-authed'); } catch (_e) {}
+  </script>
 </head>
 <body class="bg-background font-body-md text-on-surface antialiased selection:bg-primary-container selection:text-on-primary-fixed min-h-screen">
 
@@ -2390,6 +2398,7 @@
       }
 
       function showDesktopLanding() {
+        document.documentElement.classList.remove('autoorb-authed');
         stopDesktopPolling();
         ['modal-manual', 'modal-config', 'modal-guide', 'modal-sl', 'modal-broker', 'modal-kill', 'modal-auth'].forEach(closeModal);
         const auPass = document.getElementById('au-pass');
@@ -2410,15 +2419,21 @@
       }
 
       async function enterDesktopApp(me) {
+        document.documentElement.classList.add('autoorb-authed');
+        const entering = document.getElementById('desk-app-header').classList.contains('hidden');
         populateUserProfile(me);
-        document.getElementById('desk-landing-screen').classList.add('hidden');
-        document.getElementById('desk-app-header').classList.remove('hidden');
-        document.getElementById('desk-app-main').classList.remove('hidden');
+        if (entering) {
+          document.getElementById('desk-landing-screen').classList.add('hidden');
+          document.getElementById('desk-app-header').classList.remove('hidden');
+          document.getElementById('desk-app-main').classList.remove('hidden');
+        }
         closeModal('modal-auth');
-        renderAll();
-        await pollStatus();
-        startDesktopPolling();
-        if (A.bg) A.bg.init(pollStatus);
+        if (entering) {
+          renderAll();
+          await pollStatus();
+          startDesktopPolling();
+          if (A.bg) A.bg.init(pollStatus);
+        }
       }
 
       async function syncDesktopAuth() {
@@ -2426,18 +2441,19 @@
           showDesktopLanding();
           return;
         }
+        const cached = (A.getCachedUser && A.getCachedUser()) || { name: 'Trader', email: '' };
+        const enterPromise = enterDesktopApp(cached);
         try {
           const me = await A.api.getMe();
           if (A.setCachedUser) A.setCachedUser(me);
-          await enterDesktopApp(me);
+          populateUserProfile(me);
+          await enterPromise;
         } catch (err) {
           if (err && err.status === 401) {
             A.setToken('');
             showDesktopLanding();
           } else {
-            // Keep session alive across laptop/mobile lock or brief network sleep
-            const cached = (A.getCachedUser && A.getCachedUser()) || { name: 'Trader', email: '' };
-            await enterDesktopApp(cached);
+            await enterPromise;
           }
         }
       }
