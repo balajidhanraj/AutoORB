@@ -1,9 +1,9 @@
-/* AutoORB × Tradetron ATP-AI Institutional Design System (Dark default + Light toggle) */
+/* AutoORB × AutoORB ATP-AI Institutional Design System (Dark default + Light toggle) */
 
 :root {
   color-scheme: dark;
 
-  /* Tradetron ATP-AI Dark Tokens (Reverse-Engineered from tradetron.tech/css/atp-ai/app.bundle.css) */
+  /* AutoORB ATP-AI Dark Tokens (Reverse-Engineered from AutoORB/css/atp-ai/app.bundle.css) */
   --paper: #0A0A0F;
   --paper-2: #1A1A24;
   --paper-3: #1E1B39;
@@ -151,7 +151,7 @@
 [data-theme="light"] {
   color-scheme: light;
 
-  /* Tradetron ATP-AI Light Tokens */
+  /* AutoORB ATP-AI Light Tokens */
   --paper: #FAFAFB;
   --paper-2: #F2F2F5;
   --paper-3: #EEEDFD;
@@ -376,11 +376,11 @@ input[type="range"].obsidian-range::-webkit-slider-thumb {
 }
 
 /* =====================================================================
-   TRADETRON ATP-AI DASHBOARD CLONE ARCHITECTURE
-   (Reverse-Engineered via REA from https://tradetron.tech/user/dashboard)
+   AutoORB ATP-AI DASHBOARD CLONE ARCHITECTURE
+   (Reverse-Engineered via REA from https://AutoORB/user/dashboard)
    ===================================================================== */
 
-/* Tradetron Pulsing Neural Synapse Logo Dots (.tt-brainfx) */
+/* AutoORB Pulsing Neural Synapse Logo Dots (.tt-brainfx) */
 .tt-brainfx {
   display: inline-flex;
   align-items: center;
@@ -410,7 +410,7 @@ input[type="range"].obsidian-range::-webkit-slider-thumb {
   50% { transform: scale(1.25); opacity: 1; }
 }
 
-/* Tradetron Market Ticker Bar (.h-ticker) */
+/* AutoORB Market Ticker Bar (.h-ticker) */
 .h-ticker {
   display: flex;
   align-items: center;
@@ -462,7 +462,7 @@ input[type="range"].obsidian-range::-webkit-slider-thumb {
   font-size: 11px;
 }
 
-/* Tradetron Summary Toolbar & Cards (.db-sum__toolbar, .db-cards, .db-card, .db-sum) */
+/* AutoORB Summary Toolbar & Cards (.db-sum__toolbar, .db-cards, .db-card, .db-sum) */
 .db-sum__toolbar {
   display: flex;
   align-items: center;
@@ -554,7 +554,7 @@ input[type="range"].obsidian-range::-webkit-slider-thumb {
   color: var(--negative);
 }
 
-/* Tradetron Deployed Strategies Panel (.db-panel, .db-scope, .db-strat-head, .db-strat) */
+/* AutoORB Deployed Strategies Panel (.db-panel, .db-scope, .db-strat-head, .db-strat) */
 .db-panel {
   background: var(--surface);
   border: 1px solid var(--rule);
@@ -616,7 +616,7 @@ input[type="range"].obsidian-range::-webkit-slider-thumb {
   box-shadow: 0 0 0 3px var(--signal-tint);
 }
 
-/* 8-Column Tradetron Strategy Table Header & Row */
+/* 8-Column AutoORB Strategy Table Header & Row */
 .db-strat-head {
   display: none;
 }
@@ -719,7 +719,7 @@ input[type="range"].obsidian-range::-webkit-slider-thumb {
   border: 1px solid rgba(99, 102, 241, 0.35);
 }
 
-/* Tradetron Multiplier Select & Stepper */
+/* AutoORB Multiplier Select & Stepper */
 .db-mult-select {
   font-family: 'JetBrains Mono', monospace;
   font-size: 12px;
@@ -736,7 +736,7 @@ input[type="range"].obsidian-range::-webkit-slider-thumb {
   border-color: var(--signal);
 }
 
-/* Tradetron Status Badges (.db-status) */
+/* AutoORB Status Badges (.db-status) */
 .db-status {
   display: inline-flex;
   align-items: center;
@@ -778,7 +778,7 @@ input[type="range"].obsidian-range::-webkit-slider-thumb {
   color: var(--negative);
 }
 
-/* Tradetron Strategy Row Action Buttons (.db-rowact) */
+/* AutoORB Strategy Row Action Buttons (.db-rowact) */
 .db-rowact {
   display: inline-flex;
   align-items: center;
@@ -839,7 +839,7 @@ input[type="range"].obsidian-range::-webkit-slider-thumb {
   border-color: #DC2626;
 }
 
-/* Tradetron Expandable Positions & 5-Gate Radar Drawer (.db-strat__positions, .db-postbl) */
+/* AutoORB Expandable Positions & 5-Gate Radar Drawer (.db-strat__positions, .db-postbl) */
 .db-strat__positions {
   padding: 12px 16px 16px;
   background: var(--paper);

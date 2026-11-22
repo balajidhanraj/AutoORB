@@ -313,9 +313,9 @@
         </div>
       </div>
 
-      <!-- Tradetron 3-Column Summary Cards (.db-cards) -->
+      <!-- AutoORB 3-Column Summary Cards (.db-cards) -->
       <div class="db-cards">
-        <!-- Card 1: Total P&L (Tradetron Accent Card) -->
+        <!-- Card 1: Total P&L (AutoORB Accent Card) -->
         <div class="db-card db-card--accent">
           <div class="flex items-center justify-between gap-2">
             <span class="font-label-caps text-on-surface-variant uppercase font-bold tracking-wider">TOTAL MTM P&amp;L (TODAY)</span>
@@ -385,7 +385,7 @@
         </div>
       </div>
 
-      <!-- Tradetron Deployed Strategies Table Panel (.db-panel) -->
+      <!-- AutoORB Deployed Strategies Table Panel (.db-panel) -->
       <div class="db-panel">
         <!-- Panel Header: Scope Tabs, Index Toggles, Filter & Drawer Toggle -->
         <div class="db-panel__head">
@@ -423,7 +423,7 @@
           </div>
         </div>
 
-        <!-- Tradetron 8-Column Table Header (.db-strat-head) -->
+        <!-- AutoORB 8-Column Table Header (.db-strat-head) -->
         <div class="db-strat-head">
           <div>STRATEGY</div>
           <div>EXECUTION</div>
@@ -439,7 +439,7 @@
         <div id="radar-cards-grid" class="flex flex-col divide-y divide-outline-variant/25"></div>
       </div>
 
-      <!-- Lower Section: Live Tradetron Notification & Signal Log Stream -->
+      <!-- Lower Section: Live AutoORB Notification & Signal Log Stream -->
       <div class="bg-surface-container-low glass-panel rounded-xl p-3.5 shadow-xl flex flex-col gap-2">
         <div class="flex items-center justify-between">
           <div class="flex items-center gap-2">
@@ -1306,7 +1306,7 @@
         posBadge.textContent = String(posCount);
         posBadge.classList.toggle('hidden', posCount === 0);
 
-        // Tradetron Dashboard Summary Strip
+        // AutoORB Dashboard Summary Strip
         const isLiveMode = snap.mode === 'LIVE';
         const execBadge = document.getElementById('tt-exec-mode-badge');
         if (execBadge) {
@@ -1464,7 +1464,7 @@
           multOptions.sort((a, b) => a - b);
 
           return `<div class="db-strat ${!isEnabled ? 'opacity-75' : ''}">
-            <!-- Tradetron 8-Column Deployed Strategy Row (.db-strat__row) -->
+            <!-- AutoORB 8-Column Deployed Strategy Row (.db-strat__row) -->
             <div class="db-strat__row">
               <!-- Col 1: Strategy Identity & Drawer Trigger -->
               <div class="flex flex-col gap-1 min-w-0">
@@ -1521,7 +1521,7 @@
                 <span class="font-label-caps text-on-surface-variant truncate">${gates.filter(g => g[1]).length}/${gates.length} Gates Ready</span>
               </div>
 
-              <!-- Col 5: Tradetron Multiplier Selector (1x..25x) -->
+              <!-- Col 5: AutoORB Multiplier Selector (1x..25x) -->
               <div class="flex flex-col gap-1">
                 <div class="flex items-center gap-1">
                   <button onclick="stepLots('${idx}', ${Math.max(1, lots - 1)})" type="button" class="w-6 h-6 rounded bg-surface-container-high hover:bg-surface-bright font-bold cursor-pointer text-xs">-</button>
@@ -1533,7 +1533,7 @@
                 <span class="font-data-mono-sm text-[11px] text-on-surface-variant tabular-nums">${totalQty} Qty (${lotSize}/lot)</span>
               </div>
 
-              <!-- Col 6: Tradetron Status Pill -->
+              <!-- Col 6: AutoORB Status Pill -->
               <div>
                 <span class="db-status ${statusCls}">${statusTxt}</span>
                 <span class="font-data-mono-sm text-[10px] text-on-surface-variant block mt-0.5 truncate">${esc(info.last_signal || 'NO SIGNAL')}</span>
@@ -1545,7 +1545,7 @@
                 <span class="font-data-mono-sm text-[10.5px] text-on-surface-variant tabular-nums">${idxPositions.length ? 'Live MTM' : (idxClosed.length ? `${idxClosed.length} Closed` : ' Standby')}</span>
               </div>
 
-              <!-- Col 8: Tradetron Quick Action Bar -->
+              <!-- Col 8: AutoORB Quick Action Bar -->
               <div class="flex items-center justify-start xl:justify-end gap-1 flex-wrap">
                 <button onclick="triggerAuto('${idx}','CE_BUY')" type="button" class="db-rowact db-rowact--ce" title="Trigger ATM Call Option Buy">CE</button>
                 <button onclick="triggerAuto('${idx}','PE_BUY')" type="button" class="db-rowact db-rowact--pe" title="Trigger ATM Put Option Buy">PE</button>
@@ -1554,7 +1554,7 @@
               </div>
             </div>
 
-            <!-- Tradetron Expandable Positions & 5-Gate Radar Drawer (.db-strat__positions) -->
+            <!-- AutoORB Expandable Positions & 5-Gate Radar Drawer (.db-strat__positions) -->
             <div class="db-strat__positions ${drawerOpen ? '' : 'hidden'} space-y-3">
               <!-- Part A: Active Leg Positions Table (.db-postbl) -->
               ${idxPositions.length > 0 ? `
