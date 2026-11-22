@@ -367,6 +367,13 @@ class TradingSystemOrchestrator:
             all_candles=all_closed_candles,
             india_vix=vix,
         )
+        st_state = self.strategy.get_state(index_name)
+        self.risk_manager.check_supertrend_trailing_exit(
+            index_name=index_name,
+            spot_close=closed_candle.close,
+            supertrend_line=st_state.last_supertrend,
+            supertrend_dir=st_state.last_supertrend_dir,
+        )
         if signal is None:
             return
 

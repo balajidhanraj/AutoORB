@@ -31,7 +31,7 @@ from broker.auth import ShoonyaAuthenticator
 from broker.instrument_mapper import get_target_expiry
 from broker.shoonya_client import ShoonyaClient
 from config.settings import INDIA_VIX_EXCHANGE, INDIA_VIX_TOKEN, INDEX_SPECS, IST, IndexSpec, load_settings
-from engine.indicators import calculate_ema
+from engine.indicators import calculate_ema, calculate_supertrend
 from scripts.backtest_orb import (
     Candle,
     calculate_intraday_vwap,
@@ -278,9 +278,10 @@ def _simulate_fixed_sl_trade(
     vix_map: Dict[datetime, float],
     total_qty: int,
     p0: float,
+    st_by_ts: Optional[Dict[datetime, Tuple[Optional[float], int]]] = None,
     exit_slippage: float = 1.0,
 ) -> Dict[str, Any]:
-    """Simulate Fixed SL (25pt NF / 45pt BNF), BE (+20/+45), T1 50% (+40/+80), and 15:15 EOD with real Shoonya VIX."""
+    """Simulate Fixed SL (25pt NF / 45pt BNF), BE (+20/+45), T1 50% (+40/+80), Supertrend(10,3) line trail, and 15:15 EOD."""
     iv_mult = 1.12 if index_name == "BANKNIFTY" else 1.0
     sl_price = max(1.0, p0 - spec.sl_pts)
     be_ts: Optional[datetime] = None
@@ -330,6 +331,21 @@ def _simulate_fixed_sl_trade(
         if be_ts is None and fav_pts >= spec.breakeven_trigger_pts:
             be_ts = bar.timestamp
             sl_price = max(sl_price, p0)
+
+        # Supertrend(10, 3) Trailing Exit on 5-minute candle close across the Supertrend line
+        if st_by_ts is not None:
+            st_line, st_dir = st_by_ts.get(bar.timestamp, (None, 0))
+            if st_line is not None and st_dir != 0:
+                st_crossed = (
+                    (sig_type == "CE" and (bar.close < st_line or st_dir == -1))
+                    or (sig_type == "PE" and (bar.close > st_line or st_dir == 1))
+                )
+                if st_crossed:
+                    exit_px = max(0.5, o_close - exit_slippage)
+                    exit_ts = bar.timestamp
+                    exit_time_str = bar.timestamp.strftime("%H:%M")
+                    exit_reason = "SUPERTREND_TRAIL"
+                    break
 
         if b_time >= time(15, 15):
             exit_px = o_close
@@ -410,13 +426,20 @@ def run_nf_bnf_sequential_backtest(
 
         orb_info: Dict[str, Optional[Tuple[float, float]]] = {}
         bars_ts_idx: Dict[str, Dict[datetime, int]] = {idx: {} for idx in indices}
+        day_st_map: Dict[str, Dict[datetime, Tuple[Optional[float], int]]] = {idx: {} for idx in indices}
         all_ts_set = set()
 
         for idx in indices:
             dc = days_by_idx[idx].get(sess_date, [])
+            prior_tail = seen_by_idx[idx][-60:]
             for i, c in enumerate(dc):
                 bars_ts_idx[idx][c.timestamp] = i
                 all_ts_set.add(c.timestamp)
+                day_st_map[idx][c.timestamp] = calculate_supertrend(
+                    (prior_tail + dc[: i + 1])[-60:],
+                    period=10,
+                    multiplier=3.0,
+                )
             oc = [c for c in dc if time(9, 15) <= c.timestamp.time() <= time(9, 40)]
             if len(dc) >= 6 and len(oc) >= 5:
                 orh = max(c.high for c in oc)
@@ -495,7 +518,15 @@ def run_nf_bnf_sequential_backtest(
                     and (prev_c is None or candle.close <= prev_c)
                 )
 
-                if idx == "BANKNIFTY" and (ce_signal or pe_signal):
+                # Multi-confirmation filter for both NIFTY & BANKNIFTY:
+                # Supertrend(10, 3) + 20-EMA + Decisive Candle Body >= 0.40
+                if ce_signal or pe_signal:
+                    st_val, st_dir = calculate_supertrend(seen_by_idx[idx][-60:], period=10, multiplier=3.0)
+                    if st_val is not None and st_dir != 0:
+                        if ce_signal and (st_dir != 1 or candle.close <= st_val):
+                            ce_signal = False
+                        if pe_signal and (st_dir != -1 or candle.close >= st_val):
+                            pe_signal = False
                     ema20 = calculate_ema(closes_win, period=20)
                     if ema20 is not None:
                         if ce_signal and candle.close <= ema20:
@@ -533,6 +564,7 @@ def run_nf_bnf_sequential_backtest(
                     vix_map=vix_lookup,
                     total_qty=total_qty,
                     p0=p0,
+                    st_by_ts=day_st_map[idx],
                 )
 
                 trades_today_global += 1
@@ -661,7 +693,7 @@ def main() -> None:
     parser.add_argument("--force", action="store_true", help="Force re-fetch even if 365d cache is non-empty")
     parser.add_argument("--max-trades", type=int, default=4, help="Max trades per day (default 4)")
     parser.add_argument("--daily-risk", type=float, default=10000.0, help="Daily max loss cap (Rs)")
-    parser.add_argument("--include-nifty", action="store_true", help="Include NIFTY in backtest (default: BANKNIFTY only)")
+    parser.add_argument("--bnf-only", action="store_true", help="Run BANKNIFTY only (default: NIFTY + BANKNIFTY)")
     args = parser.parse_args()
 
     start_d = date.fromisoformat(args.start)
@@ -676,7 +708,7 @@ def main() -> None:
             auth.login_via_selenium()
         print(f"Authenticated with Shoonya ({settings.shoonya_user_id}); fetching {start_d} -> {end_d}...", flush=True)
 
-    active_indices = ("NIFTY", "BANKNIFTY") if args.include_nifty else ("BANKNIFTY",)
+    active_indices = ("BANKNIFTY",) if args.bnf_only else ("NIFTY", "BANKNIFTY")
     candles_by_index: Dict[str, List[Candle]] = {}
     date_ranges: Dict[str, Tuple[str, str]] = {}
     for idx in active_indices:

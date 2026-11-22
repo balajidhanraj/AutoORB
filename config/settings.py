@@ -114,7 +114,7 @@ class AppSettings(BaseModel):
     capital: float = Field(default=100000.0)
     max_daily_loss: float = Field(default=10000.0)
     max_trades_per_day: int = Field(default=4)
-    enable_nifty_trading: bool = Field(default=False)
+    enable_nifty_trading: bool = Field(default=True)
     enable_banknifty_trading: bool = Field(default=True)
 
     min_india_vix: float = Field(default=12.0)
@@ -123,10 +123,13 @@ class AppSettings(BaseModel):
     daily_bias_filter: bool = Field(default=True)
     use_ema_filter: bool = Field(default=True)
     min_candle_body_ratio: float = Field(default=0.40)
+    use_supertrend_filter: bool = Field(default=True)
+    supertrend_period: int = Field(default=10)
+    supertrend_multiplier: float = Field(default=3.0)
     require_vwap_slope: bool = Field(default=False)
     min_vwap_slope_pct: float = Field(default=0.02)
     dynamic_sl_pct: float = Field(default=0.0)
-    nifty_use_ema_body_filter: bool = Field(default=False)
+    nifty_use_ema_body_filter: bool = Field(default=True)
     banknifty_be_pyramiding: bool = Field(default=False)
     tuesday_expiry_boost: bool = Field(default=True)
     max_weekly_losses: int = Field(default=0)
@@ -205,7 +208,7 @@ def load_settings(env_path: str | Path | None = None) -> AppSettings:
         capital=float(os.getenv("CAPITAL", "100000") or 100000),
         max_daily_loss=float(os.getenv("MAX_DAILY_LOSS", "10000") or 10000),
         max_trades_per_day=int(os.getenv("MAX_TRADES_PER_DAY", "4") or 4),
-        enable_nifty_trading=_parse_bool(os.getenv("ENABLE_NIFTY_TRADING"), default=False),
+        enable_nifty_trading=_parse_bool(os.getenv("ENABLE_NIFTY_TRADING"), default=True),
         enable_banknifty_trading=_parse_bool(os.getenv("ENABLE_BANKNIFTY_TRADING"), default=True),
         min_india_vix=float(os.getenv("MIN_INDIA_VIX", "12.0") or 12.0),
         min_orb_range_pct=float(os.getenv("MIN_ORB_RANGE_PCT", "0.20") or 0.20),
@@ -213,10 +216,13 @@ def load_settings(env_path: str | Path | None = None) -> AppSettings:
         daily_bias_filter=_parse_bool(os.getenv("DAILY_BIAS_FILTER"), default=True),
         use_ema_filter=_parse_bool(os.getenv("USE_EMA_FILTER"), default=True),
         min_candle_body_ratio=float(os.getenv("MIN_CANDLE_BODY_RATIO", "0.40") or 0.40),
+        use_supertrend_filter=_parse_bool(os.getenv("USE_SUPERTREND_FILTER"), default=True),
+        supertrend_period=int(os.getenv("SUPERTREND_PERIOD", "10") or 10),
+        supertrend_multiplier=float(os.getenv("SUPERTREND_MULTIPLIER", "3.0") or 3.0),
         require_vwap_slope=_parse_bool(os.getenv("REQUIRE_VWAP_SLOPE"), default=False),
         min_vwap_slope_pct=float(os.getenv("MIN_VWAP_SLOPE_PCT", "0.02") or 0.02),
         dynamic_sl_pct=float(os.getenv("DYNAMIC_SL_PCT", "0.0") or 0.0),
-        nifty_use_ema_body_filter=_parse_bool(os.getenv("NIFTY_USE_EMA_BODY_FILTER"), default=False),
+        nifty_use_ema_body_filter=_parse_bool(os.getenv("NIFTY_USE_EMA_BODY_FILTER"), default=True),
         banknifty_be_pyramiding=_parse_bool(os.getenv("BANKNIFTY_BE_PYRAMIDING"), default=False),
         tuesday_expiry_boost=_parse_bool(os.getenv("TUESDAY_EXPIRY_BOOST"), default=True),
         max_weekly_losses=int(os.getenv("MAX_WEEKLY_LOSSES", "0") or 0),

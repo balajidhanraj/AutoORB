@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import date, time
-from typing import Sequence
+from typing import Optional, Sequence, Tuple
 
 from config.settings import IST
 from engine.candle_builder import Candle
@@ -85,3 +85,67 @@ def calculate_ema(closes: Sequence[float], period: int = 20) -> Optional[float]:
     for px in closes[1:]:
         ema = (float(px) * k) + (ema * (1.0 - k))
     return round(ema, 2)
+
+
+def calculate_supertrend(
+    candles: Sequence[Candle],
+    period: int = 10,
+    multiplier: float = 3.0,
+) -> Tuple[Optional[float], int]:
+    """Calculate TradingView-compatible Supertrend(period=10, multiplier=3.0).
+
+    Returns (supertrend_line_value, direction) where direction is:
+      +1 = Bullish (price above Supertrend -> CE)
+      -1 = Bearish (price below Supertrend -> PE)
+       0 = Insufficient bars (< period + 1)
+    """
+    if len(candles) < period + 1:
+        return None, 0
+
+    trs = []
+    for i in range(1, len(candles)):
+        h = float(candles[i].high)
+        l = float(candles[i].low)
+        pc = float(candles[i - 1].close)
+        tr = max(h - l, abs(h - pc), abs(l - pc))
+        trs.append(tr)
+
+    atr = sum(trs[:period]) / period
+    final_upper = 0.0
+    final_lower = 0.0
+    direction = 1
+    st_val = 0.0
+
+    for idx in range(period - 1, len(trs)):
+        c_bar = candles[idx + 1]
+        prev_bar = candles[idx]
+        if idx > period - 1:
+            atr = ((atr * (period - 1)) + trs[idx]) / period
+
+        hl2 = (float(c_bar.high) + float(c_bar.low)) / 2.0
+        basic_upper = hl2 + (multiplier * atr)
+        basic_lower = hl2 - (multiplier * atr)
+
+        if idx == period - 1:
+            final_upper = basic_upper
+            final_lower = basic_lower
+            direction = 1 if float(c_bar.close) >= final_lower else -1
+            st_val = final_lower if direction == 1 else final_upper
+            continue
+
+        prev_close = float(prev_bar.close)
+        if basic_upper < final_upper or prev_close > final_upper:
+            final_upper = basic_upper
+        if basic_lower > final_lower or prev_close < final_lower:
+            final_lower = basic_lower
+
+        cur_close = float(c_bar.close)
+        if direction == -1 and cur_close > final_upper:
+            direction = 1
+        elif direction == 1 and cur_close < final_lower:
+            direction = -1
+
+        st_val = final_lower if direction == 1 else final_upper
+
+    return round(st_val, 2), direction
+

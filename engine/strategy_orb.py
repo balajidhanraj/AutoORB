@@ -8,7 +8,12 @@ from typing import Dict, Optional, Sequence
 
 from config.settings import INDEX_SPECS, IST, AppSettings
 from engine.candle_builder import Candle
-from engine.indicators import calculate_ema, calculate_intraday_vwap, calculate_wilder_rsi
+from engine.indicators import (
+    calculate_ema,
+    calculate_intraday_vwap,
+    calculate_supertrend,
+    calculate_wilder_rsi,
+)
 from utils.logger import get_logger
 
 logger = get_logger("engine.strategy_orb")
@@ -28,6 +33,8 @@ class ORBState:
     last_spot: Optional[float] = None
     last_vwap: Optional[float] = None
     last_rsi: Optional[float] = None
+    last_supertrend: Optional[float] = None
+    last_supertrend_dir: int = 0
     last_signal: Optional[str] = None
     last_eval_time: Optional[str] = None
 
@@ -187,10 +194,15 @@ class ORBStrategy:
 
         vwap = calculate_intraday_vwap(candles_seq, session_date=candle_ist.date())
         rsi = calculate_wilder_rsi([c.close for c in candles_seq], period=14)
+        st_period = int(getattr(self.settings, "supertrend_period", 10) or 10)
+        st_mult = float(getattr(self.settings, "supertrend_multiplier", 3.0) or 3.0)
+        st_val, st_dir = calculate_supertrend(candles_seq[-60:], period=st_period, multiplier=st_mult)
 
         state.last_spot = closed_candle.close
         state.last_vwap = vwap
         state.last_rsi = rsi
+        state.last_supertrend = st_val
+        state.last_supertrend_dir = st_dir
         state.last_eval_time = eval_dt.strftime("%H:%M:%S")
 
         if not state.is_locked and eval_time >= self.settings.orb_end_time:
@@ -280,6 +292,27 @@ class ORBStrategy:
                 )
                 ce_signal = False
                 pe_signal = False
+
+        # 4. Supertrend(10, 3) Confirmation Filter (CE requires Bullish +1; PE requires Bearish -1)
+        if getattr(self.settings, "use_supertrend_filter", False) and (ce_signal or pe_signal):
+            st_period = int(getattr(self.settings, "supertrend_period", 10) or 10)
+            st_mult = float(getattr(self.settings, "supertrend_multiplier", 3.0) or 3.0)
+            st_val, st_dir = calculate_supertrend(candles_seq[-60:], period=st_period, multiplier=st_mult)
+            state.last_supertrend = st_val
+            state.last_supertrend_dir = st_dir
+            if st_val is not None and st_dir != 0:
+                if ce_signal and (st_dir != 1 or close_px <= st_val):
+                    logger.info(
+                        "%s CE skipped: Supertrend(%d,%.1f) dir=%d val=%.2f vs spot %.2f",
+                        index_name, st_period, st_mult, st_dir, st_val, close_px,
+                    )
+                    ce_signal = False
+                if pe_signal and (st_dir != -1 or close_px >= st_val):
+                    logger.info(
+                        "%s PE skipped: Supertrend(%d,%.1f) dir=%d val=%.2f vs spot %.2f",
+                        index_name, st_period, st_mult, st_dir, st_val, close_px,
+                    )
+                    pe_signal = False
 
         if ce_signal:
             state.last_signal = f"CE @ {close_px:.2f} (RSI {rsi:.1f})"

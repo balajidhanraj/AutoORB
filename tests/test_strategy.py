@@ -55,6 +55,7 @@ def _make_settings(tmp_path: Path, **overrides: Any) -> AppSettings:
         "enable_nifty_trading": True,
         "dynamic_sl_pct": 0.0,
         "require_vwap_slope": False,
+        "use_supertrend_filter": False,
     }
     defaults.update(overrides)
     return AppSettings(**defaults)
@@ -522,8 +523,12 @@ def test_nf_bnf_30m_max4_global_single_order_defaults(tmp_path: Path) -> None:
         log_dir=str(tmp_path / "logs"),
     )
     assert prod_settings.capital == 100000.0
-    assert prod_settings.enable_nifty_trading is False
+    assert prod_settings.enable_nifty_trading is True
     assert prod_settings.enable_banknifty_trading is True
+    assert prod_settings.use_supertrend_filter is True
+    assert prod_settings.supertrend_period == 10
+    assert prod_settings.supertrend_multiplier == 3.0
+    assert prod_settings.nifty_use_ema_body_filter is True
     assert prod_settings.banknifty_be_pyramiding is False
     assert prod_settings.max_trades_per_day == 4
     assert prod_settings.orb_window_minutes == 30
@@ -536,15 +541,17 @@ def test_nf_bnf_30m_max4_global_single_order_defaults(tmp_path: Path) -> None:
     mapper = InstrumentMapper(client)
     rm = RiskManager(prod_settings, client, mapper)
 
-    # Default: NIFTY unchecked (False), BANKNIFTY checked (True)
-    assert rm.can_take_new_trade("NIFTY") is False
+    # Default: both NIFTY and BANKNIFTY enabled with Supertrend(10, 3) + confirmations
+    assert rm.can_take_new_trade("NIFTY") is True
     assert rm.can_take_new_trade("BANKNIFTY") is True
 
-    # Toggle NIFTY ON via checkbox API helper
+    # Toggle NIFTY OFF/ON via checkbox API helper
+    ok, _ = rm.set_enabled_indices(nifty=False, banknifty=True)
+    assert ok is True
+    assert rm.can_take_new_trade("NIFTY") is False
     ok, _ = rm.set_enabled_indices(nifty=True, banknifty=True)
     assert ok is True
     assert rm.can_take_new_trade("NIFTY") is True
-    assert rm.can_take_new_trade("BANKNIFTY") is True
 
     bnf_sig = ORBSignal(
         index_name="BANKNIFTY",
@@ -585,6 +592,18 @@ def test_nf_bnf_30m_max4_global_single_order_defaults(tmp_path: Path) -> None:
         else:
             assert rm.can_take_new_trade("BANKNIFTY") is False
             assert rm.can_take_new_trade("NIFTY") is False
+
+    # Verify Supertrend(10, 3) Trailing Exit closes CE when spot closes below Supertrend line
+    rm.reset_daily()
+    ce_pos = rm.execute_entry(bnf_sig, option_ltp=500.0)
+    assert ce_pos is not None
+    # Spot above ST line -> stays open
+    assert rm.check_supertrend_trailing_exit("BANKNIFTY", spot_close=52600.0, supertrend_line=52300.0, supertrend_dir=1) is False
+    assert len(rm.positions) == 1
+    # Spot closes below ST line -> exits with SUPERTREND_TRAIL
+    assert rm.check_supertrend_trailing_exit("BANKNIFTY", spot_close=52250.0, supertrend_line=52300.0, supertrend_dir=-1) is True
+    assert len(rm.positions) == 0
+    assert rm.completed_trades[-1].exit_reason == "SUPERTREND_TRAIL"
 
 
 def test_auto_square_off_all_and_exit_position(tmp_path: Path) -> None:

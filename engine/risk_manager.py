@@ -952,6 +952,49 @@ class RiskManager:
             logger.info("Manually exited %d position(s) for %s (%s)", len(matching), index_name, reason)
             return True
 
+    def check_supertrend_trailing_exit(
+        self,
+        index_name: str,
+        spot_close: float,
+        supertrend_line: Optional[float],
+        supertrend_dir: int,
+    ) -> bool:
+        """Exit open CE if 5m spot candle closes below Supertrend(10,3) line, or PE if it closes above."""
+        if not getattr(self.settings, "use_supertrend_filter", False):
+            return False
+        if supertrend_line is None or supertrend_dir == 0:
+            return False
+        with self._lock:
+            matching = [
+                p for k, p in list(self.positions.items())
+                if (k == index_name or p.index_name == index_name)
+                and p.state in {
+                    PositionState.OPEN_FULL,
+                    PositionState.OPEN_FULL_BREAKEVEN,
+                    PositionState.OPEN_PARTIAL_TRAILING,
+                }
+            ]
+            if not matching:
+                return False
+            exited_any = False
+            for pos in matching:
+                should_exit = (
+                    (pos.signal_type == "CE" and (spot_close < supertrend_line or supertrend_dir == -1))
+                    or (pos.signal_type == "PE" and (spot_close > supertrend_line or supertrend_dir == 1))
+                )
+                if should_exit:
+                    logger.info(
+                        "Supertrend trailing exit triggered for %s (%s): spot=%.2f vs ST=%.2f (dir=%d)",
+                        pos.contract.tradingsymbol,
+                        pos.signal_type,
+                        spot_close,
+                        supertrend_line,
+                        supertrend_dir,
+                    )
+                    self._exit_position_locked(pos, "SUPERTREND_TRAIL")
+                    exited_any = True
+            return exited_any
+
     def modify_position_sl(self, index_name: str, new_sl_price: float) -> Tuple[bool, str]:
         """Manually adjust the active SL-LMT trigger price for an open position."""
         idx = index_name.strip().upper()
