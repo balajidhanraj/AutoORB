@@ -1003,19 +1003,19 @@
           <input id="au-email" type="email" required placeholder="trader@example.com" class="w-full p-2.5 rounded-lg bg-surface-container-lowest border border-outline-variant/50 text-on-surface"/>
           <input id="au-pass" type="password" required placeholder="Password" class="w-full p-2.5 rounded-lg bg-surface-container-lowest border border-outline-variant/50 text-on-surface"/>
           <div class="grid grid-cols-2 gap-2">
-            <button type="button" onclick="submitEmailAuth('login')" class="py-2.5 rounded-xl bg-primary-container text-on-primary-fixed font-bold cursor-pointer">SIGN IN</button>
-            <button type="button" onclick="submitEmailAuth('register')" class="py-2.5 rounded-xl bg-surface-container-high text-on-surface font-bold cursor-pointer">REGISTER</button>
+            <button id="btn-email-login" type="button" onclick="submitEmailAuth('login')" class="py-2.5 rounded-xl bg-primary-container text-on-primary-fixed font-bold cursor-pointer">SIGN IN</button>
+            <button id="btn-email-register" type="button" onclick="submitEmailAuth('register')" class="py-2.5 rounded-xl bg-surface-container-high text-on-surface font-bold cursor-pointer">REGISTER</button>
           </div>
         </form>
 
         <div id="form-phone-auth" class="hidden space-y-2.5 text-body-sm">
           <div class="flex gap-2">
             <input id="au-phone" type="tel" placeholder="+919876543210" class="flex-1 p-2.5 rounded-lg bg-surface-container-lowest border border-outline-variant/50 font-data-mono-sm text-on-surface"/>
-            <button type="button" onclick="sendDeskOtp()" class="px-3 py-2 rounded-lg bg-primary-container text-on-primary-fixed font-label-caps font-bold cursor-pointer">SEND OTP</button>
+            <button id="btn-desk-send-otp" type="button" onclick="sendDeskOtp()" class="px-3 py-2 rounded-lg bg-primary-container text-on-primary-fixed font-label-caps font-bold cursor-pointer">SEND OTP</button>
           </div>
           <div id="au-otp-row" class="hidden flex gap-2">
             <input id="au-otp" type="text" maxlength="6" placeholder="6-digit OTP" class="flex-1 p-2.5 rounded-lg bg-surface-container-lowest border border-outline-variant/50 font-data-mono-md text-center text-on-surface"/>
-            <button type="button" onclick="verifyDeskOtp()" class="px-3 py-2 rounded-lg bg-primary-container text-on-primary-fixed font-label-caps font-bold cursor-pointer">VERIFY</button>
+            <button id="btn-desk-verify-otp" type="button" onclick="verifyDeskOtp()" class="px-3 py-2 rounded-lg bg-primary-container text-on-primary-fixed font-label-caps font-bold cursor-pointer">VERIFY</button>
           </div>
         </div>
       </div>
@@ -2117,13 +2117,24 @@
         const email = document.getElementById('au-email').value.trim();
         const pass = document.getElementById('au-pass').value;
         const name = document.getElementById('au-name').value.trim();
+        const btnId = kind === 'register' ? 'btn-email-register' : 'btn-email-login';
+        if (A.setButtonLoading) A.setButtonLoading(btnId, true, kind === 'register' ? 'CREATING...' : 'SIGNING IN...');
         try {
           const r = kind === 'register' ? await A.api.register(email, pass, name) : await A.api.login(email, pass);
           A.setToken(r.access_token);
           await syncDesktopAuth();
           A.showToast(`Signed in as ${r.user.name || email}`);
-        } catch (err) { A.showToast(err.message, 'error'); }
+        } catch (err) {
+          A.showToast(err.message, 'error');
+        } finally {
+          if (A.setButtonLoading) A.setButtonLoading(btnId, false);
+        }
       };
+
+      document.getElementById('form-email-auth').addEventListener('submit', (e) => {
+        e.preventDefault();
+        window.submitEmailAuth('login');
+      });
 
       window.handleGoogleAuth = async () => {
         const email = prompt('Enter Google account email for SSO:', 'trader@gmail.com');
@@ -2149,23 +2160,33 @@
 
       window.sendDeskOtp = async () => {
         const phone = document.getElementById('au-phone').value.trim();
+        if (A.setButtonLoading) A.setButtonLoading('btn-desk-send-otp', true, 'SENDING...');
         try {
           const r = await A.api.sendPhoneOtp(phone);
           document.getElementById('au-otp-row').classList.remove('hidden');
           if (r.dev_otp) document.getElementById('au-otp').value = r.dev_otp;
           A.showToast(r.dev_otp ? `OTP sent (Dev: ${r.dev_otp})` : 'OTP sent');
-        } catch (err) { A.showToast(err.message, 'error'); }
+        } catch (err) {
+          A.showToast(err.message, 'error');
+        } finally {
+          if (A.setButtonLoading) A.setButtonLoading('btn-desk-send-otp', false);
+        }
       };
 
       window.verifyDeskOtp = async () => {
         const phone = document.getElementById('au-phone').value.trim();
         const otp = document.getElementById('au-otp').value.trim();
+        if (A.setButtonLoading) A.setButtonLoading('btn-desk-verify-otp', true, 'VERIFYING...');
         try {
           const r = await A.api.verifyPhoneOtp(phone, otp);
           A.setToken(r.access_token);
           await syncDesktopAuth();
           A.showToast('Phone verified & signed in');
-        } catch (err) { A.showToast(err.message, 'error'); }
+        } catch (err) {
+          A.showToast(err.message, 'error');
+        } finally {
+          if (A.setButtonLoading) A.setButtonLoading('btn-desk-verify-otp', false);
+        }
       };
 
       window.savePersonalRisk = async () => {

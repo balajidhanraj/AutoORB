@@ -260,12 +260,131 @@
   }
 
   const state = {
-    lastPingMs: null
+    lastPingMs: null,
+    activeLoaderCount: 0
   };
+
+  let lastClickedBtn = null;
+  let lastClickedAt = 0;
+
+  if (typeof document !== 'undefined') {
+    document.addEventListener('click', (ev) => {
+      const btn = ev.target && ev.target.closest ? ev.target.closest('button') : null;
+      if (btn && !btn.classList.contains('desk-tab') && !btn.classList.contains('m-nav-btn') && !btn.classList.contains('book-tab') && !btn.classList.contains('log-cat') && !btn.classList.contains('mlcat')) {
+        lastClickedBtn = btn;
+        lastClickedAt = Date.now();
+      }
+    }, true);
+    document.addEventListener('submit', (ev) => {
+      const form = ev.target;
+      if (form && form.querySelector) {
+        const subBtn = form.querySelector('button[type="submit"], button:not([type])');
+        if (subBtn) {
+          lastClickedBtn = subBtn;
+          lastClickedAt = Date.now();
+        }
+      }
+    }, true);
+  }
+
+  function ensureGlobalLoaderEl() {
+    if (typeof document === 'undefined' || !document.body) return null;
+    let el = document.getElementById('autoorb-global-loader');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'autoorb-global-loader';
+      el.setAttribute('role', 'status');
+      el.setAttribute('aria-live', 'polite');
+      el.innerHTML = '<span class="autoorb-spinner"></span><span id="autoorb-global-loader-text">PROCESSING...</span>';
+      document.body.appendChild(el);
+    }
+    return el;
+  }
+
+  function showGlobalLoader(label = 'PROCESSING...') {
+    state.activeLoaderCount += 1;
+    const el = ensureGlobalLoaderEl();
+    if (el) {
+      const txt = document.getElementById('autoorb-global-loader-text');
+      if (txt && label) txt.textContent = label;
+      el.classList.add('is-active');
+    }
+  }
+
+  function hideGlobalLoader() {
+    state.activeLoaderCount = Math.max(0, state.activeLoaderCount - 1);
+    if (state.activeLoaderCount === 0) {
+      const el = typeof document !== 'undefined' ? document.getElementById('autoorb-global-loader') : null;
+      if (el) el.classList.remove('is-active');
+    }
+  }
+
+  function setButtonLoading(btnOrId, isLoading, loadingText = '') {
+    const btn = typeof btnOrId === 'string'
+      ? (typeof document !== 'undefined' ? document.getElementById(btnOrId) : null)
+      : btnOrId;
+    if (!btn) return;
+    if (isLoading) {
+      const count = Number(btn.dataset.loadingCount || 0) + 1;
+      btn.dataset.loadingCount = String(count);
+      if (count > 1) return;
+      btn.dataset.origHtml = btn.innerHTML;
+      btn.disabled = true;
+      btn.classList.add('autoorb-btn-loading');
+      const rawText = (loadingText || btn.textContent || '').replace(/\s+/g, ' ').trim();
+      const isCompact = btn.offsetWidth > 0 && btn.offsetWidth < 54;
+      if (isCompact || rawText.length <= 2) {
+        btn.innerHTML = '<span class="autoorb-spinner"></span>';
+      } else {
+        btn.innerHTML = `<span class="inline-flex items-center justify-center gap-1.5"><span class="autoorb-spinner"></span><span>${escapeHtml(loadingText || rawText)}</span></span>`;
+      }
+    } else {
+      const count = Math.max(0, Number(btn.dataset.loadingCount || 1) - 1);
+      btn.dataset.loadingCount = String(count);
+      if (count === 0) {
+        if (btn.dataset.origHtml !== undefined) {
+          btn.innerHTML = btn.dataset.origHtml;
+          delete btn.dataset.origHtml;
+        }
+        btn.disabled = false;
+        btn.classList.remove('autoorb-btn-loading');
+      }
+    }
+  }
+
+  function inferLoadingLabel(path, method) {
+    const p = String(path || '').toLowerCase();
+    const m = String(method || 'GET').toUpperCase();
+    if (p.includes('/auth/login')) return { pill: 'SIGNING IN...', btn: 'SIGNING IN...' };
+    if (p.includes('/auth/register')) return { pill: 'CREATING ACCOUNT...', btn: 'CREATING...' };
+    if (p.includes('/auth/phone/send-otp')) return { pill: 'SENDING OTP...', btn: 'SENDING...' };
+    if (p.includes('/auth/phone/verify-otp')) return { pill: 'VERIFYING OTP...', btn: 'VERIFYING...' };
+    if (p.includes('/auth/google') || p.includes('/auth/facebook') || p.includes('/auth/neon') || p.includes('/auth/firebase')) return { pill: 'AUTHENTICATING SSO...', btn: 'SIGNING IN...' };
+    if (p.includes('/auth/logout')) return { pill: 'SIGNING OUT...', btn: 'SIGNING OUT...' };
+    if (p.includes('/auth/me')) return { pill: 'VERIFYING SESSION...', btn: '' };
+    if (p.includes('/oauth-login') || p.includes('/broker/connect')) return { pill: 'CONNECTING SHOONYA...', btn: 'CONNECTING...' };
+    if (p.includes('/broker/refresh')) return { pill: 'SYNCING BROKER BOOKS...', btn: 'SYNCING...' };
+    if (p.includes('/broker/sync-backup-ip')) return { pill: 'SYNCING BACKUP IP...', btn: 'SYNCING IP...' };
+    if (p.includes('/broker/order') || p.includes('/auto-trigger')) return { pill: 'TRANSMITTING ORDER...', btn: 'SENDING...' };
+    if (p.includes('/positions/exit')) return { pill: 'SQUARING OFF POSITION...', btn: 'EXITING...' };
+    if (p.includes('/positions/modify-sl')) return { pill: 'UPDATING STOP LOSS...', btn: 'UPDATING...' };
+    if (p.includes('/kill-switch')) return { pill: 'EXECUTING KILL SWITCH...', btn: 'EXECUTING...' };
+    if (p.includes('/toggle-mode')) return { pill: 'SWITCHING MODE...', btn: '' };
+    if (p.includes('/schedule/milestone')) return { pill: 'UPDATING SCHEDULE...', btn: '' };
+    if (p.includes('/risk/reset-halt') || p.includes('/trades/reset')) return { pill: 'RESETTING GUARDRAIL...', btn: 'RESETTING...' };
+    if (p.includes('/settings/') || p.includes('/risk/settings') || p.includes('/broker/funds')) return { pill: 'SAVING SETTINGS...', btn: 'SAVING...' };
+    if (p.includes('/backtest/trades')) return { pill: 'LOADING BACKTEST...', btn: 'SYNCING...' };
+    if (p.includes('/health')) return { pill: 'CHECKING SERVER...', btn: 'TESTING...' };
+    if (m !== 'GET') return { pill: 'PROCESSING...', btn: '' };
+    return null;
+  }
 
   async function probeHealth(candidateBase) {
     const clean = normalizeServerUrl(candidateBase);
     const url = `${clean}/health`;
+    const activeBtn = (lastClickedBtn && (Date.now() - lastClickedAt) < 1200) ? lastClickedBtn : null;
+    if (activeBtn) setButtonLoading(activeBtn, true, 'TESTING...');
+    showGlobalLoader('CHECKING SERVER...');
     let res;
     try {
       const isLocal = /^http:\/\/(127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|localhost)/i.test(clean);
@@ -278,25 +397,32 @@
       });
       if (timer) clearTimeout(timer);
     } catch (_err) {
+      if (activeBtn) setButtonLoading(activeBtn, false);
+      hideGlobalLoader();
       const targetDesc = clean || (global.location && global.location.origin) || 'local server';
       throw new Error(`Cannot reach ${targetDesc}/health`);
     }
-    const contentType = res.headers.get('content-type') || '';
-    const data = contentType.includes('application/json') ? await res.json() : await res.text();
-    if (!res.ok) {
-      const targetDesc = url.startsWith('http') ? url : `${global.location.origin}${url}`;
-      const rawMsg = data && typeof data === 'object' && (data.detail || data.message || data.error);
-      const msg = rawMsg
-        ? (res.status === 404 ? `404 Not Found (${targetDesc}): ${rawMsg}` : rawMsg)
-        : (res.status === 404
-            ? `HTTP 404 at ${targetDesc}. Check Server Connection URL in app.`
-            : `HTTP ${res.status}`);
-      const err = new Error(msg);
-      err.status = res.status;
-      err.data = data;
-      throw err;
+    try {
+      const contentType = res.headers.get('content-type') || '';
+      const data = contentType.includes('application/json') ? await res.json() : await res.text();
+      if (!res.ok) {
+        const targetDesc = url.startsWith('http') ? url : `${global.location.origin}${url}`;
+        const rawMsg = data && typeof data === 'object' && (data.detail || data.message || data.error);
+        const msg = rawMsg
+          ? (res.status === 404 ? `404 Not Found (${targetDesc}): ${rawMsg}` : rawMsg)
+          : (res.status === 404
+              ? `HTTP 404 at ${targetDesc}. Check Server Connection URL in app.`
+              : `HTTP ${res.status}`);
+        const err = new Error(msg);
+        err.status = res.status;
+        err.data = data;
+        throw err;
+      }
+      return data;
+    } finally {
+      if (activeBtn) setButtonLoading(activeBtn, false);
+      hideGlobalLoader();
     }
-    return data;
   }
 
   async function autoConnectNativeBackend() {
@@ -333,32 +459,50 @@
       headers.Authorization = `Bearer ${token}`;
     }
 
+    const method = (options.method || 'GET').toUpperCase();
+    const userClickedRecently = lastClickedBtn && (Date.now() - lastClickedAt) < 900;
+    const labelInfo = inferLoadingLabel(path, method);
+    const shouldShowSpinner = !options.silent && (method !== 'GET' || userClickedRecently || Boolean(labelInfo));
+    const activeBtn = (shouldShowSpinner && userClickedRecently) ? lastClickedBtn : null;
+    if (activeBtn) {
+      lastClickedBtn = null;
+      setButtonLoading(activeBtn, true, (labelInfo && labelInfo.btn) || '');
+    }
+    if (shouldShowSpinner) {
+      showGlobalLoader((labelInfo && labelInfo.pill) || 'SYNCING...');
+    }
+
     const t0 = performance.now();
     let res;
     try {
-      res = await fetch(url, Object.assign({}, options, { headers }));
-    } catch (_err) {
-      const targetDesc = url.startsWith('http') ? url : `${global.location.origin}${url}`;
-      throw new Error(`Cannot reach server (${targetDesc}). Verify AutoORB backend is running.`);
-    }
-    state.lastPingMs = Math.max(1, Math.round(performance.now() - t0));
+      try {
+        res = await fetch(url, Object.assign({}, options, { headers }));
+      } catch (_err) {
+        const targetDesc = url.startsWith('http') ? url : `${global.location.origin}${url}`;
+        throw new Error(`Cannot reach server (${targetDesc}). Verify AutoORB backend is running.`);
+      }
+      state.lastPingMs = Math.max(1, Math.round(performance.now() - t0));
 
-    const contentType = res.headers.get('content-type') || '';
-    const data = contentType.includes('application/json') ? await res.json() : await res.text();
-    if (!res.ok) {
-      const targetDesc = url.startsWith('http') ? url : `${global.location.origin}${url}`;
-      const rawMsg = data && typeof data === 'object' && (data.detail || data.message || data.error);
-      const msg = rawMsg
-        ? (res.status === 404 ? `404 Not Found (${targetDesc}): ${rawMsg}` : rawMsg)
-        : (res.status === 404
-            ? `HTTP 404 at ${targetDesc}. Check Server Connection URL in app.`
-            : `HTTP ${res.status}`);
-      const err = new Error(msg);
-      err.status = res.status;
-      err.data = data;
-      throw err;
+      const contentType = res.headers.get('content-type') || '';
+      const data = contentType.includes('application/json') ? await res.json() : await res.text();
+      if (!res.ok) {
+        const targetDesc = url.startsWith('http') ? url : `${global.location.origin}${url}`;
+        const rawMsg = data && typeof data === 'object' && (data.detail || data.message || data.error);
+        const msg = rawMsg
+          ? (res.status === 404 ? `404 Not Found (${targetDesc}): ${rawMsg}` : rawMsg)
+          : (res.status === 404
+              ? `HTTP 404 at ${targetDesc}. Check Server Connection URL in app.`
+              : `HTTP ${res.status}`);
+        const err = new Error(msg);
+        err.status = res.status;
+        err.data = data;
+        throw err;
+      }
+      return data;
+    } finally {
+      if (activeBtn) setButtonLoading(activeBtn, false);
+      if (shouldShowSpinner) hideGlobalLoader();
     }
-    return data;
   }
 
   function postJson(path, bodyObj) {
@@ -845,6 +989,9 @@
     toggleTheme,
     bg,
     state,
+    showGlobalLoader,
+    hideGlobalLoader,
+    setButtonLoading,
     request,
     postJson,
     putJson,

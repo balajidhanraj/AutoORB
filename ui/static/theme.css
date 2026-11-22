@@ -316,3 +316,64 @@ input[type="range"].obsidian-range::-webkit-slider-thumb {
   border: 2px solid rgb(var(--rgb-surface-container-lowest));
   box-shadow: 0 0 10px rgba(0, 245, 212, 0.6);
 }
+
+/* Universal Action & Button Loading Spinners */
+@keyframes autoorbSpin {
+  to { transform: rotate(360deg); }
+}
+
+.autoorb-spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 9999px;
+  animation: autoorbSpin 0.65s linear infinite;
+  vertical-align: middle;
+  flex-shrink: 0;
+}
+
+.autoorb-btn-loading {
+  position: relative;
+  pointer-events: none !important;
+  opacity: 0.88;
+  cursor: wait !important;
+}
+
+#autoorb-global-loader {
+  position: fixed;
+  top: calc(10px + env(safe-area-inset-top, 0px));
+  left: 50%;
+  transform: translateX(-50%) translateY(-12px);
+  z-index: 9999;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  border-radius: 9999px;
+  background: rgba(15, 19, 28, 0.94);
+  color: var(--c-profit);
+  border: 1px solid rgba(0, 245, 212, 0.38);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.55), 0 0 14px rgba(0, 245, 212, 0.18);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.18s ease, transform 0.18s ease;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+[data-theme="light"] #autoorb-global-loader {
+  background: rgba(255, 255, 255, 0.96);
+  border-color: rgba(0, 122, 103, 0.35);
+  box-shadow: 0 6px 20px rgba(24, 27, 37, 0.16);
+}
+
+#autoorb-global-loader.is-active {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}

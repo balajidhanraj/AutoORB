@@ -217,7 +217,10 @@
         };
       }
 
-      async function syncData() {
+      async function syncData(isManual = false) {
+        if (isManual && A.setButtonLoading) {
+          A.setButtonLoading('bt-refresh-btn', true, 'SYNCING...');
+        }
         try {
           const [btRes, stRes] = await Promise.all([
             A.api.getBacktestTrades(),
@@ -244,6 +247,10 @@
           renderBacktest();
         } catch (err) {
           document.getElementById('live-src-count').textContent = 'Sync error';
+        } finally {
+          if (isManual && A.setButtonLoading) {
+            A.setButtonLoading('bt-refresh-btn', false);
+          }
         }
       }
 
@@ -436,10 +443,10 @@
       }));
 
       document.getElementById('bt-search').addEventListener('input', renderBacktest);
-      document.getElementById('bt-refresh-btn').addEventListener('click', syncData);
+      document.getElementById('bt-refresh-btn').addEventListener('click', () => syncData(true));
 
-      syncData();
-      setInterval(syncData, 15000);
+      syncData(false);
+      setInterval(() => syncData(false), 15000);
     })();
   </script>
 </body>
