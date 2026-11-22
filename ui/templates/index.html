@@ -35,7 +35,7 @@
           <img src="/static/icon-192.png" alt="AutoORB" class="w-8 h-8 rounded-lg object-cover shadow-[0_0_12px_rgba(99,102,241,0.35)] shrink-0"/>
           <span class="tt-brainfx" aria-hidden="true"><span></span><span></span><span></span></span>
           <span class="font-headline-md text-[16px] font-bold tracking-tight text-on-surface">AutoORB</span>
-          <span class="hidden sm:inline font-label-caps text-on-surface-variant uppercase tracking-widest">Tradetron ATP-AI &bull; Shoonya ORB</span>
+          <span class="hidden sm:inline font-label-caps text-on-surface-variant uppercase tracking-widest">Shoonya ORB Terminal</span>
         </div>
 
         <div class="flex items-center gap-2 shrink-0">
@@ -136,45 +136,41 @@
     </footer>
   </section>
 
-  <!-- FIXED 2-TIER TRADETRON ATP-AI WORKSTATION HEADER (Hidden until authenticated) -->
+  <!-- FIXED 2-TIER WORKSTATION HEADER (Hidden until authenticated) -->
   <header id="desk-app-header" class="hidden fixed top-0 left-0 right-0 z-40 glass-header shadow-[0_2px_16px_rgba(0,0,0,0.45)]">
     <div class="w-full max-w-[1600px] mx-auto px-3 lg:px-4 xl:px-5 flex flex-col justify-between py-1">
-      <!-- Row 1: Tradetron ATP-AI Brand (.tt-brainfx), Nav Tabs, Broker Tally, Live MTM, Action Buttons, Profile -->
+      <!-- Row 1: Brand + Live Status Left | P&L Capsule + Actions + Profile Right -->
       <div class="h-11 flex items-center justify-between gap-2 min-w-0">
-        <div class="flex items-center gap-2.5 min-w-0">
+        <div class="flex items-center gap-2 min-w-0 overflow-hidden">
           <div class="flex items-center gap-2 shrink-0">
             <img src="/static/icon-192.png" alt="AutoORB" class="w-7 h-7 rounded-lg object-cover shadow-[0_0_10px_rgba(99,102,241,0.35)]"/>
-            <span class="tt-brainfx" title="Tradetron ATP-AI Engine"><span></span><span></span><span></span></span>
+            <span class="tt-brainfx" title="AutoORB 5-Gate Engine"><span></span><span></span><span></span></span>
             <div class="flex flex-col">
               <span class="font-headline-md text-[15px] font-bold tracking-tight text-on-surface leading-none">AutoORB</span>
-              <span class="font-label-caps text-on-surface-variant uppercase tracking-wider leading-none mt-0.5">Tradetron Dashboard</span>
+              <span class="font-label-caps text-on-surface-variant uppercase tracking-wider leading-none mt-0.5">Shoonya ORB Terminal</span>
             </div>
           </div>
 
-          <nav id="desktop-nav" class="flex items-center gap-1 h-9 overflow-x-auto no-scrollbar ml-1">
-            <button data-tab="radar" type="button" class="desk-tab h-full px-3 flex items-center gap-1.5 font-body-sm text-body-sm bg-surface-container-high text-primary font-bold border-b-2 border-primary-container transition-colors tracking-wide cursor-pointer whitespace-nowrap rounded-t">
-              <span class="material-symbols-outlined text-[15px]">dashboard</span>
-              <span>Deployed Dashboard</span>
-            </button>
-            <button data-tab="positions" type="button" class="desk-tab h-full px-3 flex items-center gap-1.5 font-body-sm text-body-sm text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low transition-colors tracking-wide cursor-pointer whitespace-nowrap rounded-t">
-              <span class="material-symbols-outlined text-[15px]">account_balance_wallet</span>
-              <span>Positions &amp; Books</span>
-              <span id="nav-pos-badge" class="hidden px-1.5 py-0.5 rounded-full bg-primary-container text-on-primary-fixed font-label-caps text-[9px] font-bold">0</span>
-            </button>
-            <button data-tab="logs" type="button" class="desk-tab h-full px-3 flex items-center gap-1.5 font-body-sm text-body-sm text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low transition-colors tracking-wide cursor-pointer whitespace-nowrap rounded-t">
-              <span class="material-symbols-outlined text-[15px]">terminal</span>
-              <span>Terminal Logs</span>
-            </button>
-            <button data-tab="analytics" type="button" class="desk-tab h-full px-3 flex items-center gap-1.5 font-body-sm text-body-sm text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low transition-colors tracking-wide cursor-pointer whitespace-nowrap rounded-t">
-              <span class="material-symbols-outlined text-[15px]">analytics</span>
-              <span>Backtest &amp; Reports</span>
-            </button>
-          </nav>
+          <span class="h-ticker__pill ml-1">
+            <span id="hdr-ws-dot" class="h-ticker__dot"></span>
+            <span id="hdr-ws-label">LIVE FEED</span>
+            <span id="hdr-ping" class="opacity-80 tabular-nums">--ms</span>
+          </span>
+
+          <span class="h-ticker__item hidden md:inline-flex">
+            <span class="text-on-surface-variant">PHASE:</span>
+            <span id="hdr-phase" class="font-bold text-profit">STANDBY</span>
+          </span>
+
+          <span class="h-ticker__item hidden 2xl:inline-flex">
+            <span class="text-on-surface-variant">SEBI ID:</span>
+            <span id="hdr-sebi-id" class="font-bold text-primary">--</span>
+          </span>
         </div>
 
         <div class="flex items-center gap-1.5 shrink-0">
           <!-- Live Net MTM & Avail Cash Capsule -->
-          <div class="hidden xl:flex items-center gap-3 px-2.5 py-0.5 rounded-lg bg-surface-container-low glass-panel">
+          <div class="hidden lg:flex items-center gap-3 px-2.5 py-0.5 rounded-lg bg-surface-container-low glass-panel">
             <div class="flex flex-col text-right">
               <span class="font-label-caps text-on-surface-variant uppercase leading-none">TOTAL P&amp;L</span>
               <span id="hdr-mtm" class="font-data-mono-md font-bold text-profit leading-tight tabular-nums">₹0.00</span>
@@ -209,7 +205,7 @@
             </button>
             <button id="btn-hdr-kill" type="button" class="h-7 px-2.5 rounded-md bg-secondary-container hover:bg-error-container text-on-secondary-container flex items-center gap-1 shadow-[0_2px_10px_rgba(220,38,38,0.3)] transition-all font-bold cursor-pointer whitespace-nowrap" title="Emergency Exit All &amp; Kill Switch">
               <span class="material-symbols-outlined text-[15px]">power_settings_new</span>
-              <span class="hidden xl:inline font-label-caps tracking-wide">EXIT ALL</span>
+              <span class="font-label-caps tracking-wide">EXIT ALL</span>
             </button>
           </div>
 
@@ -228,46 +224,50 @@
         </div>
       </div>
 
-      <!-- Row 2: Tradetron Market Ticker Bar (.h-ticker) -->
-      <div class="h-9 flex items-center justify-between border-t border-surface-container-high gap-2">
-        <div class="h-ticker no-scrollbar flex-1">
-          <span class="h-ticker__pill">
-            <span id="hdr-ws-dot" class="h-ticker__dot"></span>
-            <span id="hdr-ws-label">LIVE FEED</span>
-            <span id="hdr-ping" class="opacity-80 tabular-nums">--ms</span>
-          </span>
-          <span class="h-ticker__item">
+      <!-- Row 2: Dedicated 4 Workspace Navigation Tabs Left | Live Market Ticker & Mode Switcher Right -->
+      <div class="h-9 flex items-center justify-between border-t border-surface-container-high gap-3 min-w-0">
+        <nav id="desktop-nav" class="flex items-center gap-1 h-full overflow-x-auto no-scrollbar shrink-0">
+          <button data-tab="radar" type="button" class="desk-tab h-full px-3 flex items-center gap-1.5 font-body-sm text-body-sm bg-surface-container-high text-primary font-bold border-b-2 border-primary-container transition-colors tracking-wide cursor-pointer whitespace-nowrap shrink-0 rounded-t">
+            <span class="material-symbols-outlined text-[15px]">dashboard</span>
+            <span>Deployed Dashboard</span>
+          </button>
+          <button data-tab="positions" type="button" class="desk-tab h-full px-3 flex items-center gap-1.5 font-body-sm text-body-sm text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low transition-colors tracking-wide cursor-pointer whitespace-nowrap shrink-0 rounded-t">
+            <span class="material-symbols-outlined text-[15px]">account_balance_wallet</span>
+            <span>Positions &amp; Books</span>
+            <span id="nav-pos-badge" class="hidden px-1.5 py-0.5 rounded-full bg-primary-container text-on-primary-fixed font-label-caps text-[9px] font-bold">0</span>
+          </button>
+          <button data-tab="logs" type="button" class="desk-tab h-full px-3 flex items-center gap-1.5 font-body-sm text-body-sm text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low transition-colors tracking-wide cursor-pointer whitespace-nowrap shrink-0 rounded-t">
+            <span class="material-symbols-outlined text-[15px]">terminal</span>
+            <span>Terminal Logs</span>
+          </button>
+          <button data-tab="analytics" type="button" class="desk-tab h-full px-3 flex items-center gap-1.5 font-body-sm text-body-sm text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low transition-colors tracking-wide cursor-pointer whitespace-nowrap shrink-0 rounded-t">
+            <span class="material-symbols-outlined text-[15px]">analytics</span>
+            <span>Backtest &amp; Reports</span>
+          </button>
+        </nav>
+
+        <div class="h-ticker no-scrollbar justify-end flex-1 min-w-0">
+          <span class="h-ticker__item hidden md:inline-flex">
             <span class="h-ticker__sym">NIFTY 50</span>
             <span id="hdr-index-range" class="font-bold text-profit tabular-nums">--</span>
           </span>
-          <span class="h-ticker__item">
+          <span class="h-ticker__item hidden lg:inline-flex">
             <span class="h-ticker__sym">BANKNIFTY</span>
             <span id="hdr-bnf-ticker" class="font-bold text-profit tabular-nums">--</span>
           </span>
-          <span class="h-ticker__item">
+          <span class="h-ticker__item hidden xl:inline-flex">
             <span class="h-ticker__sym">INDIA VIX</span>
             <span id="hdr-vix-ticker" class="font-bold text-primary tabular-nums">--</span>
           </span>
-          <span class="h-ticker__item">
-            <span class="text-on-surface-variant">PHASE:</span>
-            <span id="hdr-phase" class="font-bold text-profit">STANDBY</span>
-          </span>
-          <span class="h-ticker__item hidden 2xl:inline-flex">
-            <span class="text-on-surface-variant">SEBI ID:</span>
-            <span id="hdr-sebi-id" class="font-bold text-primary">--</span>
-          </span>
-        </div>
-
-        <div class="flex items-center gap-2 shrink-0">
-          <div class="flex items-center gap-1">
+          <div class="flex items-center gap-1 shrink-0">
             <span class="font-label-caps text-on-surface-variant uppercase">EXECUTION:</span>
             <button id="hdr-mode-pill" type="button" class="px-2 py-0.5 rounded bg-surface-container-high font-label-caps font-bold text-profit cursor-pointer hover:opacity-80">PAPER</button>
           </div>
-          <a href="/backtest" class="hidden sm:inline-flex px-2 py-0.5 rounded bg-surface-container hover:bg-surface-high font-label-caps text-on-surface-variant hover:text-on-surface items-center gap-1 whitespace-nowrap">
+          <a href="/backtest" class="hidden sm:inline-flex px-2 py-0.5 rounded bg-surface-container hover:bg-surface-high font-label-caps text-on-surface-variant hover:text-on-surface items-center gap-1 whitespace-nowrap shrink-0">
             <span class="material-symbols-outlined text-[13px] text-primary">query_stats</span>
             <span>1Y BACKTEST</span>
           </a>
-          <a href="/app" class="px-2 py-0.5 rounded bg-surface-container hover:bg-surface-high font-label-caps text-on-surface-variant hover:text-on-surface flex items-center gap-1 whitespace-nowrap">
+          <a href="/app" class="px-2 py-0.5 rounded bg-surface-container hover:bg-surface-high font-label-caps text-on-surface-variant hover:text-on-surface flex items-center gap-1 whitespace-nowrap shrink-0">
             <span class="material-symbols-outlined text-[13px]">smartphone</span>
             <span>MOBILE UI</span>
           </a>
@@ -279,10 +279,10 @@
   <!-- MAIN WORKSPACE (Hidden until authenticated) -->
   <main id="desk-app-main" class="hidden w-full pt-[98px] pb-8 px-3 lg:px-4 xl:px-5 max-w-[1520px] mx-auto">
 
-    <!-- ==================== TAB 1: TRADETRON /USER/DASHBOARD — DEPLOYED STRATEGIES ==================== -->
+    <!-- ==================== TAB 1: DEPLOYED STRATEGIES DASHBOARD ==================== -->
     <section id="view-radar" class="desk-view flex flex-col gap-3.5">
 
-      <!-- Tradetron Dashboard Top Toolbar (.db-sum__toolbar) -->
+      <!-- Dashboard Top Toolbar (.db-sum__toolbar) -->
       <div class="db-sum__toolbar">
         <div class="flex items-center gap-2.5 flex-wrap">
           <h1 class="font-headline-md text-[19px] font-bold text-on-surface tracking-tight">Deployed Strategies</h1>
@@ -294,7 +294,7 @@
         <div class="flex items-center gap-2 flex-wrap">
           <button id="btn-rad-ticket" type="button" class="db-rowact db-rowact--oneclick h-8 px-3">
             <span class="material-symbols-outlined text-[15px]">bolt</span>
-            <span>One-Click Broker Ticket</span>
+            <span>Broker Order Ticket</span>
           </button>
           <button id="btn-rad-tune" type="button" class="db-rowact h-8 px-2.5" title="Adjust ORB Anchor &amp; Cutoff">
             <span class="material-symbols-outlined text-[15px]">schedule</span>
@@ -309,10 +309,6 @@
           <button id="btn-rad-refresh" type="button" class="db-rowact h-8 px-2.5">
             <span class="material-symbols-outlined text-[15px]">refresh</span>
             <span>Refresh</span>
-          </button>
-          <button type="button" onclick="openModal('modal-kill')" class="db-exitall" title="Emergency Square-Off All Deployed Strategies">
-            <span class="material-symbols-outlined text-[15px]">power_settings_new</span>
-            <span>Exit All</span>
           </button>
         </div>
       </div>
@@ -1247,8 +1243,8 @@
         document.querySelectorAll('.desk-tab').forEach(btn => {
           const isAct = btn.getAttribute('data-tab') === tab;
           btn.className = isAct
-            ? 'desk-tab h-full px-space-md flex items-center gap-1.5 font-body-sm text-body-sm bg-surface-container-high text-primary font-bold border-b-2 border-primary-container transition-colors tracking-wide cursor-pointer'
-            : 'desk-tab h-full px-space-md flex items-center gap-1.5 font-body-sm text-body-sm text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low transition-colors tracking-wide cursor-pointer';
+            ? 'desk-tab h-full px-3 flex items-center gap-1.5 font-body-sm text-body-sm bg-surface-container-high text-primary font-bold border-b-2 border-primary-container transition-colors tracking-wide cursor-pointer whitespace-nowrap shrink-0 rounded-t'
+            : 'desk-tab h-full px-3 flex items-center gap-1.5 font-body-sm text-body-sm text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low transition-colors tracking-wide cursor-pointer whitespace-nowrap shrink-0 rounded-t';
         });
         if (tab === 'analytics' && backtestTrades.length === 0) loadBacktest();
         if (tab === 'logs') refreshLogs();
