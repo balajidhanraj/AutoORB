@@ -846,10 +846,11 @@
                 <div id="ana-margin-bar" class="h-full bg-primary-container rounded-full" style="width: 0%;"></div>
               </div>
             </div>
-            <div class="grid grid-cols-3 gap-1.5">
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
               <button id="btn-ana-switch-acct" type="button" class="py-2 px-2 rounded-lg bg-primary-container text-on-primary-fixed font-label-caps text-label-caps font-bold cursor-pointer truncate">SWITCH ACCT</button>
               <button id="btn-ana-reauth" type="button" class="py-2 px-2 rounded-lg bg-surface-container-high hover:bg-surface-bright text-on-surface font-label-caps text-label-caps font-bold cursor-pointer truncate">RE-AUTH</button>
               <button id="btn-ana-sync-ip" type="button" onclick="handleSyncBackupIp()" class="py-2 px-2 rounded-lg bg-surface-container-high hover:bg-surface-bright text-profit font-label-caps text-label-caps font-bold cursor-pointer truncate" title="Detect current outbound IP and sync Shoonya Backup IP">SYNC BACKUP IP</button>
+              <button id="btn-ana-test-tg" type="button" onclick="handleTestTelegram()" class="py-2 px-2 rounded-lg bg-surface-container-high hover:bg-surface-bright text-primary font-label-caps text-label-caps font-bold cursor-pointer truncate" title="Send a test alert to your configured Telegram bot">TEST TELEGRAM</button>
             </div>
           </div>
 
@@ -2225,6 +2226,18 @@
           A.showToast(r.message || 'Backup IP synced', r.ok ? 'info' : 'warn');
         } catch (e) {
           A.showToast(e.message, 'error');
+        }
+      };
+
+      window.handleTestTelegram = async () => {
+        if (A.setButtonLoading) A.setButtonLoading('btn-ana-test-tg', true, 'SENDING...');
+        try {
+          const r = await A.postJson('/api/telegram/test', {});
+          A.showToast(r.message || 'Telegram test checked', r.ok ? 'info' : 'error');
+        } catch (e) {
+          A.showToast(e.message, 'error');
+        } finally {
+          if (A.setButtonLoading) A.setButtonLoading('btn-ana-test-tg', false);
         }
       };
       window.applyCustomFund = () => {

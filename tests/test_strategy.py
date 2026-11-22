@@ -1199,3 +1199,41 @@ def test_scheduler_unattended_retry_and_reset_resilience(tmp_path: Path) -> None
         assert b.backfill_from_api.call_args.kwargs["lookback_days"] == 7
 
 
+def test_telegram_startup_and_test_endpoint(tmp_path: Path) -> None:
+    """Verify /api/telegram/test and 10:00 scanner_alert single-fire notification."""
+    settings = _make_settings(tmp_path, mode="PAPER")
+    orch = TradingSystemOrchestrator(settings=settings)
+    app = create_app(orch)
+    handlers = app.state.handlers
+
+    # 1. Disabled by default without bot token / chat id
+    ok, msg = orch.send_test_telegram()
+    assert ok is False and "not configured" in msg.lower()
+    resp = handlers["api_telegram_test"]()
+    data = json.loads(resp.body.decode("utf-8"))
+    assert resp.status_code == 200 and data["ok"] is False and data["enabled"] is False
+
+    # 2. Enabled with mocked send_sync -> succeeds
+    orch.notifier.bot_token = "123456:TESTTOKEN"
+    orch.notifier.chat_id = "987654321"
+    orch.notifier.send_sync = MagicMock(return_value=True)  # type: ignore[method-assign]
+    resp2 = handlers["api_telegram_test"]()
+    data2 = json.loads(resp2.body.decode("utf-8"))
+    assert data2["ok"] is True and data2["enabled"] is True
+    assert orch.notifier.send_sync.call_count == 1
+
+    # 3. scanner_alert fires once at 10:00 IST and does not duplicate
+    sent: List[str] = []
+    orch.notifier.send_async = MagicMock(side_effect=lambda m, prefix="": sent.append(m))  # type: ignore[method-assign]
+    orch._mark_milestone("reset", date(2026, 11, 23))
+    orch._mark_milestone("auth", date(2026, 11, 23))
+    orch._mark_milestone("cache", date(2026, 11, 23))
+    orch._mark_milestone("ws", date(2026, 11, 23))
+    orch._mark_milestone("orb_lock", date(2026, 11, 23))
+    orch.step_scheduler(now_ist=_ist_dt(2026, 11, 23, 10, 0, 0))
+    orch.step_scheduler(now_ist=_ist_dt(2026, 11, 23, 10, 1, 0))
+    scanner_msgs = [m for m in sent if "Scanner LIVE" in m]
+    assert len(scanner_msgs) == 1
+
+
+

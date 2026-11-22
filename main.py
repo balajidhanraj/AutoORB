@@ -597,6 +597,36 @@ class TradingSystemOrchestrator:
         logger.info("EOD Report: trades=%d mtm=%.2f csv=%s", count, mtm, csv_path)
         self.notifier.send_async(msg)
 
+    def send_test_telegram(self) -> Tuple[bool, str]:
+        """Send a synchronous test alert via Telegram to verify bot token and chat ID."""
+        if not self.notifier.enabled:
+            return False, "Telegram not configured (set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID)."
+        now_str = datetime.now(IST).strftime("%Y-%m-%d %H:%M:%S IST")
+        entry_start = getattr(self.settings, "entry_start_time", dt_time(10, 0, 0)).strftime("%H:%M")
+        entry_end = getattr(self.settings, "entry_cutoff_time", dt_time(13, 15, 0)).strftime("%H:%M")
+        msg = (
+            f"<b>✅ AutoORB Telegram Test [{self.settings.mode}]</b>\n"
+            f"Account: <code>{self.settings.shoonya_user_id or 'UNLINKED'}</code> | Time: {now_str}\n"
+            f"Window: {entry_start}–{entry_end} IST | Public IP: <code>{self.public_ip}</code>"
+        )
+        ok = self.notifier.send_sync(msg)
+        if ok:
+            return True, "Test Telegram alert delivered!"
+        return False, "Telegram API rejected message — verify Bot Token, Chat ID, and tap Start on your bot."
+
+    def _notify_ws_ready_async(self) -> None:
+        vix = self.client.get_ltp(INDIA_VIX_KEY)
+        vix_txt = f"{vix:.2f}" if vix is not None else "--"
+        nf_st = self.strategy.get_state("NIFTY")
+        htf_txt = (
+            f" | 15m Swing RED={nf_st.htf_swing_high or '--'} GRN={nf_st.htf_swing_low or '--'}"
+            if getattr(self.settings, "nifty_use_htf_swing_hybrid", False)
+            else ""
+        )
+        self.notifier.send_async(
+            f"<b>📡 WS Feed &amp; 7D Backfill Ready</b>\nVIX: {vix_txt}{htf_txt}"
+        )
+
     def _handle_reauth(self) -> bool:
         """Triggered automatically when a 401 Unauthorized or WebSocket auth rejection occurs."""
         now_m = time.monotonic()
@@ -968,12 +998,17 @@ class TradingSystemOrchestrator:
                     cnt = self.run_instrument_cache()
                     if cnt > 0 or current_t >= self.settings.market_close_time:
                         self._mark_milestone("cache", today)
+                        if cnt > 0:
+                            self.notifier.send_async(
+                                f"<b>📦 NFO Contract Cache Ready</b>\nLoaded {cnt:,} contracts for {today}."
+                            )
                     else:
                         logger.warning("NFO Contract Cache returned 0 contracts; scheduler will retry in 60s")
 
             if current_t >= self.settings.ws_connect_time and self._milestone_ready("ws", today, current_t):
                 if getattr(self, "_last_ws_attempt_date", None) == today and self.client.ws_connected:
                     self._mark_milestone("ws", today)
+                    self._notify_ws_ready_async()
                 else:
                     auth_ready = (
                         self.settings.mode == "PAPER"
@@ -995,6 +1030,8 @@ class TradingSystemOrchestrator:
                             or current_t >= self.settings.market_close_time
                         ):
                             self._mark_milestone("ws", today)
+                            if current_t < self.settings.market_close_time:
+                                self._notify_ws_ready_async()
                         else:
                             logger.warning("WS connection pending/retrying; scheduler will recheck in 30s")
 
@@ -1011,6 +1048,19 @@ class TradingSystemOrchestrator:
                         locked = self.run_lock_orb(dt)
                         if locked:
                             self._mark_milestone("orb_lock", today)
+
+            entry_start = getattr(self.settings, "entry_start_time", dt_time(10, 0, 0))
+            if (
+                entry_start <= current_t <= self.settings.entry_cutoff_time
+                and self._milestone_ready("scanner_alert", today, current_t)
+            ):
+                self._mark_milestone("scanner_alert", today)
+                vix_now = self.client.get_ltp(INDIA_VIX_KEY)
+                vix_txt = f"{vix_now:.2f}" if vix_now is not None else "--"
+                self.notifier.send_async(
+                    f"<b>🟢 AutoORB Scanner LIVE ({entry_start.strftime('%H:%M')}–{self.settings.entry_cutoff_time.strftime('%H:%M')} IST)</b>\n"
+                    f"Mode: {self.settings.mode} | VIX: {vix_txt} | NIFTY Hybrid H1 &amp; BANKNIFTY 5-Gate ORB armed."
+                )
 
             if current_t >= self.settings.auto_squareoff_time and self._milestone_ready("squareoff", today, current_t):
                 logger.info("Scheduled 15:15 IST Auto EOD Square-Off triggered")
@@ -1044,6 +1094,12 @@ class TradingSystemOrchestrator:
 
         def _loop() -> None:
             logger.info("TradingSystemOrchestrator loop started (MODE=%s)", self.settings.mode)
+            self.notifier.send_async(
+                f"<b>🚀 AutoORB Engine Started [{self.settings.mode}]</b>\n"
+                f"Account: <code>{self.settings.shoonya_user_id or 'UNLINKED'}</code> | Capital: ₹{self.settings.capital:,.0f}\n"
+                f"Strategy: Option 2 Dual Engine (10:00–13:15 IST, VIX ≥ {self.settings.min_india_vix:.0f}, ST 10,3)\n"
+                f"Schedule: 08:40 Auth → 08:55 Cache → 09:14 WS/7D → 09:45 ORB → 10:00 Scan"
+            )
             while not self._stop_event.is_set():
                 try:
                     self.step_scheduler()

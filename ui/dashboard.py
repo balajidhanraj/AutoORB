@@ -576,6 +576,17 @@ def create_app(orchestrator: Any) -> FastAPI:
             }
         )
 
+    @app.post("/api/telegram/test")
+    def api_telegram_test() -> JSONResponse:
+        ok, msg = orchestrator.send_test_telegram()
+        return JSONResponse(
+            content={
+                "ok": ok,
+                "enabled": orchestrator.notifier.enabled,
+                "message": msg,
+            }
+        )
+
     app.state.handlers = {
         "index": index,
         "api_status": api_status,
@@ -597,6 +608,7 @@ def create_app(orchestrator: Any) -> FastAPI:
         "api_modify_sl": api_modify_sl,
         "api_public_config": api_public_config,
         "api_reset_trades": api_reset_trades,
+        "api_telegram_test": api_telegram_test,
         "health": health,
     }
     return app
