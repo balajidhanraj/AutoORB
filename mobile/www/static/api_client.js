@@ -217,7 +217,25 @@
       localStorage.setItem('autoorb_token', token);
     } else {
       localStorage.removeItem('autoorb_token');
+      localStorage.removeItem('autoorb_user');
     }
+  }
+
+  function getCachedUser() {
+    try {
+      const raw = localStorage.getItem('autoorb_user');
+      return raw ? JSON.parse(raw) : null;
+    } catch (_e) {
+      return null;
+    }
+  }
+
+  function setCachedUser(userObj) {
+    try {
+      if (userObj && typeof userObj === 'object') {
+        localStorage.setItem('autoorb_user', JSON.stringify(userObj));
+      }
+    } catch (_e) {}
   }
 
   function getTheme() {
@@ -550,6 +568,263 @@
 
   setTheme(getTheme());
 
+  // ---------------------------------------------------------------------------
+  // Background Keep-Alive (Web Worker + WakeLock) & Trading Action Notifications
+  // ---------------------------------------------------------------------------
+  const bg = {
+    enabled: localStorage.getItem('autoorb_bg_enabled') !== 'false',
+    wakeLock: null,
+    worker: null,
+    onTickCallback: null,
+    prevSnap: null,
+    swReg: null,
+
+    init(onTick) {
+      if (typeof onTick === 'function') this.onTickCallback = onTick;
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('/static/sw.js').then((reg) => {
+          this.swReg = reg;
+        }).catch(() => null);
+      }
+      this._bindLifecycleEvents();
+      if (this.enabled) {
+        this.startWorker();
+        this.requestWakeLock();
+      }
+      this.updateIndicatorUi();
+    },
+
+    async enableInteractive() {
+      this.enabled = true;
+      localStorage.setItem('autoorb_bg_enabled', 'true');
+      if ('Notification' in global && Notification.permission === 'default') {
+        try { await Notification.requestPermission(); } catch (_e) {}
+      }
+      this.startWorker();
+      await this.requestWakeLock();
+      this.updateIndicatorUi();
+      this.notify(
+        'AutoORB Background Mode Active',
+        'Connection stays alive when locked & alerts fire on any trade/order action.',
+        'autoorb-bg-on',
+        false
+      );
+      showToast('Background mode & trade notifications enabled');
+    },
+
+    async toggleInteractive() {
+      if (this.enabled && 'Notification' in global && Notification.permission === 'granted') {
+        this.enabled = false;
+        localStorage.setItem('autoorb_bg_enabled', 'false');
+        this.stopWorker();
+        this.releaseWakeLock();
+        this.updateIndicatorUi();
+        showToast('Background alerts paused', 'warn');
+      } else {
+        await this.enableInteractive();
+      }
+    },
+
+    startWorker() {
+      if (this.worker) return;
+      try {
+        const code = `
+          let timer = null;
+          self.onmessage = function(e) {
+            if (e.data === 'start') {
+              if (timer) clearInterval(timer);
+              timer = setInterval(() => self.postMessage('tick'), 3500);
+            } else if (e.data === 'stop') {
+              if (timer) clearInterval(timer);
+              timer = null;
+            }
+          };
+        `;
+        const blob = new Blob([code], { type: 'application/javascript' });
+        this.worker = new Worker(URL.createObjectURL(blob));
+        this.worker.onmessage = () => {
+          if (this.enabled && typeof this.onTickCallback === 'function') {
+            this.onTickCallback();
+          }
+        };
+        this.worker.postMessage('start');
+      } catch (_e) {}
+    },
+
+    stopWorker() {
+      if (this.worker) {
+        try {
+          this.worker.postMessage('stop');
+          this.worker.terminate();
+        } catch (_e) {}
+        this.worker = null;
+      }
+    },
+
+    async requestWakeLock() {
+      try {
+        if (this.enabled && navigator.wakeLock && typeof navigator.wakeLock.request === 'function' && !this.wakeLock) {
+          this.wakeLock = await navigator.wakeLock.request('screen');
+          this.wakeLock.addEventListener('release', () => { this.wakeLock = null; });
+        }
+      } catch (_e) {}
+    },
+
+    releaseWakeLock() {
+      if (this.wakeLock) {
+        try { this.wakeLock.release(); } catch (_e) {}
+        this.wakeLock = null;
+      }
+    },
+
+    _bindLifecycleEvents() {
+      if (this._bound) return;
+      this._bound = true;
+      const resumeNow = () => {
+        if (this.enabled) {
+          this.startWorker();
+          if (document.visibilityState === 'visible') this.requestWakeLock();
+        }
+        if (typeof this.onTickCallback === 'function') {
+          this.onTickCallback();
+        }
+      };
+      document.addEventListener('visibilitychange', resumeNow);
+      global.addEventListener('focus', resumeNow);
+      global.addEventListener('pageshow', resumeNow);
+      global.addEventListener('online', resumeNow);
+    },
+
+    updateIndicatorUi() {
+      const permOk = ('Notification' in global) ? Notification.permission === 'granted' : true;
+      const active = this.enabled && permOk;
+      ['btn-desk-bg-notify', 'btn-mob-bg-notify'].forEach((id) => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.className = active
+          ? 'h-7 px-2.5 rounded-full bg-primary-container/20 text-profit font-label-caps text-[10px] font-bold flex items-center gap-1 cursor-pointer'
+          : 'h-7 px-2.5 rounded-full bg-surface-container-high text-on-surface-variant font-label-caps text-[10px] font-bold flex items-center gap-1 cursor-pointer';
+        const lbl = el.querySelector('.bg-notify-label');
+        if (lbl) lbl.textContent = active ? 'BG LIVE' : 'ENABLE ALERTS';
+      });
+    },
+
+    notify(title, body, tag = '', urgent = false) {
+      if (!this.enabled) return;
+      try {
+        if ('Notification' in global && Notification.permission === 'granted') {
+          if (navigator.serviceWorker && navigator.serviceWorker.controller) {
+            navigator.serviceWorker.controller.postMessage({
+              type: 'AUTOORB_NOTIFY',
+              title,
+              body,
+              tag: tag || `autoorb-${Date.now()}`,
+              urgent,
+              url: global.location ? global.location.pathname : '/app'
+            });
+            return;
+          }
+          if (this.swReg && this.swReg.showNotification) {
+            this.swReg.showNotification(title, {
+              body,
+              icon: '/static/icon-192.png',
+              badge: '/static/icon-192.png',
+              tag: tag || `autoorb-${Date.now()}`,
+              renotify: true,
+              requireInteraction: urgent
+            });
+            return;
+          }
+          new Notification(title, { body, icon: '/static/icon-192.png', tag: tag || undefined });
+        }
+      } catch (_e) {}
+    },
+
+    inspectSnapshot(snap) {
+      if (!snap || typeof snap !== 'object') return;
+      const prev = this.prevSnap;
+      this.prevSnap = JSON.parse(JSON.stringify(snap));
+      this.updateIndicatorUi();
+      if (!prev) return;
+
+      // 1. Detect new open position or position state change (Breakeven / Target-1 / Trailing)
+      const prevPosMap = {};
+      (prev.positions || []).forEach(p => { prevPosMap[p.trade_id || p.tradingsymbol || p.index_name] = p; });
+      (snap.positions || []).forEach(p => {
+        const key = p.trade_id || p.tradingsymbol || p.index_name;
+        const old = prevPosMap[key];
+        if (!old) {
+          this.notify(
+            `🟢 ENTRY: ${p.tradingsymbol || p.index_name}`,
+            `${p.signal_type || ''} Qty ${p.remaining_qty || p.initial_qty} @ ₹${fmtNum(p.entry_avg_price)} | SL ₹${fmtNum(p.sl_trigger_price)}`,
+            `entry-${key}`,
+            true
+          );
+        } else if (old.state !== p.state || Number(old.sl_trigger_price) !== Number(p.sl_trigger_price)) {
+          this.notify(
+            `⚡ POSITION UPDATE: ${p.tradingsymbol || p.index_name}`,
+            `State: ${p.state} | SL moved to ₹${fmtNum(p.sl_trigger_price)} | P&L ${fmtSignedINR(p.unrealized_pnl, 0)}`,
+            `pos-${key}-${p.state}-${p.sl_trigger_price}`,
+            false
+          );
+        }
+      });
+
+      // 2. Detect newly completed / closed trade
+      const prevDoneIds = new Set(
+        (prev.completed_trades || []).filter(t => t.mode !== 'BACKTEST').map(t => t.trade_id || `${t.date}_${t.tradingsymbol}_${t.exit_time}`)
+      );
+      (snap.completed_trades || []).filter(t => t.mode !== 'BACKTEST').forEach(t => {
+        const tid = t.trade_id || `${t.date}_${t.tradingsymbol}_${t.exit_time}`;
+        if (!prevDoneIds.has(tid)) {
+          const net = Number(t.net_pnl ?? t.net ?? 0);
+          this.notify(
+            `${net >= 0 ? '✅ PROFIT' : '🛑 CLOSED'}: ${t.tradingsymbol || t.index_name} (${fmtSignedINR(net, 0)})`,
+            `Exit @ ₹${fmtNum(t.exit_price)} (${t.exit_reason || 'CLOSED'}) | Today MTM: ${fmtSignedINR(snap.mtm_pnl, 0)}`,
+            `exit-${tid}`,
+            true
+          );
+        }
+      });
+
+      // 3. Detect ORB range locked
+      const prevIdx = prev.indices || {};
+      const curIdx = snap.indices || {};
+      Object.keys(curIdx).forEach(k => {
+        const cI = curIdx[k] || {};
+        const pI = prevIdx[k] || {};
+        if (cI.is_locked && !pI.is_locked) {
+          this.notify(
+            `🔒 ${k} ORB Locked`,
+            `ORH: ${fmtNum(cI.orh)} | ORL: ${fmtNum(cI.orl)} (${fmtNum(cI.range_pct)}%) ${cI.no_trade_reason ? '• ' + cI.no_trade_reason : '• READY'}`,
+            `orb-${k}-${snap.session_date || ''}`,
+            false
+          );
+        }
+      });
+
+      // 4. Detect System Halt / Kill Switch
+      if (snap.halted && !prev.halted) {
+        this.notify(
+          '🚨 SYSTEM HALTED / KILL SWITCH',
+          snap.halt_reason || `Daily MTM: ${fmtSignedINR(snap.mtm_pnl, 0)}`,
+          `halt-${Date.now()}`,
+          true
+        );
+      }
+
+      // 5. Detect Broker Auth Status Change
+      if (snap.login_status && prev.login_status && snap.login_status !== prev.login_status) {
+        this.notify(
+          `🔑 Shoonya Session: ${snap.login_status}`,
+          `Mode: ${snap.mode || 'LIVE'} | Account connected`,
+          `auth-${snap.login_status}`,
+          false
+        );
+      }
+    }
+  };
+
   global.AutoORB = {
     DEFAULT_ANDROID_API_BASE,
     isPlaceholderUrl,
@@ -563,9 +838,12 @@
     setApiBase,
     getToken,
     setToken,
+    getCachedUser,
+    setCachedUser,
     getTheme,
     setTheme,
     toggleTheme,
+    bg,
     state,
     request,
     postJson,
@@ -605,6 +883,7 @@
       modifyPositionSl: (index_name, sl_trigger_price) => postJson('/api/positions/modify-sl', { index_name, sl_trigger_price }),
       resetTrades: () => postJson('/api/trades/reset'),
       setMaxDailyLoss: (amount) => postJson('/api/settings/max-daily-loss', { amount }),
+      setEnabledIndices: (nifty, banknifty) => postJson('/api/settings/enabled-indices', { nifty, banknifty }),
       resetRiskHalt: (reset_type = 'all') => postJson('/api/risk/reset-halt', { reset_type }),
       controlMilestone: (milestone = 'all', action = 'restart') => postJson('/api/schedule/milestone', { milestone, action }),
       // Multi-user Auth & Config v1

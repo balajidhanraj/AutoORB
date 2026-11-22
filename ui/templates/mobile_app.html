@@ -287,6 +287,10 @@
 
       <!-- Quick Action Pills -->
       <div class="px-margin flex items-center gap-space-xs overflow-x-auto pb-1 no-scrollbar">
+        <button id="btn-mob-bg-notify" type="button" onclick="AutoORB.bg.toggleInteractive()" class="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-primary-container/20 text-profit font-bold shadow-sm cursor-pointer">
+          <span class="material-symbols-outlined text-[14px]">notifications_active</span>
+          <span class="bg-notify-label font-label-caps">BG LIVE</span>
+        </button>
         <button id="m-pill-orb" type="button" class="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-surface-container-high text-on-surface shadow-sm cursor-pointer">
           <span class="material-symbols-outlined text-[14px] text-profit">tune</span>
           <span id="m-pill-orb-txt" class="font-label-caps">ORB 30m</span>
@@ -865,6 +869,7 @@
       // ---------- Render Mobile State ----------
       function renderMobile() {
         if (!snap || !snap.indices) return;
+        if (A.bg) A.bg.inspectSnapshot(snap);
         const mtm = Number(snap.mtm_pnl || 0);
         const real = Number(snap.realized_pnl || 0);
         const cap = Number(snap.capital || 1);
@@ -1547,6 +1552,7 @@
           await pollMobile();
           startPolling();
         }
+        if (A.bg) A.bg.init(pollMobile);
       }
 
       async function syncMAuth() {
@@ -1556,10 +1562,17 @@
         }
         try {
           const me = await A.api.getMe();
+          if (A.setCachedUser) A.setCachedUser(me);
           await enterAppShell(me);
-        } catch (_e) {
-          A.setToken('');
-          showLandingScreen();
+        } catch (err) {
+          if (err && err.status === 401) {
+            A.setToken('');
+            showLandingScreen();
+          } else {
+            // Keep mobile session alive across screen lock / network wake
+            const cached = (A.getCachedUser && A.getCachedUser()) || { name: 'Trader', email: '' };
+            await enterAppShell(cached);
+          }
         }
       }
 

@@ -207,6 +207,10 @@
             </button>
           </div>
 
+          <button id="btn-desk-bg-notify" type="button" onclick="AutoORB.bg.toggleInteractive()" class="h-7 px-2.5 rounded-full bg-primary-container/20 text-profit font-label-caps text-[10px] font-bold flex items-center gap-1 cursor-pointer whitespace-nowrap" title="Keep running in background when locked &amp; send OS notifications on trade actions">
+            <span class="material-symbols-outlined text-[14px]">notifications_active</span>
+            <span class="bg-notify-label">BG LIVE</span>
+          </button>
           <button id="btn-hdr-user" type="button" class="h-7 px-2 rounded-full bg-primary/15 border border-primary/30 text-primary flex items-center gap-1 hover:bg-primary/25 transition-colors cursor-pointer whitespace-nowrap" title="Account & Multi-User Auth">
             <span class="material-symbols-outlined text-[16px]">person</span>
             <span id="hdr-user-label" class="hidden 2xl:inline font-label-caps">SIGN IN</span>
@@ -1155,6 +1159,7 @@
       // ---------- Render Snapshot ----------
       function renderAll() {
         if (!snap || !snap.indices) return;
+        if (A.bg) A.bg.inspectSnapshot(snap);
         const mtm = Number(snap.mtm_pnl || 0);
         const realized = Number(snap.realized_pnl || 0);
         const unrealized = mtm - realized;
@@ -2064,6 +2069,7 @@
         renderAll();
         await pollStatus();
         startDesktopPolling();
+        if (A.bg) A.bg.init(pollStatus);
       }
 
       async function syncDesktopAuth() {
@@ -2073,10 +2079,17 @@
         }
         try {
           const me = await A.api.getMe();
+          if (A.setCachedUser) A.setCachedUser(me);
           await enterDesktopApp(me);
-        } catch (_e) {
-          A.setToken('');
-          showDesktopLanding();
+        } catch (err) {
+          if (err && err.status === 401) {
+            A.setToken('');
+            showDesktopLanding();
+          } else {
+            // Keep session alive across laptop/mobile lock or brief network sleep
+            const cached = (A.getCachedUser && A.getCachedUser()) || { name: 'Trader', email: '' };
+            await enterDesktopApp(cached);
+          }
         }
       }
 
@@ -2087,10 +2100,16 @@
         }
         try {
           const me = await A.api.getMe();
+          if (A.setCachedUser) A.setCachedUser(me);
           populateUserProfile(me);
-        } catch (_e) {
-          A.setToken('');
-          showDesktopLanding();
+        } catch (err) {
+          if (err && err.status === 401) {
+            A.setToken('');
+            showDesktopLanding();
+          } else {
+            const cached = (A.getCachedUser && A.getCachedUser()) || { name: 'Trader', email: '' };
+            populateUserProfile(cached);
+          }
         }
       }
 
