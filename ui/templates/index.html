@@ -1407,27 +1407,38 @@
             }
           }
           const isEnabled = enMap[idx] !== false;
-          const isBear = (info.orl && ltp && ltp <= info.orl) || (r.radar_state === 'IMMINENT_PE_BREAKOUT') || (info.supertrend_dir === -1);
+          const isHybrid = (info.strategy_mode || r.strategy_mode) === 'HTF_SWING_HYBRID';
+          const bandHi = isHybrid ? (info.htf_swing_high ?? info.orh) : info.orh;
+          const bandLo = isHybrid ? (info.htf_swing_low ?? info.orl) : info.orl;
+          const isBear = (bandLo && ltp && ltp <= bandLo) || (r.radar_state === 'IMMINENT_PE_BREAKOUT') || (info.supertrend_dir === -1);
           const stateBadge = esc((r.radar_state || 'SCANNING').replace(/_/g, ' '));
           const readiness = Number(r.readiness_pct || 0);
           const stDir = info.supertrend_dir ?? r.supertrend_dir;
           const stVal = info.supertrend_value ?? r.supertrend_value ?? info.supertrend;
           const stOk = stDir === 1 || stDir === -1;
           const stBadgeTxt = stDir === 1 ? `ST BULL (${A.fmtNum(stVal, 1)})` : stDir === -1 ? `ST BEAR (${A.fmtNum(stVal, 1)})` : `ST(10,3) ${stVal ? A.fmtNum(stVal, 1) : 'SYNC'}`;
-          const gates = [
-            ['SYS', r.system_ready],
-            ['VIX', r.vix_ready],
-            ['ORB', r.orb_ready],
-            ['PRICE', r.ce_price_ok || r.pe_price_ok],
-            ['RSI', r.ce_rsi_ok || r.pe_rsi_ok],
-            ['ST(10,3)', stOk || Boolean(r.ce_price_ok || r.pe_price_ok)]
-          ];
+          const gates = isHybrid
+            ? [
+                ['SYS', r.system_ready],
+                ['VIX', r.vix_ready],
+                ['15m HTF', r.orb_ready],
+                ['BREAK', r.ce_price_ok || r.pe_price_ok],
+                ['ST(10,3)', stOk && (r.ce_rsi_ok || r.pe_rsi_ok)]
+              ]
+            : [
+                ['SYS', r.system_ready],
+                ['VIX', r.vix_ready],
+                ['ORB', r.orb_ready],
+                ['PRICE', r.ce_price_ok || r.pe_price_ok],
+                ['RSI', r.ce_rsi_ok || r.pe_rsi_ok],
+                ['ST(10,3)', stOk || Boolean(r.ce_price_ok || r.pe_price_ok)]
+              ];
           const lots = Number(r.lots || 1);
           const lotSize = Number(r.lot_size || (idx === 'NIFTY' ? 65 : 30));
           const totalQty = Number(r.total_qty || (lots * lotSize));
           const prd = r.product_type || 'M';
           const distStr = r.dist_to_orh !== null && r.dist_to_orh !== undefined
-            ? `ORH ${r.dist_to_orh > 0 ? '+' : ''}${r.dist_to_orh}`
+            ? `${isHybrid ? 'RED' : 'ORH'} ${r.dist_to_orh > 0 ? '+' : ''}${r.dist_to_orh}`
             : '--';
 
           // Positions & P&L specific to this deployed strategy
@@ -1474,7 +1485,7 @@
                     <span>${drawerOpen ? '▾' : '▸'}</span>
                     <span>${idxPositions.length} Leg${idxPositions.length === 1 ? '' : 's'} &bull; Radar</span>
                   </button>
-                  <span class="db-strat__name truncate">${esc(idx)} &mdash; 5-Gate ORB + Supertrend(10,3)</span>
+                  <span class="db-strat__name truncate">${esc(idx)} &mdash; ${isHybrid ? '15m HTF Swing Break + Supertrend(10,3)' : '5-Gate ORB + Supertrend(10,3)'}</span>
                   <span class="db-strat__chip ${isLiveMode ? 'db-strat__chip--live' : 'db-strat__chip--paper'}">${isLiveMode ? 'LIVE AUTO' : 'PAPER'}</span>
                 </div>
                 <div class="flex items-center gap-2 text-[11px] font-data-mono-sm text-on-surface-variant flex-wrap">
@@ -1611,16 +1622,16 @@
               <div class="grid grid-cols-1 lg:grid-cols-12 gap-3 items-center">
                 <div class="lg:col-span-4 h-14 bg-surface-container-lowest/90 border border-outline-variant/25 rounded-lg px-2.5 py-1.5 flex flex-col justify-between">
                   <div class="flex items-center justify-between font-label-caps text-[9.5px] text-on-surface-variant">
-                    <span>${esc(idx)} INTRADAY SPOT &amp; ORB BANDS</span>
+                    <span>${esc(idx)} INTRADAY SPOT &amp; ${isHybrid ? '15m HTF SWING BANDS' : 'ORB BANDS'}</span>
                     <span class="${isBear ? 'text-loss' : 'text-profit'} font-bold">${A.fmtNum(ltp, 2)}</span>
                   </div>
-                  <div class="h-8">${A.buildSparklineSvg(spotHistory[idx], info.orh, info.orl, !isBear)}</div>
+                  <div class="h-8">${A.buildSparklineSvg(spotHistory[idx], bandHi, bandLo, !isBear)}</div>
                 </div>
 
                 <div class="lg:col-span-8 grid grid-cols-3 sm:grid-cols-7 gap-1.5 font-data-mono-sm tabular-nums">
-                  <div class="p-2 rounded-lg bg-surface-container-low border border-outline-variant/25"><span class="font-label-caps text-on-surface-variant block">ORH</span><b class="text-profit">${A.fmtNum(info.orh, 2)}</b></div>
-                  <div class="p-2 rounded-lg bg-surface-container-low border border-outline-variant/25"><span class="font-label-caps text-on-surface-variant block">ORL</span><b class="text-loss">${A.fmtNum(info.orl, 2)}</b></div>
-                  <div class="p-2 rounded-lg bg-surface-container-low border border-outline-variant/25"><span class="font-label-caps text-on-surface-variant block">RANGE %</span><b class="text-amber-tactical">${info.range_pct !== null && info.range_pct !== undefined ? info.range_pct.toFixed(2) + '%' : '--'}</b></div>
+                  <div class="p-2 rounded-lg bg-surface-container-low border border-outline-variant/25"><span class="font-label-caps text-on-surface-variant block">${isHybrid ? '15m RED' : 'ORH'}</span><b class="text-profit">${A.fmtNum(bandHi, 2)}</b></div>
+                  <div class="p-2 rounded-lg bg-surface-container-low border border-outline-variant/25"><span class="font-label-caps text-on-surface-variant block">${isHybrid ? '15m GRN' : 'ORL'}</span><b class="text-loss">${A.fmtNum(bandLo, 2)}</b></div>
+                  <div class="p-2 rounded-lg bg-surface-container-low border border-outline-variant/25"><span class="font-label-caps text-on-surface-variant block">${isHybrid ? '15m ATR' : 'RANGE %'}</span><b class="text-amber-tactical">${isHybrid ? (info.htf_atr ? A.fmtNum(info.htf_atr, 1) : '--') : (info.range_pct !== null && info.range_pct !== undefined ? info.range_pct.toFixed(2) + '%' : '--')}</b></div>
                   <div class="p-2 rounded-lg bg-surface-container-low border border-outline-variant/25"><span class="font-label-caps text-on-surface-variant block">VWAP</span><b class="text-on-surface">${A.fmtNum(info.vwap, 1)}</b></div>
                   <div class="p-2 rounded-lg bg-surface-container-low border border-outline-variant/25"><span class="font-label-caps text-on-surface-variant block">RSI (14)</span><b class="${(info.rsi || 50) > 60 ? 'text-profit' : (info.rsi || 50) < 40 ? 'text-loss' : 'text-on-surface'}">${info.rsi !== null && info.rsi !== undefined ? Number(info.rsi).toFixed(1) : '--'}</b></div>
                   <div class="p-2 rounded-lg bg-surface-container-low border border-outline-variant/25"><span class="font-label-caps text-on-surface-variant block">ST (10,3)</span><b class="${stDir === -1 ? 'text-loss' : 'text-profit'}">${stVal ? A.fmtNum(stVal, 1) : (stDir === 1 ? 'BULL' : stDir === -1 ? 'BEAR' : 'ACTIVE')}</b></div>

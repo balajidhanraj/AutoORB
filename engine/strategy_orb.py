@@ -9,6 +9,7 @@ from typing import Dict, Optional, Sequence
 from config.settings import INDEX_SPECS, IST, AppSettings
 from engine.candle_builder import Candle
 from engine.indicators import (
+    build_htf_15m_series,
     calculate_ema,
     calculate_intraday_vwap,
     calculate_supertrend,
@@ -35,6 +36,11 @@ class ORBState:
     last_rsi: Optional[float] = None
     last_supertrend: Optional[float] = None
     last_supertrend_dir: int = 0
+    strategy_mode: str = "ORB_5GATE"
+    htf_swing_high: Optional[float] = None
+    htf_swing_low: Optional[float] = None
+    htf_atr: Optional[float] = None
+    htf_bias: int = 0
     last_signal: Optional[str] = None
     last_eval_time: Optional[str] = None
 
@@ -52,6 +58,10 @@ class ORBSignal:
     vwap: float
     rsi: float
     india_vix: float
+    strategy_mode: str = "ORB_5GATE"
+    spot_sl_price: Optional[float] = None
+    opt_sl_cap_pts: Optional[float] = None
+    pure_supertrend_trail: bool = False
 
 
 class ORBStrategy:
@@ -208,6 +218,26 @@ class ORBStrategy:
         if not state.is_locked and eval_time >= self.settings.orb_end_time:
             self.lock_opening_range(index_name, candles_seq, session_date=candle_ist.date())
 
+        close_px = float(closed_candle.close)
+        vix_val = float(india_vix) if india_vix is not None else 15.0
+
+        # Dedicated H1 Hybrid NIFTY Engine:
+        # 15m HTF Swing Break (swing_len=2, buf=0.1*ATR) + India VIX >= 12 + Supertrend(10,3) Confirm & Pure Trail
+        if index_name == "NIFTY" and getattr(self.settings, "nifty_use_htf_swing_hybrid", False):
+            return self._evaluate_nifty_htf_hybrid(
+                state=state,
+                closed_candle=closed_candle,
+                candles_seq=candles_seq,
+                candle_ist=candle_ist,
+                current_time_ist=current_time_ist,
+                vwap=vwap,
+                rsi=rsi,
+                st_val=st_val,
+                st_dir=st_dir,
+                vix_val=vix_val,
+            )
+
+        state.strategy_mode = "ORB_5GATE"
         if not state.is_locked or state.orh is None or state.orl is None:
             return None
 
@@ -221,7 +251,6 @@ class ORBStrategy:
             return None
 
         # Volatility Filter: Skip if India VIX < 12.0
-        vix_val = float(india_vix) if india_vix is not None else 15.0
         if vix_val < self.settings.min_india_vix:
             logger.info(
                 "%s signal skipped: India VIX %.2f < %.2f",
@@ -234,7 +263,6 @@ class ORBStrategy:
         rsi_bull = 60.0
         rsi_bear = 40.0
 
-        close_px = closed_candle.close
         ce_signal = (close_px > state.orh) and (close_px > vwap) and (rsi > rsi_bull)
         pe_signal = (close_px < state.orl) and (close_px < vwap) and (rsi < rsi_bear)
 
@@ -343,3 +371,118 @@ class ORBStrategy:
             )
 
         return None
+
+    def _evaluate_nifty_htf_hybrid(
+        self,
+        state: ORBState,
+        closed_candle: Candle,
+        candles_seq: Sequence[Candle],
+        candle_ist: datetime,
+        current_time_ist: Optional[datetime],
+        vwap: float,
+        rsi: float,
+        st_val: Optional[float],
+        st_dir: int,
+        vix_val: float,
+    ) -> Optional[ORBSignal]:
+        """H1 Hybrid NIFTY: 15m HTF Swing Break + VIX >= 12 + Supertrend(10,3) Confirm & Pure Trail."""
+        state.strategy_mode = "HTF_SWING_HYBRID"
+        swing_len = int(getattr(self.settings, "nifty_htf_swing_len", 2) or 2)
+        buf_mult = float(getattr(self.settings, "nifty_htf_break_buf_atr", 0.1) or 0.1)
+        stop_mult = float(getattr(self.settings, "nifty_htf_stop_atr_mult", 0.5) or 0.5)
+        opt_sl_cap = float(getattr(self.settings, "nifty_htf_opt_sl_cap", 35.0) or 35.0)
+
+        series = build_htf_15m_series(candles_seq, swing_len=swing_len, atr_period=14)
+        if not series:
+            return None
+
+        htf_c, htf_f, htf_a, htf_b = series[-1]
+        state.htf_swing_high = round(htf_c, 2) if htf_c is not None else None
+        state.htf_swing_low = round(htf_f, 2) if htf_f is not None else None
+        state.htf_atr = round(htf_a, 2) if htf_a is not None else None
+        state.htf_bias = int(htf_b)
+
+        entry_start = getattr(self.settings, "nifty_htf_entry_start_time", time(9, 30, 0))
+        entry_end = getattr(self.settings, "entry_cutoff_time", time(13, 15, 0))
+        check_t = current_time_ist.time() if current_time_ist is not None else candle_ist.time()
+        if not (entry_start <= check_t <= entry_end):
+            return None
+
+        if vix_val < self.settings.min_india_vix:
+            logger.info("NIFTY Hybrid skipped: India VIX %.2f < %.2f", vix_val, self.settings.min_india_vix)
+            return None
+
+        if htf_a is None or st_val is None or st_dir == 0 or len(candles_seq) < 2 or len(series) < 2:
+            return None
+
+        prev_close = float(candles_seq[-2].close)
+        prev_c, prev_f, prev_a, _ = series[-2]
+        buf_pts = buf_mult * htf_a
+        prev_buf = (buf_mult * prev_a) if prev_a is not None else buf_pts
+        close_px = float(closed_candle.close)
+
+        ref_c = prev_c if prev_c is not None else htf_c
+        ref_bc = prev_buf if prev_c is not None else buf_pts
+        brk_up = (
+            htf_c is not None
+            and close_px > (htf_c + buf_pts)
+            and prev_close <= (ref_c + ref_bc)
+        )
+
+        ref_f = prev_f if prev_f is not None else htf_f
+        ref_bf = prev_buf if prev_f is not None else buf_pts
+        brk_dn = (
+            htf_f is not None
+            and close_px < (htf_f - buf_pts)
+            and prev_close >= (ref_f - ref_bf)
+        )
+
+        ce_signal = brk_up and (st_dir == 1 and close_px > st_val)
+        pe_signal = brk_dn and (st_dir == -1 and close_px < st_val)
+
+        if ce_signal and pe_signal:
+            if close_px >= float(closed_candle.open):
+                pe_signal = False
+            else:
+                ce_signal = False
+
+        if ce_signal and htf_c is not None:
+            spot_sl = round(max(0.0, min(float(closed_candle.low), htf_c) - stop_mult * htf_a), 2)
+            state.last_signal = f"CE HTF @ {close_px:.2f} (> {htf_c:.1f} | ST {st_val:.1f})"
+            return ORBSignal(
+                index_name="NIFTY",
+                signal_type="CE",
+                candle_time=candle_ist,
+                spot_close=close_px,
+                orh=round(htf_c, 2),
+                orl=round(htf_f, 2) if htf_f is not None else (state.orl or close_px),
+                vwap=vwap,
+                rsi=rsi,
+                india_vix=vix_val,
+                strategy_mode="HTF_SWING_HYBRID",
+                spot_sl_price=spot_sl,
+                opt_sl_cap_pts=opt_sl_cap,
+                pure_supertrend_trail=True,
+            )
+
+        if pe_signal and htf_f is not None:
+            spot_sl = round(max(float(closed_candle.high), htf_f) + stop_mult * htf_a, 2)
+            state.last_signal = f"PE HTF @ {close_px:.2f} (< {htf_f:.1f} | ST {st_val:.1f})"
+            return ORBSignal(
+                index_name="NIFTY",
+                signal_type="PE",
+                candle_time=candle_ist,
+                spot_close=close_px,
+                orh=round(htf_c, 2) if htf_c is not None else (state.orh or close_px),
+                orl=round(htf_f, 2),
+                vwap=vwap,
+                rsi=rsi,
+                india_vix=vix_val,
+                strategy_mode="HTF_SWING_HYBRID",
+                spot_sl_price=spot_sl,
+                opt_sl_cap_pts=opt_sl_cap,
+                pure_supertrend_trail=True,
+            )
+
+        return None
+

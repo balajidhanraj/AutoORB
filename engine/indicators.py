@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-from datetime import date, time
-from typing import Optional, Sequence, Tuple
+from dataclasses import dataclass
+from datetime import date, datetime, time
+from typing import Dict, List, Optional, Sequence, Tuple
 
 from config.settings import IST
 from engine.candle_builder import Candle
@@ -148,4 +149,136 @@ def calculate_supertrend(
         st_val = final_lower if direction == 1 else final_upper
 
     return round(st_val, 2), direction
+
+
+@dataclass
+class _Htf15mBar:
+    """Internal 15-minute bar container for non-repainting HTF swing detection."""
+
+    open: float
+    high: float
+    low: float
+    close: float
+    atr14: Optional[float] = None
+    ceil: Optional[float] = None
+    floor: Optional[float] = None
+    bias_b: int = 0
+
+
+def build_htf_15m_series(
+    candles_5m: Sequence[Candle],
+    swing_len: int = 2,
+    atr_period: int = 14,
+) -> List[Tuple[Optional[float], Optional[float], Optional[float], int]]:
+    """Resample 5m bars to 15m (IST 09:15-aligned) and return non-repainting [1] HTF levels per 5m bar.
+
+    Each 5m bar receives (htf_swing_high, htf_swing_low, htf_atr, htf_bias) from the last
+    completely closed 15-minute bar ([1] inside 15m timeframe), matching zero-repaint Pine logic.
+    """
+    if not candles_5m:
+        return []
+
+    htf_bars: List[_Htf15mBar] = []
+    bar_to_htf_idx: List[int] = []
+    seen_buckets: Dict[Tuple[date, int], int] = {}
+
+    for c in candles_5m:
+        ts_ist = c.timestamp.astimezone(IST) if c.timestamp.tzinfo else IST.localize(c.timestamp)
+        minutes = ts_ist.hour * 60 + ts_ist.minute
+        bucket = max(0, (minutes - (9 * 60 + 15)) // 15)
+        bkey = (ts_ist.date(), bucket)
+        idx = seen_buckets.get(bkey)
+        if idx is None:
+            idx = len(htf_bars)
+            seen_buckets[bkey] = idx
+            htf_bars.append(
+                _Htf15mBar(
+                    open=float(c.open),
+                    high=float(c.high),
+                    low=float(c.low),
+                    close=float(c.close),
+                )
+            )
+        else:
+            hb = htf_bars[idx]
+            if float(c.high) > hb.high:
+                hb.high = float(c.high)
+            if float(c.low) < hb.low:
+                hb.low = float(c.low)
+            hb.close = float(c.close)
+        bar_to_htf_idx.append(idx)
+
+    tr_list: List[float] = []
+    rma: Optional[float] = None
+    ceil_val: Optional[float] = None
+    floor_val: Optional[float] = None
+    b_val = 0
+    prev_ceil: Optional[float] = None
+    prev_floor: Optional[float] = None
+
+    for j, hb in enumerate(htf_bars):
+        tr = (
+            hb.high - hb.low
+            if j == 0
+            else max(
+                hb.high - hb.low,
+                abs(hb.high - htf_bars[j - 1].close),
+                abs(hb.low - htf_bars[j - 1].close),
+            )
+        )
+        tr_list.append(tr)
+        if j == atr_period - 1:
+            rma = sum(tr_list) / float(atr_period)
+        elif j >= atr_period and rma is not None:
+            rma = ((rma * (atr_period - 1)) + tr) / float(atr_period)
+        hb.atr14 = rma
+
+        if j >= 2 * swing_len:
+            p = j - swing_len
+            cand_h = htf_bars[p].high
+            is_ph = all(htf_bars[k].high <= cand_h for k in range(p - swing_len, p)) and all(
+                htf_bars[k].high < cand_h for k in range(p + 1, p + swing_len + 1)
+            )
+            if is_ph:
+                ceil_val = cand_h
+
+            cand_l = htf_bars[p].low
+            is_pl = all(htf_bars[k].low >= cand_l for k in range(p - swing_len, p)) and all(
+                htf_bars[k].low > cand_l for k in range(p + 1, p + swing_len + 1)
+            )
+            if is_pl:
+                floor_val = cand_l
+
+        if prev_ceil is not None and hb.close > prev_ceil:
+            b_val = 1
+        elif prev_floor is not None and hb.close < prev_floor:
+            b_val = -1
+
+        hb.ceil = ceil_val
+        hb.floor = floor_val
+        hb.bias_b = b_val
+        prev_ceil = ceil_val
+        prev_floor = floor_val
+
+    mapped: List[Tuple[Optional[float], Optional[float], Optional[float], int]] = []
+    for h_idx in bar_to_htf_idx:
+        if h_idx == 0:
+            mapped.append((None, None, None, 0))
+        else:
+            prev_hb = htf_bars[h_idx - 1]
+            mapped.append((prev_hb.ceil, prev_hb.floor, prev_hb.atr14, prev_hb.bias_b))
+    return mapped
+
+
+def calculate_htf_15m_swing_levels(
+    candles_5m: Sequence[Candle],
+    swing_len: int = 2,
+    atr_period: int = 14,
+) -> Tuple[Optional[float], Optional[float], Optional[float], int]:
+    """Return latest non-repainting (15m_swing_high, 15m_swing_low, 15m_atr, htf_bias) for a 5m sequence."""
+    series = build_htf_15m_series(candles_5m, swing_len=swing_len, atr_period=atr_period)
+    if not series:
+        return None, None, None, 0
+    return series[-1]
+
 

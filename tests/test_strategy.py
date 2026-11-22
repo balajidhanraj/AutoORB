@@ -53,6 +53,7 @@ def _make_settings(tmp_path: Path, **overrides: Any) -> AppSettings:
         "log_dir": str(tmp_path / "logs"),
         "sebi_algo_id": "ALGO_TEST_2026",
         "enable_nifty_trading": True,
+        "nifty_use_htf_swing_hybrid": False,
         "dynamic_sl_pct": 0.0,
         "require_vwap_slope": False,
         "use_supertrend_filter": False,
@@ -1039,3 +1040,100 @@ def test_master_alpha_strategy_pillars(tmp_path: Path) -> None:
     fake_ce = Candle(_ist_dt(2026, 11, 16, 10, 5), 24530, 24590, 24520, 24580, is_closed=True)
     res = strat.evaluate_candle_close("NIFTY", fake_ce, orb + [fake_ce], india_vix=14.0)
     assert res is None  # Blocked by daily bias filter!
+
+
+def test_nifty_htf_swing_hybrid_strategy_and_spot_sl(tmp_path: Path) -> None:
+    """Verify H1 Hybrid NIFTY: 15m HTF Swing Break + VIX >= 12 + ST(10,3) Confirm & Pure Trail + Spot ATR SL."""
+    from engine.indicators import build_htf_15m_series
+
+    settings = _make_settings(
+        tmp_path,
+        mode="PAPER",
+        paper_slippage_pts=0.5,
+        nifty_use_htf_swing_hybrid=True,
+        nifty_htf_swing_len=2,
+        nifty_htf_break_buf_atr=0.1,
+        nifty_htf_stop_atr_mult=0.5,
+        nifty_htf_opt_sl_cap=35.0,
+        nifty_htf_max_trades_per_day=2,
+        use_supertrend_filter=True,
+    )
+    strat = ORBStrategy(settings)
+    client = ShoonyaClient(settings)
+    mapper = InstrumentMapper(client)
+    rm = RiskManager(settings, client, mapper)
+
+    # Build 16 completed 15m bars (48 x 5m bars across prior day + current morning) with a clear 15m pivot high at bar 12
+    bars: List[Candle] = []
+    # Day 1: 09:15 -> 14:45 (66 bars = 22 x 15m bars) to warm ATR(14) & form a 15m swing high around 24540
+    t0 = _ist_dt(2026, 11, 13, 9, 15)
+    for k in range(66):
+        ts = t0 + timedelta(minutes=5 * k)
+        # Mild wave with peak 24540 in 15m bucket 18 (k=54..56), then settling near 24480
+        if 54 <= k <= 56:
+            c = Candle(ts, 24510, 24540, 24505, 24525, is_closed=True)
+        elif k > 56:
+            c = Candle(ts, 24495, 24505, 24470, 24485, is_closed=True)
+        else:
+            px = 24480 + (k % 6) * 4
+            c = Candle(ts, px, px + 10, px - 10, px + 2, is_closed=True)
+        bars.append(c)
+
+    # Day 2: 09:15..09:40 bullish expansion breaking above 24540 on 09:40 bar
+    d2 = _ist_dt(2026, 11, 16, 9, 15)
+    day2_seq = [
+        Candle(d2 + timedelta(minutes=0), 24490, 24515, 24485, 24510, is_closed=True),
+        Candle(d2 + timedelta(minutes=5), 24510, 24525, 24505, 24520, is_closed=True),
+        Candle(d2 + timedelta(minutes=10), 24520, 24535, 24515, 24530, is_closed=True),
+        Candle(d2 + timedelta(minutes=15), 24530, 24542, 24522, 24538, is_closed=True),
+        Candle(d2 + timedelta(minutes=20), 24538, 24595, 24535, 24590, is_closed=True),  # 09:35 bar closes well above 24540 + 0.1*ATR
+    ]
+    all_bars = bars + day2_seq
+    htf_series = build_htf_15m_series(all_bars, swing_len=2, atr_period=14)
+    assert len(htf_series) == len(all_bars)
+    htf_c, _htf_f, htf_a, _htf_b = htf_series[-1]
+    assert htf_c == 24540.0
+    assert htf_a is not None and htf_a > 0
+
+    # VIX < 12 blocks signal
+    assert strat.evaluate_candle_close("NIFTY", day2_seq[-1], all_bars, india_vix=11.4, current_time_ist=day2_seq[-1].timestamp) is None
+
+    # Valid VIX >= 12 fires HTF_SWING_HYBRID CE signal with Spot ATR SL & 35pt cap
+    sig = strat.evaluate_candle_close("NIFTY", day2_seq[-1], all_bars, india_vix=14.0, current_time_ist=day2_seq[-1].timestamp)
+    assert sig is not None
+    assert sig.strategy_mode == "HTF_SWING_HYBRID"
+    assert sig.signal_type == "CE"
+    assert sig.opt_sl_cap_pts == 35.0
+    assert sig.pure_supertrend_trail is True
+    assert sig.spot_sl_price is not None and sig.spot_sl_price < 24540.0
+
+    # Execute into RiskManager -> uses 35pt SL cap & skips early BE/T1 cut
+    pos = rm.execute_entry(sig, option_ltp=150.0, lots=2)
+    assert pos is not None
+    assert pos.strategy_mode == "HTF_SWING_HYBRID"
+    assert pos.pure_supertrend_trail is True
+    assert pos.sl_trigger_price == round(pos.entry_avg_price - 35.0, 1)
+
+    opt_key = f"{pos.contract.exchange}|{pos.contract.token}"
+    # Even at +45 pt gain (above T1=40), pure_supertrend_trail keeps full 130 qty without partial cut or BE lock
+    client.update_ltp(opt_key, pos.entry_avg_price + 45.0)
+    rm.on_option_tick("NIFTY", pos.entry_avg_price + 45.0)
+    assert pos.state == PositionState.OPEN_FULL
+    assert pos.remaining_qty == 130
+
+    # Spot ATR stop exits on spot breach
+    exited = rm.check_spot_atr_stop_exit("NIFTY", spot_low=pos.spot_sl_price - 2.0, spot_high=24595.0)
+    assert exited is True
+    assert "NIFTY" not in rm.positions
+    assert rm.completed_trades[-1].exit_reason == "SPOT_ATR_SL"
+
+    # Second trade allowed same day (max 2/day), third trade blocked
+    rm.reset_daily()
+    pos_a = rm.execute_entry(sig, option_ltp=150.0, lots=2)
+    assert pos_a is not None
+    rm._close_position_record_locked(pos_a, exit_price=115.0, exit_reason="STOP_LOSS")
+    pos_b = rm.execute_entry(sig, option_ltp=150.0, lots=2)
+    assert pos_b is not None  # Trade #2 allowed even after Trade #1 hit SL
+    rm._close_position_record_locked(pos_b, exit_price=190.0, exit_reason="SUPERTREND_TRAIL")
+    assert rm.execute_entry(sig, option_ltp=150.0, lots=2) is None  # Trade #3 blocked by max 2/day cap
+

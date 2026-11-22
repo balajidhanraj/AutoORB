@@ -67,6 +67,10 @@ class ActivePosition:
     trail_steps_applied: int = 0
     product_type: str = "M"
     position_key: str = ""
+    strategy_mode: str = "ORB_5GATE"
+    spot_sl_price: Optional[float] = None
+    opt_sl_cap_pts: Optional[float] = None
+    pure_supertrend_trail: bool = False
 
 
 @dataclass
@@ -334,8 +338,16 @@ class RiskManager:
                 return False
             if index_name == "BANKNIFTY" and not getattr(self.settings, "enable_banknifty_trading", True):
                 return False
-            if self.sl_hit_today_by_index.get(index_name, False):
+            is_nifty_hybrid = (
+                index_name == "NIFTY"
+                and getattr(self.settings, "nifty_use_htf_swing_hybrid", False)
+            )
+            if not is_nifty_hybrid and self.sl_hit_today_by_index.get(index_name, False):
                 return False
+            if is_nifty_hybrid:
+                nf_cap = int(getattr(self.settings, "nifty_htf_max_trades_per_day", 2) or 2)
+                if self.trades_taken_by_index.get("NIFTY", 0) >= nf_cap:
+                    return False
             allow_bnf_pyramid = (
                 index_name == "BANKNIFTY"
                 and getattr(self.settings, "banknifty_be_pyramiding", False)
@@ -394,6 +406,12 @@ class RiskManager:
                 logger.info("Trade rejected for %s (halted=%s, count=%d/%d)",
                             signal.index_name, self.halted, self.trades_taken_today, self.settings.max_trades_per_day)
                 return None
+            if signal.strategy_mode == "HTF_SWING_HYBRID":
+                nf_cap = int(getattr(self.settings, "nifty_htf_max_trades_per_day", 2) or 2)
+                if self.trades_taken_by_index.get(signal.index_name, 0) >= nf_cap:
+                    logger.info("Trade rejected for %s: Hybrid daily cap %d/%d reached",
+                                signal.index_name, self.trades_taken_by_index.get(signal.index_name, 0), nf_cap)
+                    return None
 
             spec: IndexSpec = INDEX_SPECS[signal.index_name]
             contract = self.mapper.select_option_contract(
@@ -523,6 +541,10 @@ class RiskManager:
                 highest_ltp=float(ltp),
                 product_type=prd_type,
                 position_key=self._next_position_key_locked(signal.index_name),
+                strategy_mode=getattr(signal, "strategy_mode", "ORB_5GATE"),
+                spot_sl_price=getattr(signal, "spot_sl_price", None),
+                opt_sl_cap_pts=getattr(signal, "opt_sl_cap_pts", None),
+                pure_supertrend_trail=bool(getattr(signal, "pure_supertrend_trail", False)),
             )
             self.positions[pos.position_key] = pos
             logger.info(
@@ -575,14 +597,17 @@ class RiskManager:
 
     def _place_initial_sl_locked(self, pos: ActivePosition) -> None:
         spec = INDEX_SPECS[pos.index_name]
-        dyn_pct = float(getattr(self.settings, "dynamic_sl_pct", 0.0) or 0.0)
-        sl_pts = spec.sl_pts
-        if dyn_pct > 0 and pos.entry_avg_price > 0:
-            cap_pts = 140.0 if pos.index_name == "BANKNIFTY" else 70.0
-            sl_pts = max(spec.sl_pts, min(cap_pts, pos.entry_avg_price * dyn_pct))
-            max_loss_cap = self.get_dynamic_max_daily_loss()
-            if pos.initial_qty > 0 and max_loss_cap > 0:
-                sl_pts = min(sl_pts, max(spec.sl_pts, (max_loss_cap * 0.90) / pos.initial_qty))
+        if getattr(pos, "opt_sl_cap_pts", None) is not None and float(pos.opt_sl_cap_pts) > 0:
+            sl_pts = float(pos.opt_sl_cap_pts)
+        else:
+            dyn_pct = float(getattr(self.settings, "dynamic_sl_pct", 0.0) or 0.0)
+            sl_pts = spec.sl_pts
+            if dyn_pct > 0 and pos.entry_avg_price > 0:
+                cap_pts = 140.0 if pos.index_name == "BANKNIFTY" else 70.0
+                sl_pts = max(spec.sl_pts, min(cap_pts, pos.entry_avg_price * dyn_pct))
+                max_loss_cap = self.get_dynamic_max_daily_loss()
+                if pos.initial_qty > 0 and max_loss_cap > 0:
+                    sl_pts = min(sl_pts, max(spec.sl_pts, (max_loss_cap * 0.90) / pos.initial_qty))
         trig_px = round(max(0.1, pos.entry_avg_price - sl_pts), 1)
         limit_px = round(max(0.05, trig_px - spec.sl_buffer_pts), 1)
         prd_type = getattr(pos, "product_type", getattr(INDEX_SPECS.get(pos.index_name), "product_type", "M"))
@@ -684,6 +709,10 @@ class RiskManager:
             return
 
         pos.unrealized_pnl = round((ltp - pos.entry_avg_price) * pos.remaining_qty, 2)
+        if getattr(pos, "pure_supertrend_trail", False):
+            # H1 Hybrid rides full quantity strictly with Spot ATR SL + 35pt Cap + Supertrend(10,3) trail
+            return
+
         spec = INDEX_SPECS[index_name]
         gain = ltp - pos.entry_avg_price
 
@@ -952,6 +981,46 @@ class RiskManager:
             logger.info("Manually exited %d position(s) for %s (%s)", len(matching), index_name, reason)
             return True
 
+    def check_spot_atr_stop_exit(
+        self,
+        index_name: str,
+        spot_low: float,
+        spot_high: float,
+    ) -> bool:
+        """Exit active Hybrid position if closed 5m spot bar breaches its HTF ATR stop level."""
+        with self._lock:
+            matching = [
+                p for k, p in list(self.positions.items())
+                if (k == index_name or p.index_name == index_name)
+                and p.state in {
+                    PositionState.OPEN_FULL,
+                    PositionState.OPEN_FULL_BREAKEVEN,
+                    PositionState.OPEN_PARTIAL_TRAILING,
+                }
+                and getattr(p, "spot_sl_price", None) is not None
+            ]
+            if not matching:
+                return False
+            exited_any = False
+            for pos in matching:
+                sl_lv = float(pos.spot_sl_price)
+                hit = (
+                    (pos.signal_type == "CE" and spot_low <= sl_lv)
+                    or (pos.signal_type == "PE" and spot_high >= sl_lv)
+                )
+                if hit:
+                    logger.info(
+                        "Spot ATR stop triggered for %s (%s): low=%.2f high=%.2f vs spot_sl=%.2f",
+                        pos.contract.tradingsymbol,
+                        pos.signal_type,
+                        spot_low,
+                        spot_high,
+                        sl_lv,
+                    )
+                    self._exit_position_locked(pos, "SPOT_ATR_SL")
+                    exited_any = True
+            return exited_any
+
     def check_supertrend_trailing_exit(
         self,
         index_name: str,
@@ -960,14 +1029,14 @@ class RiskManager:
         supertrend_dir: int,
     ) -> bool:
         """Exit open CE if 5m spot candle closes below Supertrend(10,3) line, or PE if it closes above."""
-        if not getattr(self.settings, "use_supertrend_filter", False):
-            return False
         if supertrend_line is None or supertrend_dir == 0:
             return False
+        global_st = bool(getattr(self.settings, "use_supertrend_filter", False))
         with self._lock:
             matching = [
                 p for k, p in list(self.positions.items())
                 if (k == index_name or p.index_name == index_name)
+                and (global_st or getattr(p, "pure_supertrend_trail", False))
                 and p.state in {
                     PositionState.OPEN_FULL,
                     PositionState.OPEN_FULL_BREAKEVEN,

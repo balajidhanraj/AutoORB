@@ -130,6 +130,13 @@ class AppSettings(BaseModel):
     min_vwap_slope_pct: float = Field(default=0.02)
     dynamic_sl_pct: float = Field(default=0.0)
     nifty_use_ema_body_filter: bool = Field(default=True)
+    nifty_use_htf_swing_hybrid: bool = Field(default=True)
+    nifty_htf_swing_len: int = Field(default=2)
+    nifty_htf_break_buf_atr: float = Field(default=0.1)
+    nifty_htf_stop_atr_mult: float = Field(default=0.5)
+    nifty_htf_opt_sl_cap: float = Field(default=35.0)
+    nifty_htf_entry_start_time: time = Field(default=time(9, 30, 0))
+    nifty_htf_max_trades_per_day: int = Field(default=2)
     banknifty_be_pyramiding: bool = Field(default=False)
     tuesday_expiry_boost: bool = Field(default=True)
     max_weekly_losses: int = Field(default=0)
@@ -223,6 +230,12 @@ def load_settings(env_path: str | Path | None = None) -> AppSettings:
         min_vwap_slope_pct=float(os.getenv("MIN_VWAP_SLOPE_PCT", "0.02") or 0.02),
         dynamic_sl_pct=float(os.getenv("DYNAMIC_SL_PCT", "0.0") or 0.0),
         nifty_use_ema_body_filter=_parse_bool(os.getenv("NIFTY_USE_EMA_BODY_FILTER"), default=True),
+        nifty_use_htf_swing_hybrid=_parse_bool(os.getenv("NIFTY_USE_HTF_SWING_HYBRID"), default=True),
+        nifty_htf_swing_len=int(os.getenv("NIFTY_HTF_SWING_LEN", "2") or 2),
+        nifty_htf_break_buf_atr=float(os.getenv("NIFTY_HTF_BREAK_BUF_ATR", "0.1") or 0.1),
+        nifty_htf_stop_atr_mult=float(os.getenv("NIFTY_HTF_STOP_ATR_MULT", "0.5") or 0.5),
+        nifty_htf_opt_sl_cap=float(os.getenv("NIFTY_HTF_OPT_SL_CAP", "35.0") or 35.0),
+        nifty_htf_max_trades_per_day=int(os.getenv("NIFTY_HTF_MAX_TRADES_PER_DAY", "2") or 2),
         banknifty_be_pyramiding=_parse_bool(os.getenv("BANKNIFTY_BE_PYRAMIDING"), default=False),
         tuesday_expiry_boost=_parse_bool(os.getenv("TUESDAY_EXPIRY_BOOST"), default=True),
         max_weekly_losses=int(os.getenv("MAX_WEEKLY_LOSSES", "0") or 0),

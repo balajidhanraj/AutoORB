@@ -927,6 +927,9 @@
             if (!arr.length || arr[arr.length - 1] !== ltp) { arr.push(ltp); if (arr.length > 24) arr.shift(); }
           }
           const isEnabled = enMap[idx] !== false;
+          const isHybrid = (info.strategy_mode || r.strategy_mode) === 'HTF_SWING_HYBRID';
+          const bandHi = isHybrid ? (info.htf_swing_high ?? info.orh) : info.orh;
+          const bandLo = isHybrid ? (info.htf_swing_low ?? info.orl) : info.orl;
           const isBear = r.radar_state === 'IMMINENT_PE_BREAKOUT' || info.supertrend_dir === -1;
           const ready = Number(r.readiness_pct || 0);
           const lots = Number(r.lots || 1);
@@ -934,14 +937,22 @@
           const prd = r.product_type || 'M';
           const stDir = info.supertrend_dir ?? r.supertrend_dir;
           const stVal = info.supertrend_value ?? r.supertrend_value ?? info.supertrend;
-          const gates = [
-            ['SYS', r.system_ready],
-            ['VIX', r.vix_ready],
-            ['ORB', r.orb_ready],
-            ['PX', r.ce_price_ok || r.pe_price_ok],
-            ['RSI', r.ce_rsi_ok || r.pe_rsi_ok],
-            ['ST(10,3)', stDir === 1 || stDir === -1 || Boolean(r.ce_price_ok || r.pe_price_ok)]
-          ];
+          const gates = isHybrid
+            ? [
+                ['SYS', r.system_ready],
+                ['VIX', r.vix_ready],
+                ['15m', r.orb_ready],
+                ['BRK', r.ce_price_ok || r.pe_price_ok],
+                ['ST', stDir === 1 || stDir === -1]
+              ]
+            : [
+                ['SYS', r.system_ready],
+                ['VIX', r.vix_ready],
+                ['ORB', r.orb_ready],
+                ['PX', r.ce_price_ok || r.pe_price_ok],
+                ['RSI', r.ce_rsi_ok || r.pe_rsi_ok],
+                ['ST(10,3)', stDir === 1 || stDir === -1 || Boolean(r.ce_price_ok || r.pe_price_ok)]
+              ];
 
           const idxPositions = positions.filter(p => p.index_name === idx);
           const idxClosed = closedTrades.filter(t => (t.index_name || '').toUpperCase() === idx || (t.tradingsymbol || '').toUpperCase().startsWith(idx));
@@ -956,7 +967,7 @@
               <div class="min-w-0">
                 <div class="flex items-center gap-1.5 flex-wrap">
                   <span class="db-serial">#${sIdx + 1}</span>
-                  <span class="font-headline-md text-[15px] font-bold text-on-surface">${esc(idx)} ORB + ST(10,3)</span>
+                  <span class="font-headline-md text-[15px] font-bold text-on-surface">${esc(idx)} ${isHybrid ? '15m HTF + ST(10,3)' : 'ORB + ST(10,3)'}</span>
                   <span class="db-strat__chip ${isLiveMode ? 'db-strat__chip--live' : 'db-strat__chip--paper'}">${isLiveMode ? 'LIVE AUTO' : 'PAPER'}</span>
                 </div>
                 <span class="font-data-mono-sm text-on-surface-variant block truncate mt-0.5">Spot <b class="${isBear ? 'text-loss' : 'text-profit'}">${A.fmtNum(ltp, 2)}</b> &bull; ${r.total_qty || (lots * lotSize)} qty &bull; Margin ${A.fmtINR(r.est_margin || 0, 0)}</span>
@@ -967,11 +978,11 @@
               </div>
             </div>
 
-            <div class="h-10 bg-surface-container-lowest/70 rounded-lg px-1.5 py-1">${A.buildSparklineSvg(spotHist[idx], info.orh, info.orl, !isBear)}</div>
+            <div class="h-10 bg-surface-container-lowest/70 rounded-lg px-1.5 py-1">${A.buildSparklineSvg(spotHist[idx], bandHi, bandLo, !isBear)}</div>
 
             <div class="grid grid-cols-5 gap-1 p-1.5 rounded bg-surface-container-low text-center font-data-mono-sm tabular-nums">
-              <div><span class="font-label-caps text-on-surface-variant block">ORH</span><b class="text-profit">${A.fmtNum(info.orh, 0)}</b></div>
-              <div><span class="font-label-caps text-on-surface-variant block">ORL</span><b class="text-loss">${A.fmtNum(info.orl, 0)}</b></div>
+              <div><span class="font-label-caps text-on-surface-variant block">${isHybrid ? '15m RED' : 'ORH'}</span><b class="text-profit">${A.fmtNum(bandHi, 0)}</b></div>
+              <div><span class="font-label-caps text-on-surface-variant block">${isHybrid ? '15m GRN' : 'ORL'}</span><b class="text-loss">${A.fmtNum(bandLo, 0)}</b></div>
               <div><span class="font-label-caps text-on-surface-variant block">VWAP</span><b class="text-on-surface">${A.fmtNum(info.vwap, 0)}</b></div>
               <div><span class="font-label-caps text-on-surface-variant block">RSI</span><b class="text-on-surface">${info.rsi !== null && info.rsi !== undefined ? Number(info.rsi).toFixed(0) : '--'}</b></div>
               <div><span class="font-label-caps text-on-surface-variant block">ST(10,3)</span><b class="${stDir === -1 ? 'text-loss' : 'text-profit'}">${stVal ? A.fmtNum(stVal, 0) : (stDir === -1 ? 'BEAR' : 'BULL')}</b></div>

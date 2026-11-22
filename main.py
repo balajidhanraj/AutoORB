@@ -368,6 +368,11 @@ class TradingSystemOrchestrator:
             india_vix=vix,
         )
         st_state = self.strategy.get_state(index_name)
+        self.risk_manager.check_spot_atr_stop_exit(
+            index_name=index_name,
+            spot_low=float(closed_candle.low),
+            spot_high=float(closed_candle.high),
+        )
         self.risk_manager.check_supertrend_trailing_exit(
             index_name=index_name,
             spot_close=closed_candle.close,
@@ -1006,6 +1011,11 @@ class TradingSystemOrchestrator:
         """Compute live 5-gate auto-order readiness metrics for an index."""
         spec = INDEX_SPECS[index_name]
         st = self.strategy.get_state(index_name)
+        is_hybrid = (
+            index_name == "NIFTY"
+            and bool(getattr(self.settings, "nifty_use_htf_swing_hybrid", False))
+        )
+        strategy_mode = "HTF_SWING_HYBRID" if is_hybrid else "ORB_5GATE"
 
         system_ready = (
             not self.risk_manager.halted
@@ -1013,31 +1023,42 @@ class TradingSystemOrchestrator:
             and index_name not in self.risk_manager.positions
         )
         vix_ready = (vix is not None and vix >= self.settings.min_india_vix)
-        orb_ready = bool(st.is_locked and not st.no_trade_reason)
-        entry_start = getattr(self.settings, "entry_start_time", dt_time(10, 0, 0))
-        entry_end = getattr(self.settings, "entry_cutoff_time", dt_time(13, 15, 0))
-        in_window = (
-            now_ist.weekday() < 5
-            and (entry_start <= now_ist.time() <= entry_end)
-        )
-
-        ce_price_ok = bool(
-            spot_ltp is not None
-            and st.orh is not None
-            and spot_ltp > st.orh
-            and (st.last_vwap is None or spot_ltp > st.last_vwap)
-        )
-        pe_price_ok = bool(
-            spot_ltp is not None
-            and st.orl is not None
-            and spot_ltp < st.orl
-            and (st.last_vwap is None or spot_ltp < st.last_vwap)
-        )
-        ce_rsi_ok = bool(st.last_rsi is not None and (st.last_rsi > 60.0))
-        pe_rsi_ok = bool(st.last_rsi is not None and (st.last_rsi < 40.0))
-
-        dist_to_orh = round(st.orh - spot_ltp, 2) if (spot_ltp is not None and st.orh is not None) else None
-        dist_to_orl = round(spot_ltp - st.orl, 2) if (spot_ltp is not None and st.orl is not None) else None
+        if is_hybrid:
+            orb_ready = bool(st.htf_swing_high is not None and st.htf_swing_low is not None and st.htf_atr is not None)
+            entry_start = getattr(self.settings, "nifty_htf_entry_start_time", dt_time(9, 30, 0))
+            entry_end = getattr(self.settings, "entry_cutoff_time", dt_time(13, 15, 0))
+            in_window = now_ist.weekday() < 5 and (entry_start <= now_ist.time() <= entry_end)
+            buf_pts = (float(getattr(self.settings, "nifty_htf_break_buf_atr", 0.1) or 0.1) * st.htf_atr) if st.htf_atr else 0.0
+            ce_price_ok = bool(spot_ltp is not None and st.htf_swing_high is not None and spot_ltp > (st.htf_swing_high + buf_pts))
+            pe_price_ok = bool(spot_ltp is not None and st.htf_swing_low is not None and spot_ltp < (st.htf_swing_low - buf_pts))
+            ce_rsi_ok = bool(st.last_supertrend_dir == 1)
+            pe_rsi_ok = bool(st.last_supertrend_dir == -1)
+            dist_to_orh = round(st.htf_swing_high - spot_ltp, 2) if (spot_ltp is not None and st.htf_swing_high is not None) else None
+            dist_to_orl = round(spot_ltp - st.htf_swing_low, 2) if (spot_ltp is not None and st.htf_swing_low is not None) else None
+        else:
+            orb_ready = bool(st.is_locked and not st.no_trade_reason)
+            entry_start = getattr(self.settings, "entry_start_time", dt_time(10, 0, 0))
+            entry_end = getattr(self.settings, "entry_cutoff_time", dt_time(13, 15, 0))
+            in_window = (
+                now_ist.weekday() < 5
+                and (entry_start <= now_ist.time() <= entry_end)
+            )
+            ce_price_ok = bool(
+                spot_ltp is not None
+                and st.orh is not None
+                and spot_ltp > st.orh
+                and (st.last_vwap is None or spot_ltp > st.last_vwap)
+            )
+            pe_price_ok = bool(
+                spot_ltp is not None
+                and st.orl is not None
+                and spot_ltp < st.orl
+                and (st.last_vwap is None or spot_ltp < st.last_vwap)
+            )
+            ce_rsi_ok = bool(st.last_rsi is not None and (st.last_rsi > 60.0))
+            pe_rsi_ok = bool(st.last_rsi is not None and (st.last_rsi < 40.0))
+            dist_to_orh = round(st.orh - spot_ltp, 2) if (spot_ltp is not None and st.orh is not None) else None
+            dist_to_orl = round(spot_ltp - st.orl, 2) if (spot_ltp is not None and st.orl is not None) else None
 
         # Dynamic Position Sizing based on available funds:
         # Tuesday: 75% allocation; Mon/Wed/Thu/Fri: 50% allocation
@@ -1092,10 +1113,37 @@ class TradingSystemOrchestrator:
 
         if index_name in self.risk_manager.positions:
             radar_state = "ACTIVE_POSITION"
-            radar_summary = "Auto position active — SL-LMT, Breakeven (+25/+55) & Trailing active."
+            radar_summary = (
+                "Hybrid H1 active — Spot ATR SL, 35pt Cap & Supertrend(10,3) Close Trail armed."
+                if is_hybrid
+                else "Auto position active — SL-LMT, Breakeven (+25/+55) & Trailing active."
+            )
         elif self.risk_manager.halted or self.risk_manager.trades_taken_today >= self.settings.max_trades_per_day:
             radar_state = "HALTED_OR_MAX_TRADES"
             radar_summary = f"Auto entries paused: {self.risk_manager.halt_reason or 'Max daily trades reached'}."
+        elif is_hybrid:
+            if not orb_ready:
+                radar_state = "WAITING_15M_SWINGS"
+                radar_summary = "Warming 15m HTF swing high/low & ATR(14) levels for Hybrid H1 breakout scan."
+            elif ce_price_ok:
+                radar_state = "IMMINENT_CE_BREAKOUT"
+                radar_summary = (
+                    f"15m Red break + ST(10,3) Bull + VIX >= 12! Auto-BUY {candidate_ce} arms on 5m close."
+                    if (ce_rsi_ok and vix_ready and in_window)
+                    else f"Above 15m Red ({st.htf_swing_high:.1f}) — awaiting ST(10,3) Bull & VIX >= 12."
+                )
+            elif pe_price_ok:
+                radar_state = "IMMINENT_PE_BREAKOUT"
+                radar_summary = (
+                    f"15m Green break + ST(10,3) Bear + VIX >= 12! Auto-BUY {candidate_pe} arms on 5m close."
+                    if (pe_rsi_ok and vix_ready and in_window)
+                    else f"Below 15m Green ({st.htf_swing_low:.1f}) — awaiting ST(10,3) Bear & VIX >= 12."
+                )
+            else:
+                radar_state = "SCANNING_RANGE"
+                orh_txt = f"{dist_to_orh:+.2f}" if dist_to_orh is not None else "--"
+                orl_txt = f"{dist_to_orl:+.2f}" if dist_to_orl is not None else "--"
+                radar_summary = f"15m Swing Band: {orh_txt} pts to Red ({st.htf_swing_high}) | {orl_txt} pts above Green ({st.htf_swing_low})."
         elif st.no_trade_reason:
             radar_state = "NO_TRADE_DAY"
             radar_summary = f"No auto-trade today: {st.no_trade_reason}."
@@ -1125,6 +1173,7 @@ class TradingSystemOrchestrator:
             radar_summary = f"Inside range: {orh_txt} pts to ORH (CE) | {orl_txt} pts above ORL (PE)."
 
         return {
+            "strategy_mode": strategy_mode,
             "system_ready": system_ready,
             "vix_ready": vix_ready,
             "orb_ready": orb_ready,
@@ -1135,6 +1184,11 @@ class TradingSystemOrchestrator:
             "pe_rsi_ok": pe_rsi_ok,
             "dist_to_orh": dist_to_orh,
             "dist_to_orl": dist_to_orl,
+            "htf_swing_high": st.htf_swing_high,
+            "htf_swing_low": st.htf_swing_low,
+            "htf_atr": st.htf_atr,
+            "supertrend_value": st.last_supertrend,
+            "supertrend_dir": st.last_supertrend_dir,
             "candidate_ce": candidate_ce,
             "candidate_pe": candidate_pe,
             "actual_symbol_ce": actual_symbol_ce,
@@ -1292,10 +1346,21 @@ class TradingSystemOrchestrator:
         for name, spec in INDEX_SPECS.items():
             st = self.strategy.get_state(name)
             spot_ltp = self.client.get_ltp(spec.spot_key) or st.last_spot
+            is_hybrid = (
+                name == "NIFTY"
+                and bool(getattr(self.settings, "nifty_use_htf_swing_hybrid", False))
+            )
             indices_data[name] = {
+                "strategy_mode": "HTF_SWING_HYBRID" if is_hybrid else "ORB_5GATE",
                 "spot_ltp": spot_ltp,
                 "orh": st.orh,
                 "orl": st.orl,
+                "htf_swing_high": st.htf_swing_high,
+                "htf_swing_low": st.htf_swing_low,
+                "htf_atr": st.htf_atr,
+                "htf_bias": st.htf_bias,
+                "supertrend_value": st.last_supertrend,
+                "supertrend_dir": st.last_supertrend_dir,
                 "range_pct": st.range_pct,
                 "is_locked": st.is_locked,
                 "no_trade_reason": st.no_trade_reason,

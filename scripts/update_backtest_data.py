@@ -31,7 +31,7 @@ from broker.auth import ShoonyaAuthenticator
 from broker.instrument_mapper import get_target_expiry
 from broker.shoonya_client import ShoonyaClient
 from config.settings import INDIA_VIX_EXCHANGE, INDIA_VIX_TOKEN, INDEX_SPECS, IST, IndexSpec, load_settings
-from engine.indicators import calculate_ema, calculate_supertrend
+from engine.indicators import build_htf_15m_series, calculate_ema, calculate_supertrend
 from scripts.backtest_orb import (
     Candle,
     calculate_intraday_vwap,
@@ -386,6 +386,108 @@ def _simulate_fixed_sl_trade(
     }
 
 
+def _simulate_nifty_htf_hybrid_trade(
+    spec: IndexSpec,
+    sig_type: str,
+    strike: int,
+    expiry_date: date,
+    entry_candle: Candle,
+    day_candles: List[Candle],
+    vix_map: Dict[datetime, float],
+    total_qty: int,
+    p0: float,
+    spot_sl: Optional[float],
+    st_by_ts: Dict[datetime, Tuple[Optional[float], int]],
+    opt_sl_cap: float = 35.0,
+    exit_slippage: float = 1.0,
+) -> Dict[str, Any]:
+    """Simulate H1 Hybrid NIFTY trade: Spot ATR SL + 35pt Option SL Cap + Pure Supertrend(10,3) Trail + 15:15 EOD."""
+    opt_sl = max(1.0, p0 - opt_sl_cap)
+    exit_ts = entry_candle.timestamp
+    exit_time_str = "15:15"
+    exit_px = p0
+    exit_reason = "EOD_SQUAREOFF"
+    last_vix = vix_map.get(entry_candle.timestamp, 14.5)
+
+    subsequent = [c for c in day_candles if c.timestamp > entry_candle.timestamp]
+    for bar in subsequent:
+        b_time = bar.timestamp.time()
+        vix_val = vix_map.get(bar.timestamp, last_vix)
+        last_vix = vix_val
+        sigma = max(0.09, vix_val / 100.0)
+        t_yr = _time_to_expiry_years(bar.timestamp, expiry_date)
+
+        spot_worst = bar.low if sig_type == "CE" else bar.high
+        o_low = bs_option_price(spot_worst, strike, t_yr, sigma, sig_type)
+        o_close = bs_option_price(bar.close, strike, t_yr, sigma, sig_type)
+
+        spot_sl_hit = False
+        if spot_sl is not None:
+            spot_sl_hit = (bar.low <= spot_sl) if sig_type == "CE" else (bar.high >= spot_sl)
+        opt_sl_hit = o_low <= opt_sl
+
+        if spot_sl_hit and spot_sl is not None:
+            px_at_spot = max(0.5, bs_option_price(spot_sl, strike, t_yr, sigma, sig_type) - exit_slippage)
+            exit_px = max(0.5, opt_sl - exit_slippage) if opt_sl_hit else max(px_at_spot, opt_sl - exit_slippage)
+            exit_ts = bar.timestamp
+            exit_time_str = bar.timestamp.strftime("%H:%M")
+            exit_reason = "SPOT_ATR_SL"
+            break
+        if opt_sl_hit:
+            exit_px = max(0.5, opt_sl - exit_slippage)
+            exit_ts = bar.timestamp
+            exit_time_str = bar.timestamp.strftime("%H:%M")
+            exit_reason = "STOP_LOSS"
+            break
+
+        st_line, st_dir = st_by_ts.get(bar.timestamp, (None, 0))
+        if st_line is not None and st_dir != 0:
+            st_crossed = (
+                (sig_type == "CE" and (bar.close < st_line or st_dir == -1))
+                or (sig_type == "PE" and (bar.close > st_line or st_dir == 1))
+            )
+            if st_crossed:
+                exit_px = max(0.5, o_close - exit_slippage)
+                exit_ts = bar.timestamp
+                exit_time_str = bar.timestamp.strftime("%H:%M")
+                exit_reason = "SUPERTREND_TRAIL"
+                break
+
+        if b_time >= time(15, 15):
+            exit_px = max(0.5, o_close - exit_slippage)
+            exit_ts = bar.timestamp
+            exit_time_str = bar.timestamp.strftime("%H:%M")
+            exit_reason = "EOD_SQUAREOFF"
+            break
+    else:
+        if subsequent:
+            last_bar = subsequent[-1]
+            exit_ts = last_bar.timestamp
+            exit_time_str = last_bar.timestamp.strftime("%H:%M")
+            sigma = max(0.09, vix_map.get(last_bar.timestamp, last_vix) / 100.0)
+            t_yr = _time_to_expiry_years(last_bar.timestamp, expiry_date)
+            exit_px = max(0.5, bs_option_price(last_bar.close, strike, t_yr, sigma, sig_type) - exit_slippage)
+
+    pts_gain = exit_px - p0
+    total_gross = total_qty * pts_gain
+    charges = calculate_transaction_charges(total_qty * p0, total_qty * exit_px)
+    net_pnl = round(total_gross - charges, 2)
+    return {
+        "exit_ts": exit_ts,
+        "be_ts": None,
+        "t1_ts": None,
+        "exit_time_str": exit_time_str,
+        "exit_px": round(exit_px, 2),
+        "pts": round(pts_gain, 2),
+        "gross": round(total_gross, 2),
+        "charges": round(charges, 2),
+        "net": net_pnl,
+        "reason": exit_reason,
+        "be": False,
+        "partial": False,
+    }
+
+
 def run_nf_bnf_sequential_backtest(
     candles_by_index: Dict[str, List[Candle]],
     vix_map: Optional[Dict[datetime, float]] = None,
@@ -394,7 +496,8 @@ def run_nf_bnf_sequential_backtest(
     max_trades_per_day: int = 4,
     daily_loss_limit: float = 10000.0,
 ) -> List[Dict[str, Any]]:
-    """Run NIFTY + BANKNIFTY 30m ORB (10:00-13:15) with strict GLOBAL single-active-order lock (Rs 1L capital safe)."""
+    """Run Hybrid NIFTY (H1: 15m HTF Swing Break + VIX >= 12 + ST(10,3)) + BANKNIFTY (5-Gate ORB + ST(10,3))
+    with strict GLOBAL single-active-order lock (Rs 1L capital safe)."""
     vix_lookup = vix_map or {}
     # Priority order when both trigger on the exact same candle: BANKNIFTY first, then NIFTY
     indices = ("BANKNIFTY", "NIFTY")
@@ -406,6 +509,16 @@ def run_nf_bnf_sequential_backtest(
             d = c.timestamp.date()
             days_by_idx[idx].setdefault(d, []).append(c)
             all_dates_set.add(d)
+
+    # Precompute non-repainting 15m HTF Swing levels for NIFTY
+    nf_candles = candles_by_index.get("NIFTY", [])
+    nf_htf_series = build_htf_15m_series(nf_candles, swing_len=2, atr_period=14)
+    nf_htf_by_ts: Dict[datetime, Tuple[Optional[float], Optional[float], Optional[float], int, Optional[Tuple[Optional[float], Optional[float], Optional[float], int]], Optional[float]]] = {}
+    for pos_k, c in enumerate(nf_candles):
+        htf_c, htf_f, htf_a, htf_b = nf_htf_series[pos_k]
+        prev_tuple = nf_htf_series[pos_k - 1] if pos_k >= 1 else None
+        prev_cls = nf_candles[pos_k - 1].close if pos_k >= 1 else None
+        nf_htf_by_ts[c.timestamp] = (htf_c, htf_f, htf_a, htf_b, prev_tuple, prev_cls)
 
     seen_by_idx: Dict[str, List[Candle]] = {idx: [] for idx in indices}
     prev_close_by_idx: Dict[str, Optional[float]] = {idx: None for idx in indices}
@@ -482,7 +595,7 @@ def run_nf_bnf_sequential_backtest(
 
             if day_halted or trades_today_global >= max_trades_per_day:
                 continue
-            if not (time(10, 0) <= ts.time() <= time(13, 15)):
+            if not (time(9, 30) <= ts.time() <= time(13, 15)):
                 continue
             # Strict GLOBAL single-active-order lock: hold ALL new signals while ANY order is running
             if global_active_exit_ts is not None:
@@ -491,81 +604,141 @@ def run_nf_bnf_sequential_backtest(
             for idx in indices:
                 if global_active_exit_ts is not None:
                     break
-                if sl_hit_by_idx[idx] or orb_info.get(idx) is None:
-                    continue
                 pos_i = bars_ts_idx[idx].get(ts)
                 if pos_i is None:
                     continue
                 dc = days_by_idx[idx][sess_date]
                 candle = dc[pos_i]
-                orh, orl = orb_info[idx]  # type: ignore[misc]
-
-                vwap = calculate_intraday_vwap(dc[: pos_i + 1], session_date=sess_date)
-                closes_win = [c.close for c in seen_by_idx[idx][-120:]]
-                rsi = calculate_wilder_rsi(closes_win, period=14)
-                prev_c = prev_close_by_idx[idx]
-
-                ce_signal = (
-                    (candle.close > orh)
-                    and (vwap is None or candle.close > vwap)
-                    and (rsi is not None and rsi > 60.0)
-                    and (prev_c is None or candle.close >= prev_c)
-                )
-                pe_signal = (
-                    (candle.close < orl)
-                    and (vwap is None or candle.close < vwap)
-                    and (rsi is not None and rsi < 40.0)
-                    and (prev_c is None or candle.close <= prev_c)
-                )
-
-                # Multi-confirmation filter for both NIFTY & BANKNIFTY:
-                # Supertrend(10, 3) + 20-EMA + Decisive Candle Body >= 0.40
-                if ce_signal or pe_signal:
-                    st_val, st_dir = calculate_supertrend(seen_by_idx[idx][-60:], period=10, multiplier=3.0)
-                    if st_val is not None and st_dir != 0:
-                        if ce_signal and (st_dir != 1 or candle.close <= st_val):
-                            ce_signal = False
-                        if pe_signal and (st_dir != -1 or candle.close >= st_val):
-                            pe_signal = False
-                    ema20 = calculate_ema(closes_win, period=20)
-                    if ema20 is not None:
-                        if ce_signal and candle.close <= ema20:
-                            ce_signal = False
-                        if pe_signal and candle.close >= ema20:
-                            pe_signal = False
-                    c_range = candle.high - candle.low
-                    c_body = abs(candle.close - candle.open)
-                    if c_range > 0 and (c_body / c_range) < 0.40:
-                        ce_signal = False
-                        pe_signal = False
-
-                if not ce_signal and not pe_signal:
-                    continue
-
                 spec = INDEX_SPECS[idx]
-                sig_type = "CE" if ce_signal else "PE"
-                atm_strike = int(round(candle.close / spec.strike_step) * spec.strike_step)
-                expiry_d = get_target_expiry(idx, sess_date)
-                iv_mult = 1.12 if idx == "BANKNIFTY" else 1.0
-                vix_now = vix_lookup.get(ts, 14.5)
-                sigma_now = max(0.09, (vix_now / 100.0) * iv_mult)
-                t_entry = _time_to_expiry_years(ts, expiry_d)
-                p0 = round(bs_option_price(candle.close, atm_strike, t_entry, sigma_now, sig_type) + 1.0, 2)
-                total_qty = spec.lot_size * day_lots
 
-                res = _simulate_fixed_sl_trade(
-                    index_name=idx,
-                    spec=spec,
-                    sig_type=sig_type,
-                    strike=atm_strike,
-                    expiry_date=expiry_d,
-                    entry_candle=candle,
-                    day_candles=dc,
-                    vix_map=vix_lookup,
-                    total_qty=total_qty,
-                    p0=p0,
-                    st_by_ts=day_st_map[idx],
-                )
+                if idx == "NIFTY":
+                    # Hybrid H1 NIFTY (15m HTF Swing Break + VIX >= 12 + ST(10,3), max 2 trades/day)
+                    if trades_by_idx["NIFTY"] >= 2:
+                        continue
+                    vix_now = vix_lookup.get(ts, 14.5)
+                    if vix_now < 12.0:
+                        continue
+                    htf_info = nf_htf_by_ts.get(ts)
+                    if not htf_info:
+                        continue
+                    htf_c, htf_f, htf_a, _htf_b, prev_htf_tup, prev_cls = htf_info
+                    if htf_a is None or prev_cls is None or prev_htf_tup is None:
+                        continue
+                    st_val, st_dir = day_st_map["NIFTY"].get(ts, (None, 0))
+                    if st_val is None or st_dir == 0:
+                        continue
+                    buf_pts = 0.1 * htf_a
+                    prev_c_lv, prev_f_lv, prev_a, _ = prev_htf_tup
+                    prev_buf = (0.1 * prev_a) if prev_a is not None else buf_pts
+                    brk_up = (
+                        htf_c is not None
+                        and candle.close > (htf_c + buf_pts)
+                        and prev_cls <= ((prev_c_lv if prev_c_lv is not None else htf_c) + (prev_buf if prev_c_lv is not None else buf_pts))
+                    )
+                    brk_dn = (
+                        htf_f is not None
+                        and candle.close < (htf_f - buf_pts)
+                        and prev_cls >= ((prev_f_lv if prev_f_lv is not None else htf_f) - (prev_buf if prev_f_lv is not None else buf_pts))
+                    )
+                    ce_signal = brk_up and (st_dir == 1 and candle.close > st_val)
+                    pe_signal = brk_dn and (st_dir == -1 and candle.close < st_val)
+                    if not ce_signal and not pe_signal:
+                        continue
+
+                    sig_type = "CE" if ce_signal else "PE"
+                    spot_sl = (
+                        max(0.0, min(candle.low, htf_c) - 0.5 * htf_a)
+                        if ce_signal and htf_c is not None
+                        else (max(candle.high, htf_f) + 0.5 * htf_a if htf_f is not None else None)
+                    )
+                    atm_strike = int(round(candle.close / spec.strike_step) * spec.strike_step)
+                    expiry_d = get_target_expiry(idx, sess_date)
+                    sigma_now = max(0.09, vix_now / 100.0)
+                    t_entry = _time_to_expiry_years(ts, expiry_d)
+                    p0 = round(bs_option_price(candle.close, atm_strike, t_entry, sigma_now, sig_type) + 0.5, 2)
+                    total_qty = spec.lot_size * day_lots
+                    res = _simulate_nifty_htf_hybrid_trade(
+                        spec=spec,
+                        sig_type=sig_type,
+                        strike=atm_strike,
+                        expiry_date=expiry_d,
+                        entry_candle=candle,
+                        day_candles=dc,
+                        vix_map=vix_lookup,
+                        total_qty=total_qty,
+                        p0=p0,
+                        spot_sl=spot_sl,
+                        st_by_ts=day_st_map["NIFTY"],
+                        opt_sl_cap=35.0,
+                    )
+                else:
+                    # BANKNIFTY: Keep exact proven 5-Gate 30m ORB (10:00-13:15) + Supertrend(10,3)
+                    if not (time(10, 0) <= ts.time() <= time(13, 15)):
+                        continue
+                    if sl_hit_by_idx[idx] or orb_info.get(idx) is None:
+                        continue
+                    orh, orl = orb_info[idx]  # type: ignore[misc]
+                    vwap = calculate_intraday_vwap(dc[: pos_i + 1], session_date=sess_date)
+                    closes_win = [c.close for c in seen_by_idx[idx][-120:]]
+                    rsi = calculate_wilder_rsi(closes_win, period=14)
+                    prev_c = prev_close_by_idx[idx]
+
+                    ce_signal = (
+                        (candle.close > orh)
+                        and (vwap is None or candle.close > vwap)
+                        and (rsi is not None and rsi > 60.0)
+                        and (prev_c is None or candle.close >= prev_c)
+                    )
+                    pe_signal = (
+                        (candle.close < orl)
+                        and (vwap is None or candle.close < vwap)
+                        and (rsi is not None and rsi < 40.0)
+                        and (prev_c is None or candle.close <= prev_c)
+                    )
+                    if ce_signal or pe_signal:
+                        st_val, st_dir = calculate_supertrend(seen_by_idx[idx][-60:], period=10, multiplier=3.0)
+                        if st_val is not None and st_dir != 0:
+                            if ce_signal and (st_dir != 1 or candle.close <= st_val):
+                                ce_signal = False
+                            if pe_signal and (st_dir != -1 or candle.close >= st_val):
+                                pe_signal = False
+                        ema20 = calculate_ema(closes_win, period=20)
+                        if ema20 is not None:
+                            if ce_signal and candle.close <= ema20:
+                                ce_signal = False
+                            if pe_signal and candle.close >= ema20:
+                                pe_signal = False
+                        c_range = candle.high - candle.low
+                        c_body = abs(candle.close - candle.open)
+                        if c_range > 0 and (c_body / c_range) < 0.40:
+                            ce_signal = False
+                            pe_signal = False
+
+                    if not ce_signal and not pe_signal:
+                        continue
+
+                    sig_type = "CE" if ce_signal else "PE"
+                    atm_strike = int(round(candle.close / spec.strike_step) * spec.strike_step)
+                    expiry_d = get_target_expiry(idx, sess_date)
+                    vix_now = vix_lookup.get(ts, 14.5)
+                    sigma_now = max(0.09, (vix_now / 100.0) * 1.12)
+                    t_entry = _time_to_expiry_years(ts, expiry_d)
+                    p0 = round(bs_option_price(candle.close, atm_strike, t_entry, sigma_now, sig_type) + 1.0, 2)
+                    total_qty = spec.lot_size * day_lots
+
+                    res = _simulate_fixed_sl_trade(
+                        index_name=idx,
+                        spec=spec,
+                        sig_type=sig_type,
+                        strike=atm_strike,
+                        expiry_date=expiry_d,
+                        entry_candle=candle,
+                        day_candles=dc,
+                        vix_map=vix_lookup,
+                        total_qty=total_qty,
+                        p0=p0,
+                        st_by_ts=day_st_map[idx],
+                    )
 
                 trades_today_global += 1
                 trades_by_idx[idx] += 1
