@@ -8,7 +8,7 @@ import time
 from datetime import datetime
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
-from typing import Any, Callable, Optional, Tuple
+from typing import Any, Callable, Dict, Optional, Tuple
 from urllib.parse import parse_qs, urlparse
 
 import pyotp
@@ -128,42 +128,73 @@ class ShoonyaAuthenticator:
         self.last_synced_backup_ip: str = ""
         self.last_ip_sync_status: str = "MONITORING"
         self.last_ip_sync_time: Optional[str] = None
+        self._token_persist_callback: Optional[Callable[[Dict[str, Any]], None]] = None
+
+    def register_token_persist_callback(
+        self,
+        callback: Optional[Callable[[Dict[str, Any]], None]],
+    ) -> None:
+        self._token_persist_callback = callback
 
     @staticmethod
     def _today_ist_str() -> str:
         return datetime.now(IST).strftime("%Y-%m-%d")
 
-    def load_cached_token(self) -> Optional[str]:
-        """Load today's cached OAuth access token and verify it with get_limits()."""
+    def export_token_payload(self) -> Optional[Dict[str, Any]]:
+        token = str(self.settings.shoonya_access_token or getattr(self.api, "access_token", "") or getattr(self.api, "susertoken", "") or "").strip()
+        if not token or not self.last_token_date:
+            return None
+        return {
+            "date": self.last_token_date,
+            "access_token": token,
+            "susertoken": str(getattr(self.api, "susertoken", "") or token).strip(),
+            "use_bearer": bool(getattr(self.api, "_use_bearer", True)),
+            "user_id": self.settings.shoonya_user_id,
+            "created_at": datetime.now(IST).isoformat(),
+        }
+
+    def load_cached_token(self, external_payload: Optional[Dict[str, Any]] = None) -> Optional[str]:
+        """Load today's cached OAuth access token (disk or external store) and verify with get_limits()."""
         token_path = Path(self.settings.token_file_path)
         today_str = self._today_ist_str()
         candidate_token = ""
-
         susertoken = ""
+        use_bearer = True
+
+        candidates: list[Dict[str, Any]] = []
         if token_path.exists():
             try:
-                payload = json.loads(token_path.read_text(encoding="utf-8"))
-                cached_uid = str(payload.get("user_id") or "").strip().upper()
-                expected_uid = self.settings.shoonya_user_id.strip().upper()
-                created_dt_str = str(payload.get("created_at") or "")
-                is_recent = False
-                if created_dt_str:
-                    try:
-                        created_dt = datetime.fromisoformat(created_dt_str)
-                        age_hours = (datetime.now(IST) - created_dt).total_seconds() / 3600.0
-                        if 0 <= age_hours < 18:
-                            is_recent = True
-                    except Exception:
-                        pass
-                if (
-                    (payload.get("date") == today_str or is_recent)
-                    and payload.get("access_token")
-                    and (not cached_uid or not expected_uid or cached_uid == expected_uid)
-                ):
-                    candidate_token = str(payload["access_token"]).strip()
-                    susertoken = str(payload.get("susertoken") or "").strip()
+                disk_payload = json.loads(token_path.read_text(encoding="utf-8"))
+                if isinstance(disk_payload, dict):
+                    candidates.append(disk_payload)
             except Exception as exc:
                 logger.warning("Failed reading token cache %s: %s", token_path, exc)
+        if isinstance(external_payload, dict) and external_payload.get("access_token"):
+            candidates.append(external_payload)
+
+        expected_uid = self.settings.shoonya_user_id.strip().upper()
+        for payload in candidates:
+            cached_uid = str(payload.get("user_id") or "").strip().upper()
+            created_dt_str = str(payload.get("created_at") or "")
+            is_recent = False
+            if created_dt_str:
+                try:
+                    created_dt = datetime.fromisoformat(created_dt_str)
+                    age_hours = (datetime.now(IST) - created_dt).total_seconds() / 3600.0
+                    if 0 <= age_hours < 18:
+                        is_recent = True
+                except Exception:
+                    pass
+            if (
+                (payload.get("date") == today_str or is_recent)
+                and payload.get("access_token")
+                and (not cached_uid or not expected_uid or cached_uid == expected_uid)
+            ):
+                candidate_token = str(payload["access_token"]).strip()
+                susertoken = str(payload.get("susertoken") or "").strip()
+                raw_ub = payload.get("use_bearer", True)
+                use_bearer = raw_ub if isinstance(raw_ub, bool) else str(raw_ub).lower() not in {"false", "0", "no"}
+                break
 
         if not candidate_token and self.settings.shoonya_access_token:
             candidate_token = self.settings.shoonya_access_token
@@ -172,7 +203,15 @@ class ShoonyaAuthenticator:
             return None
 
         try:
-            if susertoken:
+            if not use_bearer:
+                self.api.injectOAuthHeader(
+                    candidate_token,
+                    self.settings.shoonya_user_id,
+                    self.settings.shoonya_account_id,
+                    susertoken=susertoken or candidate_token,
+                    use_bearer=False,
+                )
+            elif susertoken and susertoken != candidate_token:
                 self.api.injectOAuthHeader(
                     candidate_token,
                     self.settings.shoonya_user_id,
@@ -190,8 +229,28 @@ class ShoonyaAuthenticator:
             except TypeError:
                 limits = self.api.get_limits()
             if isinstance(limits, dict) and limits.get("stat") == "Ok":
+                self.settings.shoonya_access_token = candidate_token
                 self.last_login_status = "AUTHENTICATED (CACHED)"
                 self.last_token_date = today_str
+                if not token_path.exists():
+                    try:
+                        token_path.parent.mkdir(parents=True, exist_ok=True)
+                        token_path.write_text(
+                            json.dumps(
+                                {
+                                    "date": today_str,
+                                    "access_token": candidate_token,
+                                    "susertoken": susertoken or candidate_token,
+                                    "use_bearer": use_bearer,
+                                    "user_id": self.settings.shoonya_user_id,
+                                    "created_at": datetime.now(IST).isoformat(),
+                                },
+                                indent=2,
+                            ),
+                            encoding="utf-8",
+                        )
+                    except Exception:
+                        pass
                 logger.info("Loaded and verified cached Shoonya access token for %s", today_str)
                 return candidate_token
         except Exception as exc:
@@ -199,8 +258,8 @@ class ShoonyaAuthenticator:
 
         return None
 
-    def save_token(self, access_token: str) -> None:
-        """Persist today's validated OAuth token to disk."""
+    def save_token(self, access_token: str, use_bearer: bool = True) -> None:
+        """Persist today's validated OAuth token to disk and optional remote callback."""
         today_str = self._today_ist_str()
         token_path = Path(self.settings.token_file_path)
         token_path.parent.mkdir(parents=True, exist_ok=True)
@@ -208,6 +267,7 @@ class ShoonyaAuthenticator:
             "date": today_str,
             "access_token": access_token,
             "susertoken": getattr(self.api, "susertoken", "") or access_token,
+            "use_bearer": bool(use_bearer),
             "user_id": self.settings.shoonya_user_id,
             "created_at": datetime.now(IST).isoformat(),
         }
@@ -215,6 +275,11 @@ class ShoonyaAuthenticator:
         self.settings.shoonya_access_token = access_token
         self.last_token_date = today_str
         self.last_login_status = "AUTHENTICATED"
+        if self._token_persist_callback is not None:
+            try:
+                self._token_persist_callback(payload)
+            except Exception as exc:
+                logger.warning("Token persist callback failed: %s", exc)
 
     def generate_totp(self, current_epoch: Optional[float] = None) -> str:
         """Generate a valid 6-digit TOTP, sleeping past 30-second boundary rollovers."""
@@ -434,7 +499,7 @@ class ShoonyaAuthenticator:
                         except TypeError:
                             limits = self.api.get_limits()
                         if isinstance(limits, dict) and limits.get("stat") == "Ok":
-                            self.save_token(quick_token)
+                            self.save_token(quick_token, use_bearer=False)
                             self.last_login_status = "AUTHENTICATED (DYNAMIC_IP_FALLBACK)"
                             return quick_token
                     except Exception as q_exc:
@@ -449,11 +514,21 @@ class ShoonyaAuthenticator:
         if not access_token:
             raise RuntimeError(f"Invalid access token response: {token_resp}")
 
-        self.api.injectOAuthHeader(
-            access_token,
-            self.settings.shoonya_user_id,
-            self.settings.shoonya_account_id,
-        )
+        gen_susertoken = str(token_resp.get("susertoken") or access_token).strip()
+        try:
+            self.api.injectOAuthHeader(
+                access_token,
+                self.settings.shoonya_user_id,
+                self.settings.shoonya_account_id,
+                susertoken=gen_susertoken,
+                use_bearer=True,
+            )
+        except TypeError:
+            self.api.injectOAuthHeader(
+                access_token,
+                self.settings.shoonya_user_id,
+                self.settings.shoonya_account_id,
+            )
 
         try:
             limits = self.api.get_limits(_retry=False)
@@ -462,7 +537,10 @@ class ShoonyaAuthenticator:
         if not isinstance(limits, dict) or limits.get("stat") != "Ok":
             raise RuntimeError(f"get_limits validation failed after OAuth login: {limits}")
 
-        self.save_token(access_token)
+        actual_use_bearer = getattr(self.api, "_use_bearer", True)
+        if not isinstance(actual_use_bearer, bool):
+            actual_use_bearer = True
+        self.save_token(access_token, use_bearer=actual_use_bearer)
         return access_token
 
     def authenticate_once(self) -> Tuple[bool, str]:

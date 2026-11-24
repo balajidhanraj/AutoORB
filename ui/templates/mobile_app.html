@@ -815,15 +815,22 @@
         }
       }
 
-      let snap = {};
-      let activeMTab = 'radar';
+      let snap = (A.getCachedSnapshot && A.getCachedSnapshot()) || {};
+      let activeMTab = (function () {
+        try {
+          const saved = localStorage.getItem('autoorb_mob_tab');
+          return (saved && ['radar', 'positions', 'logs', 'controls'].includes(saved)) ? saved : 'radar';
+        } catch (_e) { return 'radar'; }
+      })();
       let posSubView = 'strategy';
       let logCat = 'ALL';
       let logAutoScroll = true;
-      let logLines = [];
+      let logLines = snap.logs || [];
       let mSide = 'B';
       let slIdx = 'NIFTY';
       let pollTimer = null;
+      let mobPollInFlight = false;
+      let mobPollStartedAt = 0;
       const spotHist = { NIFTY: [], BANKNIFTY: [] };
 
       function startPolling() {
@@ -842,6 +849,7 @@
 
       function switchMobileTab(tab) {
         activeMTab = tab;
+        try { localStorage.setItem('autoorb_mob_tab', tab); } catch (_e) {}
         document.querySelectorAll('.m-view').forEach(v => { v.classList.add('hidden'); v.classList.remove('flex'); });
         const el = document.getElementById(`mtab-${tab}`);
         if (el) { el.classList.remove('hidden'); el.classList.add('flex'); }
@@ -882,6 +890,7 @@
       // ---------- Render Mobile State ----------
       function renderMobile() {
         if (!snap || !snap.indices) return;
+        if (A.setCachedSnapshot) A.setCachedSnapshot(snap);
         if (A.bg) A.bg.inspectSnapshot(snap);
         const mtm = Number(snap.mtm_pnl || 0);
         const real = Number(snap.realized_pnl || 0);
@@ -898,7 +907,10 @@
         document.getElementById('m-ist-time').textContent = (snap.ist_time || '').split(' ')[1] || '--:--';
         document.getElementById('m-phase').textContent = (snap.schedule && snap.schedule.phase) || 'ORB ENGINE';
         const sec = snap.schedule && snap.schedule.next_candle_close_sec;
-        document.getElementById('m-candle-sec').textContent = sec ? `${sec}s` : 'CLOSED';
+        const mSigSec = snap.schedule && snap.schedule.next_signal_check_sec;
+        document.getElementById('m-candle-sec').textContent = sec
+          ? ((mSigSec !== null && mSigSec !== undefined) ? `1m:${mSigSec}s` : `${sec}s`)
+          : 'CLOSED';
 
         const tm = document.getElementById('m-total-mtm');
         tm.textContent = A.fmtSignedINR(mtm);
@@ -1245,12 +1257,19 @@
 
       // ---------- Mobile Actions & Sheets ----------
       async function pollMobile() {
+        if (mobPollInFlight && (Date.now() - mobPollStartedAt) < 16000) return;
+        mobPollInFlight = true;
+        mobPollStartedAt = Date.now();
         try {
           snap = await A.api.getStatus();
           if (snap.logs && snap.logs.length) logLines = snap.logs;
           renderMobile();
           if (activeMTab === 'logs') renderMLogs();
-        } catch (_e) {}
+        } catch (_e) {
+          // Keep current state & UI across screen lock or temporary network loss
+        } finally {
+          mobPollInFlight = false;
+        }
       }
 
       window.mStepLots = async (idx, lots) => { try { const r = await A.api.setLots(idx, lots); snap = r.snapshot || snap; renderMobile(); A.showToast(r.message); } catch (e) { A.showToast(e.message, 'error'); } };
@@ -1621,12 +1640,25 @@
         applyMobileUserProfile(me);
 
         if (entering) {
-          switchMobileTab('radar');
+          switchMobileTab(activeMTab);
+          renderMobile();
           await pollMobile();
           startPolling();
         }
         if (A.bg) A.bg.init(pollMobile);
       }
+
+      const handleMobileWake = () => {
+        if (!A.getToken()) return;
+        if (!document.getElementById('m-app-header').classList.contains('hidden')) {
+          startPolling();
+          if (document.visibilityState !== 'hidden') pollMobile();
+        }
+      };
+      document.addEventListener('visibilitychange', handleMobileWake);
+      window.addEventListener('focus', handleMobileWake);
+      window.addEventListener('pageshow', handleMobileWake);
+      window.addEventListener('online', handleMobileWake);
 
       async function syncMAuth() {
         if (!A.getToken()) {

@@ -147,6 +147,7 @@ class AppSettings(BaseModel):
     ws_watchdog_timeout_sec: float = Field(default=15.0)
     reconcile_interval_sec: float = Field(default=10.0)
     mtm_check_interval_sec: float = Field(default=1.0)
+    signal_check_interval_sec: float = Field(default=60.0)
 
     telegram_bot_token: str = Field(default="")
     telegram_chat_id: str = Field(default="")
@@ -250,6 +251,7 @@ def load_settings(env_path: str | Path | None = None) -> AppSettings:
         banknifty_be_pyramiding=_parse_bool(os.getenv("BANKNIFTY_BE_PYRAMIDING"), default=False),
         tuesday_expiry_boost=_parse_bool(os.getenv("TUESDAY_EXPIRY_BOOST"), default=True),
         max_weekly_losses=int(os.getenv("MAX_WEEKLY_LOSSES", "0") or 0),
+        signal_check_interval_sec=float(os.getenv("SIGNAL_CHECK_INTERVAL_SEC", "60.0") or 60.0),
         telegram_bot_token=os.getenv("TELEGRAM_BOT_TOKEN", "").strip(),
         telegram_chat_id=os.getenv("TELEGRAM_CHAT_ID", "").strip(),
         ui_host=os.getenv("UI_HOST", "0.0.0.0").strip(),

@@ -238,6 +238,27 @@
     } catch (_e) {}
   }
 
+  function getCachedSnapshot() {
+    try {
+      const raw = localStorage.getItem('autoorb_last_snap');
+      return raw ? JSON.parse(raw) : null;
+    } catch (_e) {
+      return null;
+    }
+  }
+
+  function setCachedSnapshot(snapObj) {
+    try {
+      if (snapObj && typeof snapObj === 'object' && snapObj.indices) {
+        const slim = Object.assign({}, snapObj);
+        if (Array.isArray(slim.logs) && slim.logs.length > 40) {
+          slim.logs = slim.logs.slice(-40);
+        }
+        localStorage.setItem('autoorb_last_snap', JSON.stringify(slim));
+      }
+    } catch (_e) {}
+  }
+
   function getTheme() {
     return localStorage.getItem('autoorb_theme') || 'dark';
   }
@@ -475,11 +496,23 @@
     const t0 = performance.now();
     let res;
     try {
+      const timeoutMs = Number(options.timeoutMs) > 0
+        ? Number(options.timeoutMs)
+        : (method === 'GET' ? 15000 : 30000);
+      const ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+      const timer = ctrl ? setTimeout(() => ctrl.abort(), timeoutMs) : null;
       try {
-        res = await fetch(url, Object.assign({}, options, { headers }));
-      } catch (_err) {
+        const fetchOpts = Object.assign({}, options, { headers });
+        if (ctrl && !fetchOpts.signal) fetchOpts.signal = ctrl.signal;
+        res = await fetch(url, fetchOpts);
+      } catch (fetchErr) {
         const targetDesc = url.startsWith('http') ? url : `${global.location.origin}${url}`;
-        throw new Error(`Cannot reach server (${targetDesc}). Verify AutoORB backend is running.`);
+        const isAbort = fetchErr && fetchErr.name === 'AbortError';
+        throw new Error(isAbort
+          ? `Request timed out (${targetDesc}). Reconnecting...`
+          : `Cannot reach server (${targetDesc}). Verify AutoORB backend is running.`);
+      } finally {
+        if (timer) clearTimeout(timer);
       }
       state.lastPingMs = Math.max(1, Math.round(performance.now() - t0));
 
@@ -824,12 +857,15 @@
     _bindLifecycleEvents() {
       if (this._bound) return;
       this._bound = true;
+      this._lastResumeTs = 0;
       const resumeNow = () => {
         if (this.enabled) {
           this.startWorker();
           if (document.visibilityState === 'visible') this.requestWakeLock();
         }
-        if (typeof this.onTickCallback === 'function') {
+        const now = Date.now();
+        if (typeof this.onTickCallback === 'function' && (now - this._lastResumeTs) > 900) {
+          this._lastResumeTs = now;
           this.onTickCallback();
         }
       };
@@ -984,6 +1020,8 @@
     setToken,
     getCachedUser,
     setCachedUser,
+    getCachedSnapshot,
+    setCachedSnapshot,
     getTheme,
     setTheme,
     toggleTheme,
@@ -1007,8 +1045,8 @@
     renderLogRowHtml,
     formatLogsForCopy,
     api: {
-      getStatus: () => request('/api/status'),
-      getLogs: (limit = 150) => request(`/api/logs?limit=${limit}`),
+      getStatus: () => request('/api/status', { silent: true, timeoutMs: 15000 }),
+      getLogs: (limit = 150) => request(`/api/logs?limit=${limit}`, { silent: true, timeoutMs: 15000 }),
       getBacktestTrades: () => request('/api/backtest/trades'),
       getPublicConfig: () => request('/api/config/public'),
       health: () => request('/health'),

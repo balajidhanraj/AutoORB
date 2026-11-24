@@ -120,3 +120,14 @@ class UserTrade(Base):
 
     user = relationship("User", back_populates="trades")
 
+
+class SystemRuntimeState(Base):
+    """Persistent engine runtime state (mode, capital, settings, daily token & counters)."""
+
+    __tablename__ = "system_runtime_state"
+
+    key = Column(String(64), primary_key=True)
+    state_json = Column(Text, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+

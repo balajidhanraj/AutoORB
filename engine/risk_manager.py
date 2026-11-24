@@ -1128,6 +1128,14 @@ class RiskManager:
     def reconcile_positions(self) -> List[str]:
         """Reconcile broker netqty against internal positions every 10 seconds."""
         discrepancies: List[str] = []
+        with self._lock:
+            if not self.positions:
+                return discrepancies
+        if self.settings.mode == "LIVE" and not (
+            getattr(self.client.api, "access_token", "")
+            or getattr(self.client.api, "susertoken", "")
+        ):
+            return discrepancies
         try:
             broker_positions = self.client.get_positions()
         except Exception as exc:

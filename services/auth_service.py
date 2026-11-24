@@ -11,7 +11,7 @@ import jwt
 
 JWT_SECRET = os.getenv("JWT_SECRET", "AutoORB_JWT_Super_Secret_Key_Change_In_Prod_2026!")
 JWT_ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7  # 7 days
+ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 30  # 30 days
 
 
 def hash_password(password: str) -> str:

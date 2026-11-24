@@ -370,7 +370,7 @@
             <span class="font-label-caps text-on-surface-variant uppercase font-bold">MARKET REGIME &amp; GUARDRAILS</span>
             <span class="inline-flex items-center gap-1.5 font-data-mono-sm text-primary font-bold tabular-nums">
               <span class="w-2 h-2 rounded-full bg-primary-container animate-ping"></span>
-              <span>5M EVAL: <span id="rad-candle-timer">--</span></span>
+              <span>SCAN: <span id="rad-candle-timer">--</span></span>
             </span>
           </div>
           <div class="grid grid-cols-3 gap-2 my-0.5 font-data-mono-sm tabular-nums">
@@ -1174,8 +1174,17 @@
       const A = window.AutoORB;
       const esc = A.escapeHtml;
 
-      let snap = window.__INITIAL_SNAPSHOT__ || {};
-      let activeTab = 'radar';
+      let snap = (function () {
+        const init = window.__INITIAL_SNAPSHOT__;
+        if (init && init.indices) return init;
+        return (A.getCachedSnapshot && A.getCachedSnapshot()) || init || {};
+      })();
+      let activeTab = (function () {
+        try {
+          const saved = localStorage.getItem('autoorb_desk_tab');
+          return (saved && ['radar', 'positions', 'logs', 'analytics'].includes(saved)) ? saved : 'radar';
+        } catch (_e) { return 'radar'; }
+      })();
       let activeBookTab = 'orders';
       let logCategory = 'ALL';
       let autoScroll = true;
@@ -1185,6 +1194,8 @@
       let manualSide = 'B';
       let slTargetIndex = 'NIFTY';
       let deskPollTimer = null;
+      let deskPollInFlight = false;
+      let deskPollStartedAt = 0;
       let ttScope = 'ALL';
       let ttAllDrawersOpen = true;
       const ttDrawerState = { NIFTY: true, BANKNIFTY: true };
@@ -1261,6 +1272,7 @@
 
       window.switchDesktopTab = function (tab) {
         activeTab = tab;
+        try { localStorage.setItem('autoorb_desk_tab', tab); } catch (_e) {}
         document.querySelectorAll('.desk-view').forEach(v => {
           v.classList.add('hidden');
           v.classList.remove('flex');
@@ -1293,6 +1305,7 @@
       // ---------- Render Snapshot ----------
       function renderAll() {
         if (!snap || !snap.indices) return;
+        if (A.setCachedSnapshot) A.setCachedSnapshot(snap);
         if (A.bg) A.bg.inspectSnapshot(snap);
         const mtm = Number(snap.mtm_pnl || 0);
         const realized = Number(snap.realized_pnl || 0);
@@ -1360,7 +1373,11 @@
         qState.textContent = snap.halted ? (snap.halt_reason || 'HALTED') : (snap.trades_taken >= snap.max_trades ? 'MAX REACHED' : 'READY');
         qState.className = `db-status ${snap.halted ? 'db-status--err' : (snap.trades_taken >= snap.max_trades ? 'db-status--warn' : 'db-status--ok')}`;
         const nextSec = snap.schedule && snap.schedule.next_candle_close_sec;
-        document.getElementById('rad-candle-timer').textContent = nextSec ? `${nextSec}s` : 'CLOSED';
+        const sigSec = snap.schedule && snap.schedule.next_signal_check_sec;
+        const sigLast = snap.schedule && snap.schedule.last_signal_check_time;
+        document.getElementById('rad-candle-timer').textContent = nextSec
+          ? ((sigSec !== null && sigSec !== undefined) ? `1m:${sigSec}s | 5m:${nextSec}s` : `${nextSec}s`)
+          : (sigLast ? `DONE (${sigLast})` : 'CLOSED');
         document.getElementById('rad-orb-window').textContent = `ORB: ${snap.orb_start_time || '09:15'} - ${snap.orb_end_time || '09:45'}`;
         document.getElementById('rad-cutoff').textContent = `CUTOFF ${snap.entry_cutoff_time || '13:15'} IST`;
 
@@ -2083,12 +2100,19 @@
 
       // ---------- Interactive Actions ----------
       async function pollStatus() {
+        if (deskPollInFlight && (Date.now() - deskPollStartedAt) < 16000) return;
+        deskPollInFlight = true;
+        deskPollStartedAt = Date.now();
         try {
           snap = await A.api.getStatus();
           if (snap.logs && snap.logs.length) logLines = snap.logs;
           renderAll();
           if (activeTab === 'logs') renderLogs();
-        } catch (_e) {}
+        } catch (_e) {
+          // Never reset UI or log out on transient wake/network hiccups
+        } finally {
+          deskPollInFlight = false;
+        }
       }
 
       window.stepLots = async (idx, lots) => {
@@ -2442,12 +2466,25 @@
         }
         closeModal('modal-auth');
         if (entering) {
+          switchDesktopTab(activeTab);
           renderAll();
           await pollStatus();
           startDesktopPolling();
           if (A.bg) A.bg.init(pollStatus);
         }
       }
+
+      const handleDesktopWake = () => {
+        if (!A.getToken()) return;
+        if (!document.getElementById('desk-app-header').classList.contains('hidden')) {
+          startDesktopPolling();
+          if (document.visibilityState !== 'hidden') pollStatus();
+        }
+      };
+      document.addEventListener('visibilitychange', handleDesktopWake);
+      window.addEventListener('focus', handleDesktopWake);
+      window.addEventListener('pageshow', handleDesktopWake);
+      window.addEventListener('online', handleDesktopWake);
 
       async function syncDesktopAuth() {
         if (!A.getToken()) {

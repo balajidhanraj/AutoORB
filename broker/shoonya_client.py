@@ -43,6 +43,8 @@ class CompatibleNorenApi:
         self.redirect_uri = redirect_uri
         self.access_token: str = ""
         self.susertoken: str = ""
+        self._quick_susertoken: str = ""
+        self._use_bearer: bool = False
         self.username: str = user_id.strip().upper()
         self.account_id: str = user_id.strip().upper()
         self._session = requests.Session()
@@ -103,7 +105,8 @@ class CompatibleNorenApi:
         data = resp.json()
         if data.get("stat") == "Ok":
             if data.get("susertoken"):
-                self.susertoken = str(data["susertoken"]).strip()
+                self._quick_susertoken = str(data["susertoken"]).strip()
+                self.susertoken = self._quick_susertoken
             if data.get("code"):
                 return str(data["code"]).strip()
         raise RuntimeError(f"QuickAuth OAuth code request failed: {data}")
@@ -135,10 +138,11 @@ class CompatibleNorenApi:
         susertoken: str = "",
         use_bearer: bool = True,
     ) -> None:  # noqa: N802
+        self._use_bearer = bool(use_bearer and access_token)
         self.access_token = access_token if use_bearer else ""
         if susertoken:
             self.susertoken = susertoken
-        elif not getattr(self, "susertoken", ""):
+        else:
             self.susertoken = access_token
         self.username = user_id
         self.account_id = account_id or user_id
@@ -147,21 +151,51 @@ class CompatibleNorenApi:
         else:
             self._session.headers.pop("Authorization", None)
 
-    def _post(self, endpoint: str, body: Dict[str, Any], _retry: bool = True) -> Any:
+    def _post(
+        self,
+        endpoint: str,
+        body: Dict[str, Any],
+        _retry: bool = True,
+        _allow_jkey_fallback: bool = True,
+    ) -> Any:
+        use_bearer = bool(getattr(self, "_use_bearer", False) and getattr(self, "access_token", ""))
         token_to_send = getattr(self, "susertoken", "") or getattr(self, "access_token", "")
-        if token_to_send:
+        if use_bearer:
+            data = f"jData={json.dumps(body)}"
+        elif token_to_send:
             data = f"jData={json.dumps(body)}&jKey={token_to_send}"
         else:
             data = f"jData={json.dumps(body)}"
         try:
             resp = self._session.post(f"{self.host}{endpoint}", data=data, timeout=15)
-            if resp.status_code == 401 and _retry and self._reauth_callback:
-                logger.warning("Shoonya API returned 401 on %s; attempting automatic re-auth...", endpoint)
-                if self._reauth_callback():
-                    return self._post(endpoint, body, _retry=False)
+            if resp.status_code == 401:
+                if _allow_jkey_fallback and use_bearer:
+                    alt_tok = (
+                        getattr(self, "_quick_susertoken", "")
+                        or getattr(self, "susertoken", "")
+                        or getattr(self, "access_token", "")
+                    )
+                    if alt_tok:
+                        logger.warning(
+                            "Shoonya API returned 401 on %s (Bearer); trying jKey session fallback...",
+                            endpoint,
+                        )
+                        self._use_bearer = False
+                        self._session.headers.pop("Authorization", None)
+                        self.susertoken = alt_tok
+                        return self._post(
+                            endpoint,
+                            body,
+                            _retry=_retry,
+                            _allow_jkey_fallback=False,
+                        )
+                if _retry and self._reauth_callback:
+                    logger.warning("Shoonya API returned 401 on %s; attempting automatic re-auth...", endpoint)
+                    if self._reauth_callback():
+                        return self._post(endpoint, body, _retry=False, _allow_jkey_fallback=False)
 
-            # Shoonya Noren API frequently returns HTTP 400/404 with a JSON body {"stat":"Not_Ok","emsg":"..."}.
-            # Parse JSON before raise_for_status() so callers get Shoonya's real rejection reason instead of raw 400/404.
+            # Shoonya Noren API frequently returns HTTP 400/404 with JSON {"stat":"Not_Ok","emsg":"no data"}
+            # or an empty/non-JSON 404 on empty PositionBook/OrderBook. Treat empty book 404s safely as [].
             res: Any = None
             try:
                 res = resp.json()
@@ -169,21 +203,27 @@ class CompatibleNorenApi:
                 res = None
 
             if res is None:
+                if resp.status_code == 404 and endpoint in ("PositionBook", "OrderBook", "TradeBook"):
+                    logger.debug("Shoonya %s returned HTTP 404 without JSON; treating as empty book []", endpoint)
+                    return []
                 resp.raise_for_status()
                 return {}
 
-            if isinstance(res, dict) and res.get("stat") == "Not_Ok" and _retry and self._reauth_callback:
+            if isinstance(res, dict) and res.get("stat") == "Not_Ok":
                 emsg = str(res.get("emsg") or "").lower()
-                if any(err in emsg for err in ("session", "invalid session", "not logged in", "expired")):
-                    logger.warning("Shoonya API session invalid on %s (%s); triggering re-auth...", endpoint, emsg)
-                    if self._reauth_callback():
-                        return self._post(endpoint, body, _retry=False)
+                if endpoint in ("PositionBook", "OrderBook", "TradeBook") and "no data" in emsg:
+                    return []
+                if _retry and self._reauth_callback:
+                    if any(err in emsg for err in ("session", "invalid session", "not logged in", "expired")):
+                        logger.warning("Shoonya API session invalid on %s (%s); triggering re-auth...", endpoint, emsg)
+                        if self._reauth_callback():
+                            return self._post(endpoint, body, _retry=False, _allow_jkey_fallback=False)
             return res
         except requests.HTTPError as exc:
             if exc.response is not None and exc.response.status_code == 401 and _retry and self._reauth_callback:
                 logger.warning("Shoonya API 401 HTTPError on %s; triggering re-auth...", endpoint)
                 if self._reauth_callback():
-                    return self._post(endpoint, body, _retry=False)
+                    return self._post(endpoint, body, _retry=False, _allow_jkey_fallback=False)
             raise
 
     def get_limits(self, _retry: bool = True) -> Dict[str, Any]:
@@ -369,6 +409,7 @@ class ShoonyaClient:
         self._token_by_tsym: Dict[str, str] = {}
         self._broker_snapshot_cache: Optional[Dict[str, Any]] = None
         self._broker_snapshot_ts: float = 0.0
+        self._broker_snapshot_fetch_lock = threading.Lock()
 
         # External callback hooks
         self._tick_listeners: List[Callable[[Dict[str, Any]], None]] = []
@@ -702,20 +743,40 @@ class ShoonyaClient:
             if hasattr(self.api, "secret_key"):
                 self.api.secret_key = settings.shoonya_secret_key.strip()
             if settings.shoonya_access_token:
+                raw_ub = getattr(self.api, "_use_bearer", True)
+                use_bearer = raw_ub if isinstance(raw_ub, bool) else True
+                susertoken = getattr(self.api, "susertoken", "") or settings.shoonya_access_token
                 if hasattr(self.api, "access_token"):
-                    self.api.access_token = settings.shoonya_access_token
+                    self.api.access_token = settings.shoonya_access_token if use_bearer else ""
                 if hasattr(self.api, "injectOAuthHeader"):
-                    susertoken = getattr(self.api, "susertoken", "") or settings.shoonya_access_token
-                    self.api.injectOAuthHeader(settings.shoonya_access_token, uid, actid, susertoken=susertoken)
+                    try:
+                        self.api.injectOAuthHeader(
+                            settings.shoonya_access_token,
+                            uid,
+                            actid,
+                            susertoken=susertoken,
+                            use_bearer=use_bearer,
+                        )
+                    except TypeError:
+                        self.api.injectOAuthHeader(
+                            settings.shoonya_access_token,
+                            uid,
+                            actid,
+                            susertoken=susertoken,
+                        )
             else:
                 if hasattr(self.api, "access_token"):
                     self.api.access_token = ""
+                if hasattr(self.api, "susertoken"):
+                    self.api.susertoken = ""
+                if hasattr(self.api, "_use_bearer"):
+                    self.api._use_bearer = False
                 sess = getattr(self.api, "_session", None)
                 if sess is not None and hasattr(sess, "headers"):
                     sess.headers.pop("Authorization", None)
 
     def get_live_broker_snapshot(self, force: bool = False) -> Dict[str, Any]:
-        """Fetch live Shoonya account limits, order book, and positions (10s cached)."""
+        """Fetch live Shoonya account limits, order book, and positions (cached to avoid API stampedes)."""
         empty_snapshot: Dict[str, Any] = {
             "connected": False,
             "user_id": self.settings.shoonya_user_id,
@@ -736,109 +797,133 @@ class ShoonyaClient:
         if not (getattr(self.api, "access_token", "") or getattr(self.api, "susertoken", "")):
             return empty_snapshot
 
-        with self._lock:
-            if (
-                not force
-                and self._broker_snapshot_cache is not None
-                and (time.monotonic() - self._broker_snapshot_ts) < 10.0
-            ):
+        now_ist = datetime.now(IST)
+        in_market = (
+            now_ist.weekday() < 5
+            and self.settings.market_open_time <= now_ist.time() <= self.settings.market_close_time
+        )
+        ok_ttl = 25.0 if in_market else 60.0
+
+        def _fresh_cached() -> Optional[Dict[str, Any]]:
+            if force or self._broker_snapshot_cache is None:
+                return None
+            ttl = ok_ttl if self._broker_snapshot_cache.get("connected") else 10.0
+            if (time.monotonic() - self._broker_snapshot_ts) < ttl:
                 return dict(self._broker_snapshot_cache)
-
-        snapshot = dict(empty_snapshot)
-        try:
-            limits = self.api.get_limits()
-            if isinstance(limits, dict) and limits.get("stat") == "Ok":
-                cash = self._to_float(limits.get("cash"))
-                payin = self._to_float(limits.get("payin"))
-                payout = self._to_float(limits.get("payout"))
-                collateral = self._to_float(limits.get("brkcollamt"))
-                margin_used = self._to_float(limits.get("marginused"))
-                net_avail = round(cash + payin + collateral - margin_used, 2)
-                snapshot.update(
-                    {
-                        "connected": True,
-                        "profile_name": str(limits.get("prfname") or "SHOONYA"),
-                        "cash": cash,
-                        "payin": payin,
-                        "payout": payout,
-                        "collateral": collateral,
-                        "margin_used": margin_used,
-                        "net_available": net_avail,
-                        "request_time": str(limits.get("request_time") or ""),
-                    }
-                )
-            elif isinstance(limits, dict):
-                snapshot["error"] = str(limits.get("emsg") or "Unable to fetch Limits")
-        except Exception as exc:
-            snapshot["error"] = str(exc)
-
-        if hasattr(self.api, "get_user_details"):
-            try:
-                user_info = self.api.get_user_details()
-                if isinstance(user_info, dict) and user_info.get("stat") == "Ok":
-                    snapshot["account_name"] = str(
-                        user_info.get("uname") or user_info.get("cliname") or ""
-                    )
-                    if user_info.get("actid"):
-                        snapshot["account_id"] = str(user_info["actid"])
-                    if user_info.get("uid"):
-                        snapshot["user_id"] = str(user_info["uid"])
-            except Exception:
-                pass
-
-        try:
-            raw_orders = self.api.get_order_book() or []
-            norm_orders = []
-            for o in raw_orders:
-                if not isinstance(o, dict):
-                    continue
-                norm_orders.append(
-                    {
-                        "norenordno": str(o.get("norenordno") or ""),
-                        "norentm": str(o.get("norentm") or ""),
-                        "exch": str(o.get("exch") or ""),
-                        "tsym": str(o.get("tsym") or ""),
-                        "trantype": str(o.get("trantype") or ""),
-                        "prd": str(o.get("s_prdt_ali") or o.get("prd") or ""),
-                        "prctyp": str(o.get("prctyp") or ""),
-                        "qty": str(o.get("qty") or "0"),
-                        "fillshares": str(o.get("fillshares") or "0"),
-                        "prc": str(o.get("avgprc") or o.get("prc") or "0"),
-                        "status": str(o.get("status") or ""),
-                        "ordersource": str(o.get("ordersource") or ""),
-                        "reason": str(o.get("rejreason") or o.get("remarks") or ""),
-                    }
-                )
-            snapshot["orders"] = norm_orders
-        except Exception as exc:
-            logger.debug("Live OrderBook fetch failed: %s", exc)
-
-        try:
-            raw_positions = self.api.get_positions() or []
-            norm_positions = []
-            for p in raw_positions:
-                if not isinstance(p, dict):
-                    continue
-                norm_positions.append(
-                    {
-                        "exch": str(p.get("exch") or ""),
-                        "tsym": str(p.get("tsym") or ""),
-                        "prd": str(p.get("s_prdt_ali") or p.get("prd") or ""),
-                        "netqty": str(p.get("netqty") or "0"),
-                        "netavgprc": str(p.get("netavgprc") or "0.00"),
-                        "lp": str(p.get("lp") or "0.00"),
-                        "rpnl": str(p.get("rpnl") or "0.00"),
-                        "urmtom": str(p.get("urmtom") or "0.00"),
-                    }
-                )
-            snapshot["positions"] = norm_positions
-        except Exception as exc:
-            logger.debug("Live PositionBook fetch failed: %s", exc)
+            return None
 
         with self._lock:
-            self._broker_snapshot_cache = dict(snapshot)
-            self._broker_snapshot_ts = time.monotonic()
-        return snapshot
+            cached = _fresh_cached()
+            if cached is not None:
+                return cached
+
+        with self._broker_snapshot_fetch_lock:
+            with self._lock:
+                cached = _fresh_cached()
+                if cached is not None:
+                    return cached
+
+            snapshot = dict(empty_snapshot)
+            try:
+                limits = self.api.get_limits()
+                if isinstance(limits, dict) and limits.get("stat") == "Ok":
+                    cash = self._to_float(limits.get("cash"))
+                    payin = self._to_float(limits.get("payin"))
+                    payout = self._to_float(limits.get("payout"))
+                    collateral = self._to_float(limits.get("brkcollamt"))
+                    margin_used = self._to_float(limits.get("marginused"))
+                    net_avail = round(cash + payin + collateral - margin_used, 2)
+                    snapshot.update(
+                        {
+                            "connected": True,
+                            "profile_name": str(limits.get("prfname") or "SHOONYA"),
+                            "cash": cash,
+                            "payin": payin,
+                            "payout": payout,
+                            "collateral": collateral,
+                            "margin_used": margin_used,
+                            "net_available": net_avail,
+                            "request_time": str(limits.get("request_time") or ""),
+                        }
+                    )
+                elif isinstance(limits, dict):
+                    snapshot["error"] = str(limits.get("emsg") or "Unable to fetch Limits")
+            except Exception as exc:
+                snapshot["error"] = str(exc)
+
+            if not snapshot["connected"]:
+                with self._lock:
+                    self._broker_snapshot_cache = dict(snapshot)
+                    self._broker_snapshot_ts = time.monotonic()
+                return snapshot
+
+            if hasattr(self.api, "get_user_details"):
+                try:
+                    user_info = self.api.get_user_details()
+                    if isinstance(user_info, dict) and user_info.get("stat") == "Ok":
+                        snapshot["account_name"] = str(
+                            user_info.get("uname") or user_info.get("cliname") or ""
+                        )
+                        if user_info.get("actid"):
+                            snapshot["account_id"] = str(user_info["actid"])
+                        if user_info.get("uid"):
+                            snapshot["user_id"] = str(user_info["uid"])
+                except Exception:
+                    pass
+
+            try:
+                raw_orders = self.api.get_order_book() or []
+                norm_orders = []
+                for o in raw_orders:
+                    if not isinstance(o, dict):
+                        continue
+                    norm_orders.append(
+                        {
+                            "norenordno": str(o.get("norenordno") or ""),
+                            "norentm": str(o.get("norentm") or ""),
+                            "exch": str(o.get("exch") or ""),
+                            "tsym": str(o.get("tsym") or ""),
+                            "trantype": str(o.get("trantype") or ""),
+                            "prd": str(o.get("s_prdt_ali") or o.get("prd") or ""),
+                            "prctyp": str(o.get("prctyp") or ""),
+                            "qty": str(o.get("qty") or "0"),
+                            "fillshares": str(o.get("fillshares") or "0"),
+                            "prc": str(o.get("avgprc") or o.get("prc") or "0"),
+                            "status": str(o.get("status") or ""),
+                            "ordersource": str(o.get("ordersource") or ""),
+                            "reason": str(o.get("rejreason") or o.get("remarks") or ""),
+                        }
+                    )
+                snapshot["orders"] = norm_orders
+            except Exception as exc:
+                logger.debug("Live OrderBook fetch failed: %s", exc)
+
+            try:
+                raw_positions = self.api.get_positions() or []
+                norm_positions = []
+                for p in raw_positions:
+                    if not isinstance(p, dict):
+                        continue
+                    norm_positions.append(
+                        {
+                            "exch": str(p.get("exch") or ""),
+                            "tsym": str(p.get("tsym") or ""),
+                            "prd": str(p.get("s_prdt_ali") or p.get("prd") or ""),
+                            "netqty": str(p.get("netqty") or "0"),
+                            "netavgprc": str(p.get("netavgprc") or "0.00"),
+                            "lp": str(p.get("lp") or "0.00"),
+                            "rpnl": str(p.get("rpnl") or "0.00"),
+                            "urmtom": str(p.get("urmtom") or "0.00"),
+                        }
+                    )
+                snapshot["positions"] = norm_positions
+            except Exception as exc:
+                logger.debug("Live PositionBook fetch failed: %s", exc)
+
+            with self._lock:
+                self._broker_snapshot_cache = dict(snapshot)
+                self._broker_snapshot_ts = time.monotonic()
+            return snapshot
 
     def place_live_broker_order(
         self,

@@ -522,3 +522,25 @@ class ORBStrategy:
 
         return None
 
+    def evaluate_live_1m_check(
+        self,
+        index_name: str,
+        candles_with_open: Sequence[Candle],
+        india_vix: Optional[float] = None,
+        current_time_ist: Optional[datetime] = None,
+    ) -> Optional[ORBSignal]:
+        """Run 1-minute live signal & indicator evaluation on latest candle (forming or closed)."""
+        seq = list(candles_with_open)
+        if not seq:
+            return None
+        latest = seq[-1]
+        history = seq[:-1]
+        return self.evaluate_candle_close(
+            index_name=index_name,
+            closed_candle=latest,
+            all_candles=history,
+            india_vix=india_vix,
+            current_time_ist=current_time_ist,
+        )
+
+

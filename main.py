@@ -19,6 +19,7 @@ from config.settings import INDEX_SPECS, INDIA_VIX_EXCHANGE, INDIA_VIX_KEY, INDI
 from engine.candle_builder import Candle, CandleBuilder
 from engine.risk_manager import RiskManager
 from engine.strategy_orb import ORBStrategy
+from services.runtime_state_store import RuntimeStateStore
 from ui.dashboard import create_app
 from utils.logger import get_logger, get_recent_logs, setup_logging
 from utils.notifier import TelegramNotifier
@@ -64,6 +65,9 @@ class TradingSystemOrchestrator:
         self._stop_event = threading.Event()
         self._loop_thread: Optional[threading.Thread] = None
         self._last_reconcile_monotonic: float = 0.0
+        self._last_signal_check_monotonic: float = 0.0
+        self.last_signal_check_time: Optional[str] = None
+        self._last_triggered_bucket_by_index: Dict[str, datetime] = {}
 
         self.custom_lots: Dict[str, int] = {}
         self.custom_product_types: Dict[str, str] = {
@@ -81,6 +85,11 @@ class TradingSystemOrchestrator:
         self.previous_public_ip: str = ""
         self._last_ip_check_monotonic: float = time.monotonic()
         self._ip_sync_lock = threading.Lock()
+
+        self.state_store = RuntimeStateStore(self.settings.data_dir)
+        self.auth.register_token_persist_callback(self._on_token_persisted)
+        restored_token_payload = self._restore_runtime_state()
+
         threading.Thread(
             target=self._detect_public_ip,
             name="public-ip-detect",
@@ -88,9 +97,202 @@ class TradingSystemOrchestrator:
         ).start()
         if self.settings.shoonya_user_id:
             try:
-                self.auth.load_cached_token()
+                self.auth.load_cached_token(external_payload=restored_token_payload)
             except Exception as exc:
                 logger.debug("Startup cached token check skipped: %s", exc)
+
+    def _on_token_persisted(self, _payload: Dict[str, Any]) -> None:
+        self._persist_runtime_state(sync=False)
+
+    def _build_runtime_state_payload(self) -> Dict[str, Any]:
+        today = datetime.now(IST).date()
+        today_str = today.strftime("%Y-%m-%d")
+        with self._lock:
+            token_payload = self.auth.export_token_payload()
+            durable_milestones = ("reset", "auth", "scanner_alert", "squareoff", "eod_report")
+            done_today = [k for k in durable_milestones if self._milestone_done.get(k) == today]
+            overrides_today = {
+                k: [v[0].strftime("%Y-%m-%d"), str(v[1]), v[2].strftime("%H:%M:%S")]
+                for k, v in self._milestone_overrides.items()
+                if v[0] == today and k not in ("cache", "ws")
+            }
+            return {
+                "version": 1,
+                "mode": self.settings.mode,
+                "capital": float(self.settings.capital),
+                "custom_max_daily_loss": self.risk_manager.custom_max_daily_loss,
+                "enabled_indices": self.risk_manager.get_enabled_indices(),
+                "custom_lots": {str(k): int(v) for k, v in self.custom_lots.items()},
+                "custom_product_types": {str(k): str(v) for k, v in self.custom_product_types.items()},
+                "orb_start_time": self.settings.orb_start_time.strftime("%H:%M"),
+                "orb_window_minutes": int(self.settings.orb_window_minutes),
+                "entry_cutoff_time": self.settings.entry_cutoff_time.strftime("%H:%M"),
+                "shoonya_user_id": self.settings.shoonya_user_id,
+                "session_date": today_str,
+                "daily_risk": {
+                    "trades_taken_today": int(self.risk_manager.trades_taken_today),
+                    "trades_taken_by_index": {
+                        str(k): int(v) for k, v in self.risk_manager.trades_taken_by_index.items()
+                    },
+                    "sl_hit_today_by_index": {
+                        str(k): bool(v) for k, v in self.risk_manager.sl_hit_today_by_index.items()
+                    },
+                    "realized_pnl_today": float(self.risk_manager.realized_pnl_today),
+                    "halted": bool(self.risk_manager.halted),
+                    "halt_reason": self.risk_manager.halt_reason,
+                },
+                "milestones_done": done_today,
+                "milestone_overrides": overrides_today,
+                "shoonya_token": token_payload,
+                "updated_at_ist": datetime.now(IST).isoformat(),
+            }
+
+    def _persist_runtime_state(self, sync: bool = False) -> None:
+        try:
+            payload = self._build_runtime_state_payload()
+            if sync:
+                self.state_store.save_sync(payload, timeout=5.0)
+            else:
+                self.state_store.save(payload)
+        except Exception as exc:
+            logger.warning("Failed persisting runtime state: %s", exc)
+
+    def _restore_runtime_state(self) -> Optional[Dict[str, Any]]:
+        try:
+            state = self.state_store.load()
+        except Exception as exc:
+            logger.warning("Runtime state restore failed: %s", exc)
+            return None
+        if not isinstance(state, dict) or not state:
+            return None
+
+        now_ist = datetime.now(IST)
+        today = now_ist.date()
+        today_str = today.strftime("%Y-%m-%d")
+
+        def _parse_hhmm_local(raw: Any, fallback: dt_time) -> dt_time:
+            try:
+                parts = str(raw).strip().split(":")
+                return dt_time(int(parts[0]), int(parts[1]) if len(parts) > 1 else 0, int(parts[2]) if len(parts) > 2 else 0)
+            except Exception:
+                return fallback
+
+        with self._lock:
+            saved_mode = str(state.get("mode") or "").strip().upper()
+            if saved_mode in {"PAPER", "LIVE"}:
+                self.settings.mode = saved_mode
+
+            if state.get("capital") is not None:
+                try:
+                    cap_val = float(state["capital"])
+                    if cap_val >= 0:
+                        self.settings.capital = round(cap_val, 2)
+                except (TypeError, ValueError):
+                    pass
+
+            if "custom_max_daily_loss" in state:
+                raw_mdl = state.get("custom_max_daily_loss")
+                if raw_mdl is None:
+                    self.risk_manager.custom_max_daily_loss = None
+                else:
+                    try:
+                        mdl_val = float(raw_mdl)
+                        if mdl_val >= 500.0:
+                            self.risk_manager.custom_max_daily_loss = mdl_val
+                            self.settings.max_daily_loss = mdl_val
+                    except (TypeError, ValueError):
+                        pass
+
+            en_map = state.get("enabled_indices")
+            if isinstance(en_map, dict):
+                self.risk_manager.set_enabled_indices(
+                    nifty=en_map.get("NIFTY"),
+                    banknifty=en_map.get("BANKNIFTY"),
+                )
+
+            lots_map = state.get("custom_lots")
+            if isinstance(lots_map, dict):
+                for k, v in lots_map.items():
+                    idx = str(k).strip().upper()
+                    if idx in INDEX_SPECS:
+                        try:
+                            lval = max(1, min(50, int(v)))
+                            self.custom_lots[idx] = lval
+                            self.risk_manager.set_index_lots(idx, lval)
+                        except (TypeError, ValueError):
+                            pass
+
+            prd_map = state.get("custom_product_types")
+            if isinstance(prd_map, dict):
+                for k, v in prd_map.items():
+                    idx = str(k).strip().upper()
+                    norm_p = str(v).strip().upper()
+                    if idx in INDEX_SPECS and norm_p in {"M", "I"}:
+                        self.custom_product_types[idx] = norm_p
+                        self.risk_manager.set_index_product_type(idx, norm_p)
+
+            if state.get("orb_start_time"):
+                self.settings.orb_start_time = _parse_hhmm_local(state["orb_start_time"], self.settings.orb_start_time)
+            if state.get("orb_window_minutes") is not None:
+                try:
+                    mins = int(state["orb_window_minutes"])
+                    if mins in {5, 15, 30, 45, 60}:
+                        self.settings.orb_window_minutes = mins
+                except (TypeError, ValueError):
+                    pass
+            end_dt = datetime.combine(today, self.settings.orb_start_time) + timedelta(minutes=self.settings.orb_window_minutes)
+            self.settings.orb_end_time = end_dt.time()
+
+            if state.get("entry_cutoff_time"):
+                self.settings.entry_cutoff_time = _parse_hhmm_local(state["entry_cutoff_time"], self.settings.entry_cutoff_time)
+
+            self.settings.max_daily_loss = self.risk_manager.get_dynamic_max_daily_loss(now_ist)
+
+            if state.get("session_date") == today_str:
+                dr = state.get("daily_risk") or {}
+                if isinstance(dr, dict):
+                    self.risk_manager.trades_taken_today = int(dr.get("trades_taken_today") or 0)
+                    tbi = dr.get("trades_taken_by_index") or {}
+                    if isinstance(tbi, dict):
+                        self.risk_manager.trades_taken_by_index = {str(k): int(v) for k, v in tbi.items()}
+                    slbi = dr.get("sl_hit_today_by_index") or {}
+                    if isinstance(slbi, dict):
+                        self.risk_manager.sl_hit_today_by_index = {str(k): bool(v) for k, v in slbi.items()}
+                    self.risk_manager.realized_pnl_today = float(dr.get("realized_pnl_today") or 0.0)
+                    self.risk_manager.halted = bool(dr.get("halted", False))
+                    self.risk_manager.halt_reason = dr.get("halt_reason")
+
+                for mk in state.get("milestones_done") or []:
+                    if mk in ("reset", "auth", "scanner_alert", "squareoff", "eod_report"):
+                        self._milestone_done[str(mk)] = today
+
+                ov_map = state.get("milestone_overrides") or {}
+                if isinstance(ov_map, dict):
+                    for ok_key, ov_vals in ov_map.items():
+                        if isinstance(ov_vals, (list, tuple)) and len(ov_vals) >= 3 and str(ov_vals[0]) == today_str:
+                            self._milestone_overrides[str(ok_key)] = (
+                                today,
+                                str(ov_vals[1]),
+                                _parse_hhmm_local(ov_vals[2], dt_time(23, 59, 59)),
+                            )
+
+                tok = state.get("shoonya_token")
+                logger.info(
+                    "Restored persistent runtime state: MODE=%s CAP=₹%.0f IDX=%s LOTS=%s",
+                    self.settings.mode,
+                    self.settings.capital,
+                    self.risk_manager.get_enabled_indices(),
+                    self.custom_lots,
+                )
+                return tok if isinstance(tok, dict) else None
+
+        logger.info(
+            "Restored sticky settings from previous session: MODE=%s CAP=₹%.0f IDX=%s",
+            self.settings.mode,
+            self.settings.capital,
+            self.risk_manager.get_enabled_indices(),
+        )
+        return None
 
     def _fetch_outbound_ip(self) -> str:
         """Query external IP echo services for the host's current outbound IPv4 address."""
@@ -190,6 +392,8 @@ class TradingSystemOrchestrator:
     def _mark_milestone(self, key: str, today: date) -> None:
         self._milestone_done[key] = today
         self._milestone_overrides.pop(key, None)
+        if key in ("reset", "auth", "scanner_alert", "squareoff", "eod_report"):
+            self._persist_runtime_state(sync=False)
 
     def control_schedule_milestone(
         self,
@@ -223,6 +427,7 @@ class TradingSystemOrchestrator:
                         self._milestone_overrides[k] = (today, "PENDING", now_t)
                     self.strategy.reset_daily(today)
                 logger.info("All daily schedule milestones reset to PENDING by user at %s", now_t.strftime("%H:%M:%S"))
+                self._persist_runtime_state(sync=True)
                 return True, "All daily schedule milestones reset to PENDING."
 
             # Restart / re-run the morning pipeline
@@ -243,6 +448,7 @@ class TradingSystemOrchestrator:
                 if sched_t is not None and now_t >= sched_t:
                     self._milestone_overrides[k] = (today, "PENDING", now_t)
             logger.info("Daily startup milestones (OAuth, NFO Cache=%d, WS/7D Backfill) restarted by user", cnt)
+            self._persist_runtime_state(sync=True)
             return True, f"Restarted morning milestones (OAuth, {cnt} NFO contracts, WS & 7D backfill)."
 
         if key not in labels:
@@ -256,6 +462,7 @@ class TradingSystemOrchestrator:
                 if key == "orb_lock":
                     self.strategy.reset_daily(today)
             logger.info("Milestone '%s' (%s) reset to PENDING by user at %s", label, key, now_t.strftime("%H:%M:%S"))
+            self._persist_runtime_state(sync=True)
             return True, f"{label} reset to PENDING."
 
         if act == "done":
@@ -263,6 +470,7 @@ class TradingSystemOrchestrator:
                 self._mark_milestone(key, today)
                 self._milestone_overrides[key] = (today, "DONE", now_t)
             logger.info("Milestone '%s' (%s) marked DONE by user", label, key)
+            self._persist_runtime_state(sync=True)
             return True, f"{label} marked DONE."
 
         # act in ("restart", "run")
@@ -396,6 +604,9 @@ class TradingSystemOrchestrator:
         if signal is None:
             return
 
+        if self._last_triggered_bucket_by_index.get(index_name) == signal.candle_time:
+            return
+
         logger.info(
             "BREAKOUT SIGNAL: %s %s spot=%.2f ORH=%.2f ORL=%.2f VWAP=%.2f RSI=%.1f VIX=%.2f",
             signal.index_name,
@@ -407,7 +618,10 @@ class TradingSystemOrchestrator:
             signal.rsi,
             signal.india_vix,
         )
-        self.risk_manager.execute_entry(signal)
+        pos = self.risk_manager.execute_entry(signal)
+        if pos is not None:
+            self._last_triggered_bucket_by_index[index_name] = signal.candle_time
+            self._persist_runtime_state(sync=False)
 
     def _backfill_all_indices(self) -> None:
         now_ist = datetime.now(IST)
@@ -470,6 +684,7 @@ class TradingSystemOrchestrator:
         ok, msg = self.auth.authenticate_once()
         if ok:
             self.client.get_live_broker_snapshot(force=True)
+            self._persist_runtime_state(sync=True)
         return ok, msg
 
     def add_or_update_funds(self, amount: float, action: str = "add") -> Tuple[bool, str]:
@@ -489,6 +704,7 @@ class TradingSystemOrchestrator:
                 return False, "Added fund amount must be greater than zero."
             self.settings.capital = round(self.settings.capital + amt, 2)
 
+        self._persist_runtime_state(sync=True)
         self.client.get_live_broker_snapshot(force=True)
         msg = f"Strategy capital updated to ₹{self.settings.capital:,.2f}; broker balances synced."
         logger.info(msg)
@@ -584,6 +800,7 @@ class TradingSystemOrchestrator:
 
     def run_eod_squareoff(self) -> None:
         self.risk_manager.auto_square_off_all()
+        self._persist_runtime_state(sync=False)
 
     def run_eod_report(self) -> None:
         csv_path = self.risk_manager.export_daily_trades_csv()
@@ -633,7 +850,7 @@ class TradingSystemOrchestrator:
         last_t = getattr(self, "_last_reauth_time", 0.0)
         last_ok = getattr(self, "_last_reauth_ok", False)
         is_invalid_ip = "INVALID_IP" in str(getattr(self.auth, "last_login_status", "") or "")
-        cooldown = 15.0 if last_ok else (180.0 if is_invalid_ip else 60.0)
+        cooldown = 120.0 if last_ok else (180.0 if is_invalid_ip else 90.0)
         if last_t > 0.0 and (now_m - last_t) < cooldown:
             logger.debug("Shoonya re-auth skipped within %.0fs cooldown (last_ok=%s)", cooldown, last_ok)
             return last_ok
@@ -648,8 +865,11 @@ class TradingSystemOrchestrator:
                 self._last_reauth_ok = True
                 logger.info("Shoonya OAuth session successfully renewed (%s)", self.settings.shoonya_user_id)
                 self.client.update_credentials(self.settings)
+                raw_ub = getattr(self.client.api, "_use_bearer", True)
+                use_bearer = (raw_ub if isinstance(raw_ub, bool) else True) and (
+                    "DYNAMIC_IP_FALLBACK" not in str(self.auth.last_login_status or "")
+                )
                 susertoken = getattr(self.client.api, "susertoken", "") or getattr(self.auth.api, "susertoken", "") or token
-                use_bearer = "DYNAMIC_IP_FALLBACK" not in str(self.auth.last_login_status or "")
                 if hasattr(self.client.api, "injectOAuthHeader"):
                     try:
                         self.client.api.injectOAuthHeader(
@@ -669,6 +889,7 @@ class TradingSystemOrchestrator:
                 if not self.client.ws_connected:
                     self.client.reconnect_websocket()
                     self._backfill_all_indices()
+                self._persist_runtime_state(sync=False)
                 return True
             else:
                 self._last_reauth_ok = False
@@ -731,6 +952,7 @@ class TradingSystemOrchestrator:
         end_str = self.settings.orb_end_time.strftime("%H:%M")
         msg = f"ORB window set to {mins}m ({start_str}–{end_str} IST); opening range recalculated."
         logger.info(msg)
+        self._persist_runtime_state(sync=True)
         return True, msg
 
     def set_orb_window(self, minutes: int) -> Tuple[bool, str]:
@@ -741,13 +963,17 @@ class TradingSystemOrchestrator:
     def reset_daily_trades(self) -> Tuple[bool, str]:
         """Reset daily trades count to 0 and clear any risk management halt."""
         self.risk_manager.reset_trades_counter()
+        self._persist_runtime_state(sync=True)
         msg = f"Daily trades counter reset to 0/{self.settings.max_trades_per_day}; strategy unhalted."
         logger.info(msg)
         return True, msg
 
     def set_max_daily_loss(self, amount: Optional[float]) -> Tuple[bool, str]:
         """Modify the Daily Max Loss Guardrail (₹) or pass None/0 for dynamic AUTO sizing."""
-        return self.risk_manager.set_max_daily_loss(amount)
+        ok, msg = self.risk_manager.set_max_daily_loss(amount)
+        if ok:
+            self._persist_runtime_state(sync=True)
+        return ok, msg
 
     def set_enabled_indices(
         self,
@@ -755,11 +981,17 @@ class TradingSystemOrchestrator:
         banknifty: Optional[bool] = None,
     ) -> Tuple[bool, str]:
         """Toggle whether NIFTY and/or BANKNIFTY are enabled for live strategy execution."""
-        return self.risk_manager.set_enabled_indices(nifty=nifty, banknifty=banknifty)
+        ok, msg = self.risk_manager.set_enabled_indices(nifty=nifty, banknifty=banknifty)
+        if ok:
+            self._persist_runtime_state(sync=True)
+        return ok, msg
 
     def reset_risk_guardrails(self, reset_type: str = "all") -> Tuple[bool, str]:
         """Reset system halts, daily order count, weekly loss guard, and/or daily MTM loss."""
-        return self.risk_manager.reset_halt_and_limits(reset_type=reset_type)
+        ok, msg = self.risk_manager.reset_halt_and_limits(reset_type=reset_type)
+        if ok:
+            self._persist_runtime_state(sync=True)
+        return ok, msg
 
     def set_entry_cutoff_time(self, cutoff_time_str: str) -> Tuple[bool, str]:
         """Configure entry cutoff time between ORB end time (e.g. 09:30) and Auto Squareoff (15:15)."""
@@ -782,6 +1014,7 @@ class TradingSystemOrchestrator:
         with self._lock:
             self.settings.entry_cutoff_time = cutoff_t
 
+        self._persist_runtime_state(sync=True)
         msg = f"Auto breakout entry window updated to {self.settings.orb_end_time.strftime('%H:%M')}–{cutoff_t.strftime('%H:%M')} IST."
         logger.info(msg)
         return True, msg
@@ -808,6 +1041,7 @@ class TradingSystemOrchestrator:
         tot_qty = spec.lot_size * val
         msg = f"Updated {idx} to {val} lot(s) ({tot_qty} quantity). Dynamic Max Daily Loss set to ₹{dynamic_max_loss:,.0f}."
         logger.info(msg)
+        self._persist_runtime_state(sync=True)
         return True, msg
 
     def set_index_product_type(self, index_name: str, product_type: str) -> Tuple[bool, str]:
@@ -831,6 +1065,7 @@ class TradingSystemOrchestrator:
 
         msg = f"Updated {idx} order product type to {lbl}."
         logger.info(msg)
+        self._persist_runtime_state(sync=True)
         return True, msg
 
     def trigger_auto_order(
@@ -904,6 +1139,7 @@ class TradingSystemOrchestrator:
             return False, "Strategy entry execution skipped or rejected by risk manager.", {}
 
         self.client.get_live_broker_snapshot(force=True)
+        self._persist_runtime_state(sync=True)
         order_id = pos.entry_order_id or "SUBMITTED"
         msg = f"Auto-order triggered successfully: {idx} {pos.contract.tradingsymbol} qty={pos.initial_qty} (Order ID: {order_id}) in {self.settings.mode} mode."
         logger.info(msg)
@@ -917,12 +1153,14 @@ class TradingSystemOrchestrator:
 
     def trigger_kill_switch(self, reason: str = "MANUAL_UI_KILL_SWITCH") -> None:
         self.risk_manager.emergency_kill_switch(reason=reason)
+        self._persist_runtime_state(sync=True)
 
     def exit_position(self, index_name: str) -> Tuple[bool, str]:
         """Manually exit / square off an active position for an index or commodity."""
         idx = index_name.strip().upper()
         ok = self.risk_manager.exit_position(idx, reason="UI_MANUAL_EXIT")
         if ok:
+            self._persist_runtime_state(sync=True)
             msg = f"Successfully squared off {idx} position."
             logger.info(msg)
             return True, msg
@@ -946,10 +1184,129 @@ class TradingSystemOrchestrator:
             new_mode = "LIVE" if self.settings.mode == "PAPER" else "PAPER"
             self.settings.mode = new_mode
             logger.warning("Trading MODE switched to %s via UI", new_mode)
-            return True, f"Switched mode to {new_mode}"
+        self._persist_runtime_state(sync=True)
+        return True, f"Switched mode to {new_mode}"
+
+    def run_minute_signal_check(self, now_ist: Optional[datetime] = None) -> Dict[str, Any]:
+        """Evaluate live 1-minute spot/indicator state and trigger qualified entries."""
+        dt = now_ist or datetime.now(IST)
+        tick_stale = (
+            not self.client.ws_connected
+            or self.client.last_tick_monotonic <= 0
+            or (time.monotonic() - self.client.last_tick_monotonic) > 15.0
+        )
+
+        vix = self.client.get_ltp(INDIA_VIX_KEY)
+        if vix is None or tick_stale:
+            try:
+                q_vix = self.client.get_quotes(INDIA_VIX_EXCHANGE, INDIA_VIX_TOKEN)
+                if isinstance(q_vix, dict):
+                    raw_vix = q_vix.get("lp") or q_vix.get("c")
+                    if raw_vix is not None and float(raw_vix) > 0:
+                        vix = float(raw_vix)
+                        self.client.update_ltp(INDIA_VIX_KEY, vix)
+            except Exception as exc:
+                logger.debug("1m VIX REST refresh skipped: %s", exc)
+
+        for name, spec in INDEX_SPECS.items():
+            if tick_stale or self.client.get_ltp(spec.spot_key) is None:
+                try:
+                    q_spot = self.client.get_quotes(spec.spot_exchange, spec.spot_token)
+                    if isinstance(q_spot, dict):
+                        raw_lp = q_spot.get("lp") or q_spot.get("c")
+                        if raw_lp is not None and float(raw_lp) > 0:
+                            lp = float(raw_lp)
+                            vol = 0
+                            try:
+                                if q_spot.get("v") is not None:
+                                    vol = int(float(q_spot["v"]))
+                            except (TypeError, ValueError):
+                                vol = 0
+                            self.client.update_ltp(spec.spot_key, lp, volume=vol if vol > 0 else None)
+                            self.candle_builders[name].on_tick(
+                                price=lp,
+                                tick_time=dt,
+                                volume=vol,
+                                is_cumulative_volume=True,
+                            )
+                except Exception as exc:
+                    logger.debug("1m spot REST refresh skipped for %s: %s", name, exc)
+
+        for builder in self.candle_builders.values():
+            builder.flush_due_candles(dt)
+
+        if dt.weekday() < 5 and self.settings.orb_end_time <= dt.time() < self.settings.market_close_time:
+            for name, builder in self.candle_builders.items():
+                st_cur = self.strategy.get_state(name)
+                if not st_cur.is_locked and builder.get_candles():
+                    self.strategy.lock_opening_range(name, builder.get_candles(), session_date=dt.date())
+
+        vix = self.client.get_ltp(INDIA_VIX_KEY)
+        summary_parts = []
+        triggered = []
+        for name, builder in self.candle_builders.items():
+            candles_open = builder.get_candles(include_open=True)
+            if not candles_open:
+                continue
+            signal = self.strategy.evaluate_live_1m_check(
+                index_name=name,
+                candles_with_open=candles_open,
+                india_vix=vix,
+                current_time_ist=dt,
+            )
+            st_state = self.strategy.get_state(name)
+            latest_c = candles_open[-1]
+            self.risk_manager.check_spot_atr_stop_exit(
+                index_name=name,
+                spot_low=float(latest_c.low),
+                spot_high=float(latest_c.high),
+            )
+            self.risk_manager.check_supertrend_trailing_exit(
+                index_name=name,
+                spot_close=float(latest_c.close),
+                supertrend_line=st_state.last_supertrend,
+                supertrend_dir=st_state.last_supertrend_dir,
+            )
+            spot_txt = f"{st_state.last_spot:.1f}" if st_state.last_spot is not None else "--"
+            rsi_txt = f"{st_state.last_rsi:.1f}" if st_state.last_rsi is not None else "--"
+            st_txt = f"{st_state.last_supertrend:.1f}" if st_state.last_supertrend is not None else "--"
+            summary_parts.append(f"{name}={spot_txt}(RSI={rsi_txt},ST={st_txt})")
+
+            if (
+                signal is not None
+                and self._last_triggered_bucket_by_index.get(name) != signal.candle_time
+                and name not in self.risk_manager.positions
+            ):
+                logger.info(
+                    "[1M SIGNAL] %s %s spot=%.2f ORH=%.2f ORL=%.2f VWAP=%.2f RSI=%.1f VIX=%.2f",
+                    signal.index_name,
+                    signal.signal_type,
+                    signal.spot_close,
+                    signal.orh,
+                    signal.orl,
+                    signal.vwap,
+                    signal.rsi,
+                    signal.india_vix,
+                )
+                pos = self.risk_manager.execute_entry(signal)
+                if pos is not None:
+                    self._last_triggered_bucket_by_index[name] = signal.candle_time
+                    triggered.append(signal.index_name)
+                    self._persist_runtime_state(sync=False)
+
+        self.last_signal_check_time = dt.strftime("%H:%M:%S")
+        vix_txt = f"{vix:.2f}" if vix is not None else "--"
+        logger.info(
+            "[1M SIGNAL CHECK] %s | VIX=%s | %s%s",
+            self.last_signal_check_time,
+            vix_txt,
+            " | ".join(summary_parts) if summary_parts else "Waiting for candles",
+            f" | TRIGGERED={','.join(triggered)}" if triggered else "",
+        )
+        return {"time": self.last_signal_check_time, "vix": vix, "triggered": triggered}
 
     def step_scheduler(self, now_ist: Optional[datetime] = None) -> None:
-        """Advance scheduled milestones and 1s/10s/15s operational checks."""
+        """Advance scheduled milestones and 1s/10s/15s/60s operational checks."""
         dt = now_ist or datetime.now(IST)
         today = dt.date()
         current_t = dt.time()
@@ -973,6 +1330,7 @@ class TradingSystemOrchestrator:
                     self._milestone_overrides = {
                         k: v for k, v in self._milestone_overrides.items() if v[0] == today
                     }
+                    self._last_triggered_bucket_by_index.clear()
                     self.strategy.reset_daily(today)
                     self.risk_manager.reset_daily()
                     self._mark_milestone("reset", today)
@@ -1084,6 +1442,10 @@ class TradingSystemOrchestrator:
                     self.client.check_ws_watchdog(dt)
 
                 now_m = time.monotonic()
+                if now_m - self._last_signal_check_monotonic >= self.settings.signal_check_interval_sec:
+                    self._last_signal_check_monotonic = now_m
+                    self.run_minute_signal_check(dt)
+
                 if now_m - self._last_reconcile_monotonic >= self.settings.reconcile_interval_sec:
                     self.risk_manager.reconcile_positions()
                     self._last_reconcile_monotonic = now_m
@@ -1445,13 +1807,26 @@ class TradingSystemOrchestrator:
             },
         ]
 
+        next_signal_check_sec: Optional[int] = None
+        if is_weekday and is_trading_hour:
+            if self._last_signal_check_monotonic > 0:
+                next_signal_check_sec = max(
+                    0,
+                    int(round(self.settings.signal_check_interval_sec - (time.monotonic() - self._last_signal_check_monotonic))),
+                )
+            else:
+                next_signal_check_sec = 0
+
         return {
             "phase": phase,
             "is_market_day": is_weekday,
             "next_candle_close_sec": next_candle_close_sec,
+            "signal_check_interval_sec": int(self.settings.signal_check_interval_sec),
+            "last_signal_check_time": self.last_signal_check_time,
+            "next_signal_check_sec": next_signal_check_sec,
             "milestones": milestones,
             "auto_mode_note": (
-                f"Option 2 Dual Engine triggers automatically on 5m candle closes "
+                f"Option 2 Dual Engine scans every 60s + 5m candle closes "
                 f"({entry_start.strftime('%H:%M')}-{entry_cutoff.strftime('%H:%M')} IST, VIX >= {self.settings.min_india_vix:.0f}, ST 10,3) "
                 f"in {self.settings.mode} mode: NIFTY 15m HTF Swing Hybrid & BANKNIFTY 5-Gate ORB."
             ),

@@ -411,6 +411,7 @@ def test_mtm_kill_switch_and_csv_export(tmp_path: Path) -> None:
     client = ShoonyaClient(settings)
     mapper = InstrumentMapper(client)
     rm = RiskManager(settings, client, mapper)
+    rm.set_max_daily_loss(5000.0)
 
     signal = ORBSignal(
         index_name="NIFTY",
@@ -979,10 +980,16 @@ def test_master_alpha_strategy_pillars(tmp_path: Path) -> None:
     # 1. Test Day-based Position Sizing rule:
     # Tuesday: 4 lots (260 qty for NIFTY, 120 qty for BNF)
     # Mon-Fri: 2 lots (130 qty for NIFTY, 60 qty for BNF)
+    now_ist = datetime.now(IST)
+    cur_week = (now_ist.year, now_ist.isocalendar()[1])
+    tue_dt = (now_ist - timedelta(days=(now_ist.weekday() - 1))).replace(
+        hour=10, minute=30, second=0, microsecond=0
+    )
+    mon_dt = tue_dt - timedelta(days=1)
     tuesday_signal = ORBSignal(
         index_name="NIFTY",
         signal_type="CE",
-        candle_time=_ist_dt(2026, 11, 17, 10, 30), # Tuesday
+        candle_time=tue_dt,  # Tuesday of current week
         spot_close=24580.0,
         orh=24540.0,
         orl=24495.0,
@@ -992,7 +999,7 @@ def test_master_alpha_strategy_pillars(tmp_path: Path) -> None:
     )
     tue_lots = rm.calculate_dynamic_lots("NIFTY", 200.0, tuesday_signal.candle_time)
     assert tue_lots == 4
-    mon_lots = rm.calculate_dynamic_lots("NIFTY", 200.0, _ist_dt(2026, 11, 16, 10, 30))
+    mon_lots = rm.calculate_dynamic_lots("NIFTY", 200.0, mon_dt)
     assert mon_lots == 2
 
     pos = rm.execute_entry(tuesday_signal, option_ltp=200.0)
@@ -1004,8 +1011,8 @@ def test_master_alpha_strategy_pillars(tmp_path: Path) -> None:
     rm._close_position_record_locked(pos, exit_price=170.0, exit_reason="STOP_LOSS")
     assert rm.can_take_new_trade("NIFTY") is False  # Stop-on-SL active for same day
     rm.sl_hit_today_by_index.clear()  # Simulate next trading day within same week
-    assert rm.weekly_losses[(2026, 47)] == 1
-    guard1 = rm.get_weekly_guard_status(tuesday_signal.candle_time)
+    assert rm.weekly_losses[cur_week] == 1
+    guard1 = rm.get_weekly_guard_status(now_ist)
     assert guard1["losses"] == 1
     assert guard1["state"] == "CAUTION"
     assert rm.can_take_new_trade("NIFTY") is True
@@ -1015,8 +1022,8 @@ def test_master_alpha_strategy_pillars(tmp_path: Path) -> None:
     pos2 = rm.execute_entry(tuesday_signal, option_ltp=200.0)
     assert pos2 is not None
     rm._close_position_record_locked(pos2, exit_price=170.0, exit_reason="STOP_LOSS")
-    assert rm.weekly_losses[(2026, 47)] == 2
-    guard2 = rm.get_weekly_guard_status(tuesday_signal.candle_time)
+    assert rm.weekly_losses[cur_week] == 2
+    guard2 = rm.get_weekly_guard_status(now_ist)
     assert guard2["losses"] == 2
     assert guard2["is_halted"] is True
     assert guard2["state"] == "HALTED"
@@ -1234,6 +1241,147 @@ def test_telegram_startup_and_test_endpoint(tmp_path: Path) -> None:
     orch.step_scheduler(now_ist=_ist_dt(2026, 11, 23, 10, 1, 0))
     scanner_msgs = [m for m in sent if "Scanner LIVE" in m]
     assert len(scanner_msgs) == 1
+
+
+def test_positionbook_404_no_reauth_and_reconcile_skip(tmp_path: Path) -> None:
+    """PositionBook 404 returns [] without triggering reauth; Bearer 401 tries jKey fallback first."""
+    settings = _make_settings(tmp_path, mode="LIVE", shoonya_user_id="USR404")
+    client = ShoonyaClient(settings)
+    reauth_cb = MagicMock(return_value=True)
+    client.register_reauth_callback(reauth_cb)
+
+    # 1. HTTP 404 JSON "no data" on PositionBook -> returns [] and no reauth
+    resp_404_json = MagicMock(status_code=404)
+    resp_404_json.json.return_value = {"stat": "Not_Ok", "emsg": "no data"}
+    client.api._session.post = MagicMock(return_value=resp_404_json)  # type: ignore[method-assign]
+    assert client.get_positions() == []
+    assert reauth_cb.call_count == 0
+
+    # 2. HTTP 404 non-JSON empty body on PositionBook -> returns [] without raise_for_status/reauth
+    resp_404_raw = MagicMock(status_code=404)
+    resp_404_raw.json.side_effect = ValueError("No JSON")
+    resp_404_raw.raise_for_status.side_effect = RuntimeError("Should not raise 404")
+    client.api._session.post = MagicMock(return_value=resp_404_raw)  # type: ignore[method-assign]
+    assert client.get_positions() == []
+    assert reauth_cb.call_count == 0
+
+    # 3. Bearer 401 falls back cleanly to jKey before re-auth
+    client.api.injectOAuthHeader("OAUTH_TOK", "USR404", "USR404", susertoken="QUICK_JKEY", use_bearer=True)
+    resp_401 = MagicMock(status_code=401)
+    resp_ok = MagicMock(status_code=200)
+    resp_ok.json.return_value = {"stat": "Ok", "cash": "50000"}
+    client.api._session.post = MagicMock(side_effect=[resp_401, resp_ok])  # type: ignore[method-assign]
+    lim = client.api.get_limits()
+    assert lim["stat"] == "Ok"
+    assert client.api._use_bearer is False
+    assert reauth_cb.call_count == 0
+
+    # 4. RiskManager.reconcile_positions skips PositionBook API call when no internal positions exist
+    rm = RiskManager(settings, client, InstrumentMapper(client))
+    client.get_positions = MagicMock()  # type: ignore[method-assign]
+    assert rm.reconcile_positions() == []
+    assert client.get_positions.call_count == 0
+
+
+def test_runtime_state_persistence_across_restart(tmp_path: Path) -> None:
+    """Mode, capital, lots, enabled indices, loss limits, timings & token persist across restarts."""
+    s1 = _make_settings(tmp_path, mode="LIVE", capital=100000.0, shoonya_user_id="USR_P")
+    orch1 = TradingSystemOrchestrator(settings=s1)
+    assert orch1.toggle_mode()[0] is True  # LIVE -> PAPER
+    assert orch1.add_or_update_funds(250000.0, action="set")[0] is True
+    assert orch1.set_index_lots("NIFTY", 4)[0] is True
+    assert orch1.set_index_product_type("BANKNIFTY", "I")[0] is True
+    assert orch1.set_max_daily_loss(7500.0)[0] is True
+    assert orch1.set_enabled_indices(nifty=True, banknifty=False)[0] is True
+    assert orch1.set_orb_anchor("09:15", 15)[0] is True
+    assert orch1.set_entry_cutoff_time("14:30")[0] is True
+    orch1.auth.save_token("PERSIST_TOK_99", use_bearer=False)
+
+    state_file = Path(s1.data_dir) / "runtime_state.json"
+    assert state_file.exists()
+    # Delete local disk token file to verify external runtime_state token restoration works too
+    token_file = Path(s1.token_file_path)
+    if token_file.exists():
+        token_file.unlink()
+
+    s2 = _make_settings(tmp_path, mode="LIVE", capital=100000.0, shoonya_user_id="USR_P")
+    orch2 = TradingSystemOrchestrator(settings=s2)
+    assert orch2.settings.mode == "PAPER"
+    assert orch2.settings.capital == 250000.0
+    assert orch2.custom_lots["NIFTY"] == 4
+    assert orch2.custom_product_types["BANKNIFTY"] == "I"
+    assert orch2.risk_manager.custom_max_daily_loss == 7500.0
+    assert orch2.risk_manager.get_enabled_indices() == {"NIFTY": True, "BANKNIFTY": False}
+    assert orch2.settings.orb_window_minutes == 15
+    assert orch2.settings.entry_cutoff_time == time(14, 30, 0)
+
+    loaded_state = orch2.state_store.load()
+    assert loaded_state["shoonya_token"]["access_token"] == "PERSIST_TOK_99"
+    orch2.auth.api.get_limits = MagicMock(return_value={"stat": "Ok"})  # type: ignore[method-assign]
+    assert orch2.auth.load_cached_token(external_payload=loaded_state["shoonya_token"]) == "PERSIST_TOK_99"
+
+
+def test_one_minute_signal_check_and_no_double_entry(tmp_path: Path) -> None:
+    """1-minute signal check evaluates live forming candle and avoids double entry on 5m close."""
+    settings = _make_settings(
+        tmp_path,
+        mode="PAPER",
+        orb_window_minutes=15,
+        orb_end_time=time(9, 30, 0),
+        daily_bias_filter=False,
+        use_ema_filter=False,
+        min_candle_body_ratio=0.0,
+        use_supertrend_filter=False,
+        enable_nifty_trading=False,
+        enable_banknifty_trading=True,
+    )
+    orch = TradingSystemOrchestrator(settings=settings)
+    orch.client.ws_connected = True
+    orch.client.last_tick_monotonic = 9999999999.0
+    orch.client.update_ltp("NSE|26017", 15.0)
+
+    # Seed 16 prior closed candles (5m + warmup from previous day) + today's rising candles -> Wilder RSI(14) > 60 & 15m ORB 51400..51550
+    bnf_builder = orch.candle_builders["BANKNIFTY"]
+    base_candles: List[Candle] = []
+    prev_day = _ist_dt(2026, 11, 23, 14, 30, 0)
+    for k in range(10):
+        c_ts = prev_day + timedelta(minutes=k * 5)
+        px = 51200.0 + (k * 10.0)
+        base_candles.append(
+            Candle(timestamp=c_ts, open=px - 4.0, high=px + 8.0, low=px - 8.0, close=px + 4.0, volume=1000, is_closed=True)
+        )
+    start_dt = _ist_dt(2026, 11, 24, 9, 15, 0)
+    for i in range(10):
+        c_ts = start_dt + timedelta(minutes=i * 5)
+        px = 51400.0 + (i * 15.0)
+        hi = 51550.0 if i < 3 else (px + 10.0)
+        lo = 51400.0 if i < 3 else (px - 10.0)
+        base_candles.append(
+            Candle(timestamp=c_ts, open=px - 5.0, high=hi, low=lo, close=px + 5.0, volume=1000, is_closed=True)
+        )
+    bnf_builder.seed_candles(base_candles)
+    orch.strategy.lock_opening_range("BANKNIFTY", bnf_builder.get_candles(), session_date=date(2026, 11, 24))
+    assert orch.strategy.get_state("BANKNIFTY").is_locked is True
+
+    # Inject forming 1m breakout tick at 10:06:00 above ORH=51550 & VWAP
+    bnf_builder.on_tick(51680.0, tick_time=_ist_dt(2026, 11, 24, 10, 6, 0), volume=1500)
+    orch.client.update_ltp("NSE|26009", 51680.0)
+
+    res = orch.run_minute_signal_check(now_ist=_ist_dt(2026, 11, 24, 10, 6, 0))
+    assert "BANKNIFTY" in res["triggered"]
+    assert orch.last_signal_check_time == "10:06:00"
+    assert orch.risk_manager.trades_taken_today == 1
+
+    # Second 1m check inside same 10:05 bucket & subsequent 10:10 close must NOT double-enter
+    res2 = orch.run_minute_signal_check(now_ist=_ist_dt(2026, 11, 24, 10, 7, 0))
+    assert res2["triggered"] == []
+    bnf_builder.flush_due_candles(now_ist=_ist_dt(2026, 11, 24, 10, 10, 0))
+    assert orch.risk_manager.trades_taken_today == 1
+
+    snap = orch.get_status_snapshot()
+    assert snap["schedule"]["signal_check_interval_sec"] == 60
+    assert snap["schedule"]["last_signal_check_time"] == "10:07:00"
+
 
 
 

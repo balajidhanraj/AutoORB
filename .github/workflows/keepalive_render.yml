@@ -4,8 +4,8 @@ on:
   schedule:
     # Mon-Fri NSE market prep & session: every 5 min from 02:00-11:55 UTC (07:30-17:25 IST)
     - cron: "*/5 2-11 * * 1-5"
-    # Evenings & weekends: every 10 min from 12:00-18:50 UTC (17:30-00:20 IST)
-    - cron: "*/10 12-18 * * *"
+    # Overnight & weekends: keep Free Tier container warm so runtime state stays active 24/7
+    - cron: "*/10 0-1,12-23 * * *"
   workflow_dispatch:
 
 jobs:
