@@ -7,13 +7,13 @@ import json
 import threading
 import time
 import uuid
-from datetime import datetime
+from datetime import datetime, time as dt_time
 from typing import Any, Callable, Dict, List, Optional
 
 import requests
 import websocket
 
-from config.settings import IST, AppSettings
+from config.settings import IST, AppSettings, is_nse_trading_day
 from utils.logger import get_logger
 
 logger = get_logger("broker.client")
@@ -168,7 +168,26 @@ class CompatibleNorenApi:
             data = f"jData={json.dumps(body)}"
         try:
             resp = self._session.post(f"{self.host}{endpoint}", data=data, timeout=15)
+
+            # Parse JSON before status checks so empty/holiday book responses ("no data")
+            # never trigger false 401 re-authentication loops.
+            res: Any = None
+            try:
+                res = resp.json()
+            except ValueError:
+                res = None
+
+            if endpoint in ("PositionBook", "OrderBook", "TradeBook"):
+                if isinstance(res, dict) and res.get("stat") == "Not_Ok":
+                    if "no data" in str(res.get("emsg") or "").lower():
+                        return []
+                if res is None and resp.status_code == 404:
+                    logger.debug("Shoonya %s returned HTTP 404 without JSON; treating as empty book []", endpoint)
+                    return []
+
             if resp.status_code == 401:
+                raw_txt = getattr(resp, "text", "")
+                resp_snippet = raw_txt.strip()[:140] if isinstance(raw_txt, str) else ""
                 if _allow_jkey_fallback and use_bearer:
                     alt_tok = (
                         getattr(self, "_quick_susertoken", "")
@@ -177,8 +196,9 @@ class CompatibleNorenApi:
                     )
                     if alt_tok:
                         logger.warning(
-                            "Shoonya API returned 401 on %s (Bearer); trying jKey session fallback...",
+                            "Shoonya API returned 401 on %s (Bearer, body=%s); trying jKey session fallback...",
                             endpoint,
+                            resp_snippet or "<empty>",
                         )
                         orig_auth = self._session.headers.pop("Authorization", None)
                         try:
@@ -191,29 +211,36 @@ class CompatibleNorenApi:
                             if orig_auth:
                                 self._session.headers["Authorization"] = orig_auth
                             raise
+                        fb_res: Any = None
+                        try:
+                            fb_res = fb_resp.json()
+                        except ValueError:
+                            fb_res = None
+                        if endpoint in ("PositionBook", "OrderBook", "TradeBook") and isinstance(fb_res, dict):
+                            if fb_res.get("stat") == "Not_Ok" and "no data" in str(fb_res.get("emsg") or "").lower():
+                                self._use_bearer = False
+                                self.access_token = ""
+                                self.susertoken = alt_tok
+                                return []
                         if fb_resp.status_code != 401:
                             self._use_bearer = False
                             self.access_token = ""
                             self.susertoken = alt_tok
                             resp = fb_resp
+                            res = fb_res
                         elif orig_auth:
                             self._session.headers["Authorization"] = orig_auth
                 if resp.status_code == 401 and _retry and self._reauth_callback:
-                    logger.warning("Shoonya API returned 401 on %s; attempting automatic re-auth...", endpoint)
+                    logger.warning(
+                        "Shoonya API returned 401 on %s (body=%s); attempting automatic re-auth...",
+                        endpoint,
+                        resp_snippet or "<empty>",
+                    )
                     if self._reauth_callback():
                         return self._post(endpoint, body, _retry=False, _allow_jkey_fallback=False)
 
-            # Shoonya Noren API frequently returns HTTP 400/404 with JSON {"stat":"Not_Ok","emsg":"no data"}
-            # or an empty/non-JSON 404 on empty PositionBook/OrderBook. Treat empty book 404s safely as [].
-            res: Any = None
-            try:
-                res = resp.json()
-            except ValueError:
-                res = None
-
             if res is None:
                 if resp.status_code == 404 and endpoint in ("PositionBook", "OrderBook", "TradeBook"):
-                    logger.debug("Shoonya %s returned HTTP 404 without JSON; treating as empty book []", endpoint)
                     return []
                 resp.raise_for_status()
                 return {}
@@ -313,12 +340,22 @@ class CompatibleNorenApi:
     def cancel_order(self, orderno: str) -> Dict[str, Any]:
         return self._post("CancelOrder", {"ordersource": "API", "uid": self.username, "norenordno": str(orderno)})
 
-    def get_positions(self) -> List[Dict[str, Any]]:
-        resp = self._post("PositionBook", {"uid": self.username, "actid": self.account_id})
+    def get_positions(self, _retry: bool = True, _allow_jkey_fallback: bool = True) -> List[Dict[str, Any]]:
+        resp = self._post(
+            "PositionBook",
+            {"uid": self.username, "actid": self.account_id},
+            _retry=_retry,
+            _allow_jkey_fallback=_allow_jkey_fallback,
+        )
         return resp if isinstance(resp, list) else []
 
-    def get_order_book(self) -> List[Dict[str, Any]]:
-        resp = self._post("OrderBook", {"uid": self.username})
+    def get_order_book(self, _retry: bool = True, _allow_jkey_fallback: bool = True) -> List[Dict[str, Any]]:
+        resp = self._post(
+            "OrderBook",
+            {"uid": self.username},
+            _retry=_retry,
+            _allow_jkey_fallback=_allow_jkey_fallback,
+        )
         return resp if isinstance(resp, list) else []
 
     def start_websocket(
@@ -570,19 +607,27 @@ class ShoonyaClient:
                 logger.error("WebSocket subscribe error: %s", exc)
 
     def check_ws_watchdog(self, now_ist: Optional[datetime] = None) -> bool:
-        """Reconnect WebSocket and trigger candle backfill if feed stalls >15s in market hours."""
+        """Reconnect WebSocket if disconnected or truly stalled during an active NSE trading day."""
         dt = now_ist or datetime.now(IST)
+        if not is_nse_trading_day(dt.date()):
+            return False
         in_market = self.settings.market_open_time <= dt.time() <= self.settings.market_close_time
         if not in_market or not self.subscribed_tokens:
             return False
 
         now_m = time.monotonic()
-        if not self.ws_connected and (now_m - self._last_reconnect_monotonic) < self.settings.ws_watchdog_timeout_sec:
-            return False
-
-        elapsed = now_m - self.last_tick_monotonic if self.last_tick_monotonic > 0 else 999.0
-        if self.ws_connected and elapsed <= self.settings.ws_watchdog_timeout_sec:
-            return False
+        if not self.ws_connected:
+            if (now_m - self._last_reconnect_monotonic) < max(60.0, self.settings.ws_watchdog_timeout_sec):
+                return False
+            elapsed = now_m - self.last_tick_monotonic if self.last_tick_monotonic > 0 else 999.0
+        else:
+            # Allow a 90s opening grace period from 09:15 before tearing down an open socket
+            if dt.time() < dt_time(9, 16, 30):
+                return False
+            elapsed = now_m - self.last_tick_monotonic if self.last_tick_monotonic > 0 else 999.0
+            silent_limit = max(90.0, self.settings.ws_watchdog_timeout_sec)
+            if elapsed <= silent_limit or (now_m - self._last_reconnect_monotonic) < 120.0:
+                return False
 
         self._last_reconnect_monotonic = now_m
         logger.warning("WebSocket watchdog triggered (connected=%s, silent=%.1fs); reconnecting...", self.ws_connected, elapsed)
@@ -899,7 +944,10 @@ class ShoonyaClient:
                     pass
 
             try:
-                raw_orders = self.api.get_order_book() or []
+                try:
+                    raw_orders = self.api.get_order_book(_retry=False, _allow_jkey_fallback=False) or []
+                except TypeError:
+                    raw_orders = self.api.get_order_book() or []
                 norm_orders = []
                 for o in raw_orders:
                     if not isinstance(o, dict):
@@ -926,7 +974,10 @@ class ShoonyaClient:
                 logger.debug("Live OrderBook fetch failed: %s", exc)
 
             try:
-                raw_positions = self.api.get_positions() or []
+                try:
+                    raw_positions = self.api.get_positions(_retry=False, _allow_jkey_fallback=False) or []
+                except TypeError:
+                    raw_positions = self.api.get_positions() or []
                 norm_positions = []
                 for p in raw_positions:
                     if not isinstance(p, dict):

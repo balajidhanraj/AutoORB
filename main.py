@@ -15,7 +15,17 @@ import uvicorn
 from broker.auth import ShoonyaAuthenticator
 from broker.instrument_mapper import InstrumentMapper, round_to_strike
 from broker.shoonya_client import ShoonyaClient
-from config.settings import INDEX_SPECS, INDIA_VIX_EXCHANGE, INDIA_VIX_KEY, INDIA_VIX_TOKEN, IST, AppSettings, load_settings
+from config.settings import (
+    INDEX_SPECS,
+    INDIA_VIX_EXCHANGE,
+    INDIA_VIX_KEY,
+    INDIA_VIX_TOKEN,
+    IST,
+    NSE_HOLIDAYS_2026,
+    AppSettings,
+    is_nse_trading_day,
+    load_settings,
+)
 from engine.candle_builder import Candle, CandleBuilder
 from engine.risk_manager import RiskManager
 from engine.strategy_orb import ORBStrategy
@@ -1323,8 +1333,8 @@ class TradingSystemOrchestrator:
                 daemon=True,
             ).start()
 
-        # Skip trading schedule on weekends (Mon=0..Fri=4)
-        if dt.weekday() < 5:
+        # Skip trading schedule on weekends and official NSE holidays
+        if is_nse_trading_day(today):
             if self._milestone_ready("reset", today, current_t):
                 if not self.risk_manager.positions:
                     self._milestone_done = {k: v for k, v in self._milestone_done.items() if v == today}
@@ -1509,7 +1519,7 @@ class TradingSystemOrchestrator:
             orb_ready = bool(st.htf_swing_high is not None and st.htf_swing_low is not None and st.htf_atr is not None)
             entry_start = getattr(self.settings, "nifty_htf_entry_start_time", dt_time(10, 0, 0))
             entry_end = getattr(self.settings, "entry_cutoff_time", dt_time(13, 15, 0))
-            in_window = now_ist.weekday() < 5 and (entry_start <= now_ist.time() <= entry_end)
+            in_window = is_nse_trading_day(now_ist.date()) and (entry_start <= now_ist.time() <= entry_end)
             buf_pts = (float(getattr(self.settings, "nifty_htf_break_buf_atr", 0.1) or 0.1) * st.htf_atr) if st.htf_atr else 0.0
             ce_price_ok = bool(spot_ltp is not None and st.htf_swing_high is not None and spot_ltp > (st.htf_swing_high + buf_pts))
             pe_price_ok = bool(spot_ltp is not None and st.htf_swing_low is not None and spot_ltp < (st.htf_swing_low - buf_pts))
@@ -1522,7 +1532,7 @@ class TradingSystemOrchestrator:
             entry_start = getattr(self.settings, "entry_start_time", dt_time(10, 0, 0))
             entry_end = getattr(self.settings, "entry_cutoff_time", dt_time(13, 15, 0))
             in_window = (
-                now_ist.weekday() < 5
+                is_nse_trading_day(now_ist.date())
                 and (entry_start <= now_ist.time() <= entry_end)
             )
             ce_price_ok = bool(
@@ -1697,11 +1707,15 @@ class TradingSystemOrchestrator:
         today = now_ist.date()
         t = now_ist.time()
         is_weekday = now_ist.weekday() < 5
+        is_holiday = is_weekday and (today in NSE_HOLIDAYS_2026)
+        is_market_day = is_nse_trading_day(today)
         entry_start = getattr(self.settings, "entry_start_time", dt_time(10, 0, 0))
         entry_cutoff = getattr(self.settings, "entry_cutoff_time", dt_time(13, 15, 0))
 
         if not is_weekday:
             phase = "WEEKEND_STANDBY"
+        elif is_holiday:
+            phase = "NSE_HOLIDAY (MARKET CLOSED)"
         elif t < self.settings.market_open_time:
             phase = "PRE_MARKET"
         elif t < self.settings.orb_end_time:
@@ -1719,7 +1733,7 @@ class TradingSystemOrchestrator:
 
         next_candle_close_sec: Optional[int] = None
         is_trading_hour = (self.settings.market_open_time <= t < self.settings.market_close_time)
-        if is_weekday and is_trading_hour:
+        if is_market_day and is_trading_hour:
             sec_into_5m = (now_ist.minute % 5) * 60 + now_ist.second
             next_candle_close_sec = max(1, 300 - sec_into_5m)
 
@@ -1791,8 +1805,8 @@ class TradingSystemOrchestrator:
                 "label": "Institutional Breakout Scan",
                 "status": _ms_status(
                     "scanner",
-                    is_weekday and t > entry_cutoff,
-                    active_cond=is_weekday
+                    is_market_day and t > entry_cutoff,
+                    active_cond=is_market_day
                     and entry_start <= t <= entry_cutoff,
                 ),
             },
@@ -1803,13 +1817,13 @@ class TradingSystemOrchestrator:
                 "status": _ms_status(
                     "squareoff",
                     self._milestone_done.get("squareoff") == today
-                    or (is_weekday and t >= self.settings.auto_squareoff_time),
+                    or (is_market_day and t >= self.settings.auto_squareoff_time),
                 ),
             },
         ]
 
         next_signal_check_sec: Optional[int] = None
-        if is_weekday and is_trading_hour:
+        if is_market_day and is_trading_hour:
             if self._last_signal_check_monotonic > 0:
                 next_signal_check_sec = max(
                     0,
@@ -1820,7 +1834,7 @@ class TradingSystemOrchestrator:
 
         return {
             "phase": phase,
-            "is_market_day": is_weekday,
+            "is_market_day": is_market_day,
             "next_candle_close_sec": next_candle_close_sec,
             "signal_check_interval_sec": int(self.settings.signal_check_interval_sec),
             "last_signal_check_time": self.last_signal_check_time,

@@ -27,7 +27,7 @@ from broker.instrument_mapper import (
     round_to_strike,
 )
 from broker.shoonya_client import ShoonyaClient
-from config.settings import IST, AppSettings
+from config.settings import IST, AppSettings, is_nse_trading_day
 from engine.candle_builder import Candle, CandleBuilder
 from engine.indicators import calculate_intraday_vwap, calculate_wilder_rsi
 from engine.risk_manager import PositionState, RiskManager
@@ -1265,6 +1265,14 @@ def test_positionbook_404_no_reauth_and_reconcile_skip(tmp_path: Path) -> None:
     assert client.get_positions() == []
     assert reauth_cb.call_count == 0
 
+    # 2b. HTTP 401 with JSON "no data" on OrderBook/PositionBook -> returns [] without reauth
+    resp_401_nodata = MagicMock(status_code=401)
+    resp_401_nodata.json.return_value = {"stat": "Not_Ok", "emsg": 'Error Occurred : 5 "no data"'}
+    client.api._session.post = MagicMock(return_value=resp_401_nodata)  # type: ignore[method-assign]
+    assert client.api.get_order_book() == []
+    assert client.api.get_positions() == []
+    assert reauth_cb.call_count == 0
+
     # 3. UserDetails 401 must NOT trigger reauth or strip Bearer header
     client.api.injectOAuthHeader("OAUTH_TOK", "USR404", "USR404", susertoken="QUICK_WS_TOK", use_bearer=True)
     resp_401_ud = MagicMock(status_code=401)
@@ -1298,6 +1306,15 @@ def test_positionbook_404_no_reauth_and_reconcile_skip(tmp_path: Path) -> None:
     client.get_positions = MagicMock()  # type: ignore[method-assign]
     assert rm.reconcile_positions() == []
     assert client.get_positions.call_count == 0
+
+    # 6. NSE holiday check (Nov 24, 2026 Guru Nanak Jayanti) & WS watchdog grace period
+    assert is_nse_trading_day(date(2026, 11, 24)) is False
+    assert is_nse_trading_day(date(2026, 11, 25)) is True
+    client.subscribe(["NSE|26000"])
+    client.ws_connected = True
+    client.last_tick_monotonic = 0.0
+    assert client.check_ws_watchdog(now_ist=_ist_dt(2026, 11, 24, 9, 15, 0)) is False
+    assert client.check_ws_watchdog(now_ist=_ist_dt(2026, 11, 25, 9, 15, 0)) is False
 
 
 def test_runtime_state_persistence_across_restart(tmp_path: Path) -> None:
@@ -1367,7 +1384,7 @@ def test_one_minute_signal_check_and_no_double_entry(tmp_path: Path) -> None:
         base_candles.append(
             Candle(timestamp=c_ts, open=px - 4.0, high=px + 8.0, low=px - 8.0, close=px + 4.0, volume=1000, is_closed=True)
         )
-    start_dt = _ist_dt(2026, 11, 24, 9, 15, 0)
+    start_dt = _ist_dt(2026, 11, 25, 9, 15, 0)
     for i in range(10):
         c_ts = start_dt + timedelta(minutes=i * 5)
         px = 51400.0 + (i * 15.0)
@@ -1377,22 +1394,22 @@ def test_one_minute_signal_check_and_no_double_entry(tmp_path: Path) -> None:
             Candle(timestamp=c_ts, open=px - 5.0, high=hi, low=lo, close=px + 5.0, volume=1000, is_closed=True)
         )
     bnf_builder.seed_candles(base_candles)
-    orch.strategy.lock_opening_range("BANKNIFTY", bnf_builder.get_candles(), session_date=date(2026, 11, 24))
+    orch.strategy.lock_opening_range("BANKNIFTY", bnf_builder.get_candles(), session_date=date(2026, 11, 25))
     assert orch.strategy.get_state("BANKNIFTY").is_locked is True
 
     # Inject forming 1m breakout tick at 10:06:00 above ORH=51550 & VWAP
-    bnf_builder.on_tick(51680.0, tick_time=_ist_dt(2026, 11, 24, 10, 6, 0), volume=1500)
+    bnf_builder.on_tick(51680.0, tick_time=_ist_dt(2026, 11, 25, 10, 6, 0), volume=1500)
     orch.client.update_ltp("NSE|26009", 51680.0)
 
-    res = orch.run_minute_signal_check(now_ist=_ist_dt(2026, 11, 24, 10, 6, 0))
+    res = orch.run_minute_signal_check(now_ist=_ist_dt(2026, 11, 25, 10, 6, 0))
     assert "BANKNIFTY" in res["triggered"]
     assert orch.last_signal_check_time == "10:06:00"
     assert orch.risk_manager.trades_taken_today == 1
 
     # Second 1m check inside same 10:05 bucket & subsequent 10:10 close must NOT double-enter
-    res2 = orch.run_minute_signal_check(now_ist=_ist_dt(2026, 11, 24, 10, 7, 0))
+    res2 = orch.run_minute_signal_check(now_ist=_ist_dt(2026, 11, 25, 10, 7, 0))
     assert res2["triggered"] == []
-    bnf_builder.flush_due_candles(now_ist=_ist_dt(2026, 11, 24, 10, 10, 0))
+    bnf_builder.flush_due_candles(now_ist=_ist_dt(2026, 11, 25, 10, 10, 0))
     assert orch.risk_manager.trades_taken_today == 1
 
     snap = orch.get_status_snapshot()
