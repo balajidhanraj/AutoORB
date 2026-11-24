@@ -144,10 +144,13 @@ class ShoonyaAuthenticator:
         token = str(self.settings.shoonya_access_token or getattr(self.api, "access_token", "") or getattr(self.api, "susertoken", "") or "").strip()
         if not token or not self.last_token_date:
             return None
+        raw_q = getattr(self.api, "_quick_susertoken", "")
+        ws_tok = raw_q.strip() if isinstance(raw_q, str) else ""
         return {
             "date": self.last_token_date,
             "access_token": token,
             "susertoken": str(getattr(self.api, "susertoken", "") or token).strip(),
+            "ws_susertoken": ws_tok or str(getattr(self.api, "susertoken", "") or token).strip(),
             "use_bearer": bool(getattr(self.api, "_use_bearer", True)),
             "user_id": self.settings.shoonya_user_id,
             "created_at": datetime.now(IST).isoformat(),
@@ -159,6 +162,7 @@ class ShoonyaAuthenticator:
         today_str = self._today_ist_str()
         candidate_token = ""
         susertoken = ""
+        ws_susertoken = ""
         use_bearer = True
 
         candidates: list[Dict[str, Any]] = []
@@ -192,6 +196,7 @@ class ShoonyaAuthenticator:
             ):
                 candidate_token = str(payload["access_token"]).strip()
                 susertoken = str(payload.get("susertoken") or "").strip()
+                ws_susertoken = str(payload.get("ws_susertoken") or "").strip()
                 raw_ub = payload.get("use_bearer", True)
                 use_bearer = raw_ub if isinstance(raw_ub, bool) else str(raw_ub).lower() not in {"false", "0", "no"}
                 break
@@ -203,6 +208,8 @@ class ShoonyaAuthenticator:
             return None
 
         try:
+            if ws_susertoken and hasattr(self.api, "_quick_susertoken"):
+                self.api._quick_susertoken = ws_susertoken
             if not use_bearer:
                 self.api.injectOAuthHeader(
                     candidate_token,
@@ -241,6 +248,7 @@ class ShoonyaAuthenticator:
                                     "date": today_str,
                                     "access_token": candidate_token,
                                     "susertoken": susertoken or candidate_token,
+                                    "ws_susertoken": ws_susertoken or susertoken or candidate_token,
                                     "use_bearer": use_bearer,
                                     "user_id": self.settings.shoonya_user_id,
                                     "created_at": datetime.now(IST).isoformat(),
@@ -263,10 +271,13 @@ class ShoonyaAuthenticator:
         today_str = self._today_ist_str()
         token_path = Path(self.settings.token_file_path)
         token_path.parent.mkdir(parents=True, exist_ok=True)
+        raw_q = getattr(self.api, "_quick_susertoken", "")
+        ws_tok = raw_q.strip() if isinstance(raw_q, str) else ""
         payload = {
             "date": today_str,
             "access_token": access_token,
             "susertoken": getattr(self.api, "susertoken", "") or access_token,
+            "ws_susertoken": ws_tok or getattr(self.api, "susertoken", "") or access_token,
             "use_bearer": bool(use_bearer),
             "user_id": self.settings.shoonya_user_id,
             "created_at": datetime.now(IST).isoformat(),
@@ -514,7 +525,9 @@ class ShoonyaAuthenticator:
         if not access_token:
             raise RuntimeError(f"Invalid access token response: {token_resp}")
 
-        gen_susertoken = str(token_resp.get("susertoken") or access_token).strip()
+        raw_q = getattr(self.api, "_quick_susertoken", "")
+        quick_ws_tok = raw_q.strip() if isinstance(raw_q, str) else ""
+        gen_susertoken = str(token_resp.get("susertoken") or quick_ws_tok or access_token).strip()
         try:
             self.api.injectOAuthHeader(
                 access_token,

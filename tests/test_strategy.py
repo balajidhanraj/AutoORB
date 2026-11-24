@@ -1265,8 +1265,10 @@ def test_positionbook_404_no_reauth_and_reconcile_skip(tmp_path: Path) -> None:
     assert client.get_positions() == []
     assert reauth_cb.call_count == 0
 
-    # 3. Bearer 401 falls back cleanly to jKey before re-auth
-    client.api.injectOAuthHeader("OAUTH_TOK", "USR404", "USR404", susertoken="QUICK_JKEY", use_bearer=True)
+    # 3. Bearer 401 falls back cleanly to jKey before re-auth & preserves _quick_susertoken for WS
+    client.api._quick_susertoken = "QUICK_WS_TOK"
+    client.api.injectOAuthHeader("OAUTH_TOK", "USR404", "USR404", susertoken="QUICK_WS_TOK", use_bearer=True)
+    assert client.api._quick_susertoken == "QUICK_WS_TOK"
     resp_401 = MagicMock(status_code=401)
     resp_ok = MagicMock(status_code=200)
     resp_ok.json.return_value = {"stat": "Ok", "cash": "50000"}
@@ -1274,6 +1276,7 @@ def test_positionbook_404_no_reauth_and_reconcile_skip(tmp_path: Path) -> None:
     lim = client.api.get_limits()
     assert lim["stat"] == "Ok"
     assert client.api._use_bearer is False
+    assert client.api._quick_susertoken == "QUICK_WS_TOK"
     assert reauth_cb.call_count == 0
 
     # 4. RiskManager.reconcile_positions skips PositionBook API call when no internal positions exist

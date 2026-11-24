@@ -316,7 +316,11 @@ class CompatibleNorenApi:
         socket_error_callback: Optional[Callable[[Any], None]] = None,
     ) -> None:
         def _on_open(ws: Any) -> None:
-            token_to_send = getattr(self, "susertoken", None) or self.access_token
+            token_to_send = (
+                getattr(self, "_quick_susertoken", "")
+                or getattr(self, "susertoken", "")
+                or self.access_token
+            )
             connect_msg = {
                 "t": "c",
                 "uid": self.username,
