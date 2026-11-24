@@ -60,6 +60,7 @@ class TradingSystemOrchestrator:
         self.client.register_reconnect_callback(self._backfill_all_indices)
         self._reauth_lock = threading.Lock()
         self.client.register_reauth_callback(self._handle_reauth)
+        self.client.subscribe([spec.spot_key for spec in INDEX_SPECS.values()] + [INDIA_VIX_KEY])
 
         self._lock = threading.RLock()
         self._stop_event = threading.Event()

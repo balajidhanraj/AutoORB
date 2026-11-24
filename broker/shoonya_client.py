@@ -180,16 +180,25 @@ class CompatibleNorenApi:
                             "Shoonya API returned 401 on %s (Bearer); trying jKey session fallback...",
                             endpoint,
                         )
-                        self._use_bearer = False
-                        self._session.headers.pop("Authorization", None)
-                        self.susertoken = alt_tok
-                        return self._post(
-                            endpoint,
-                            body,
-                            _retry=_retry,
-                            _allow_jkey_fallback=False,
-                        )
-                if _retry and self._reauth_callback:
+                        orig_auth = self._session.headers.pop("Authorization", None)
+                        try:
+                            fb_resp = self._session.post(
+                                f"{self.host}{endpoint}",
+                                data=f"jData={json.dumps(body)}&jKey={alt_tok}",
+                                timeout=15,
+                            )
+                        except Exception:
+                            if orig_auth:
+                                self._session.headers["Authorization"] = orig_auth
+                            raise
+                        if fb_resp.status_code != 401:
+                            self._use_bearer = False
+                            self.access_token = ""
+                            self.susertoken = alt_tok
+                            resp = fb_resp
+                        elif orig_auth:
+                            self._session.headers["Authorization"] = orig_auth
+                if resp.status_code == 401 and _retry and self._reauth_callback:
                     logger.warning("Shoonya API returned 401 on %s; attempting automatic re-auth...", endpoint)
                     if self._reauth_callback():
                         return self._post(endpoint, body, _retry=False, _allow_jkey_fallback=False)
@@ -230,7 +239,12 @@ class CompatibleNorenApi:
         return self._post("Limits", {"uid": self.username, "actid": self.account_id}, _retry=_retry)
 
     def get_user_details(self) -> Dict[str, Any]:
-        resp = self._post("UserDetails", {"uid": self.username})
+        resp = self._post(
+            "UserDetails",
+            {"uid": self.username},
+            _retry=False,
+            _allow_jkey_fallback=False,
+        )
         return resp if isinstance(resp, dict) else {}
 
     def searchscrip(self, exchange: str, searchtext: str) -> Dict[str, Any]:
@@ -414,6 +428,7 @@ class ShoonyaClient:
         self._broker_snapshot_cache: Optional[Dict[str, Any]] = None
         self._broker_snapshot_ts: float = 0.0
         self._broker_snapshot_fetch_lock = threading.Lock()
+        self._cached_user_details: Optional[Dict[str, str]] = None
 
         # External callback hooks
         self._tick_listeners: List[Callable[[Dict[str, Any]], None]] = []
@@ -736,6 +751,7 @@ class ShoonyaClient:
             self.settings = settings
             self._broker_snapshot_cache = None
             self._broker_snapshot_ts = 0.0
+            self._cached_user_details = None
             uid = settings.shoonya_user_id.strip().upper()
             actid = (settings.shoonya_account_id or uid).strip().upper()
             if hasattr(self.api, "username"):
@@ -861,17 +877,24 @@ class ShoonyaClient:
                     self._broker_snapshot_ts = time.monotonic()
                 return snapshot
 
-            if hasattr(self.api, "get_user_details"):
+            if self._cached_user_details is not None:
+                snapshot.update(self._cached_user_details)
+            elif hasattr(self.api, "get_user_details"):
                 try:
                     user_info = self.api.get_user_details()
                     if isinstance(user_info, dict) and user_info.get("stat") == "Ok":
-                        snapshot["account_name"] = str(
-                            user_info.get("uname") or user_info.get("cliname") or ""
-                        )
+                        details_patch: Dict[str, str] = {
+                            "account_name": str(
+                                user_info.get("uname") or user_info.get("cliname") or ""
+                            )
+                        }
                         if user_info.get("actid"):
-                            snapshot["account_id"] = str(user_info["actid"])
+                            details_patch["account_id"] = str(user_info["actid"])
                         if user_info.get("uid"):
-                            snapshot["user_id"] = str(user_info["uid"])
+                            details_patch["user_id"] = str(user_info["uid"])
+                        snapshot.update(details_patch)
+                        with self._lock:
+                            self._cached_user_details = details_patch
                 except Exception:
                     pass
 

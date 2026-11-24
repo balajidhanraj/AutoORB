@@ -1265,7 +1265,21 @@ def test_positionbook_404_no_reauth_and_reconcile_skip(tmp_path: Path) -> None:
     assert client.get_positions() == []
     assert reauth_cb.call_count == 0
 
-    # 3. Bearer 401 falls back cleanly to jKey before re-auth & preserves _quick_susertoken for WS
+    # 3. UserDetails 401 must NOT trigger reauth or strip Bearer header
+    client.api.injectOAuthHeader("OAUTH_TOK", "USR404", "USR404", susertoken="QUICK_WS_TOK", use_bearer=True)
+    resp_401_ud = MagicMock(status_code=401)
+    resp_401_ud.json.side_effect = ValueError("No JSON")
+    resp_401_ud.raise_for_status.side_effect = RuntimeError("401 on UserDetails")
+    client.api._session.post = MagicMock(return_value=resp_401_ud)  # type: ignore[method-assign]
+    try:
+        client.api.get_user_details()
+    except RuntimeError:
+        pass
+    assert reauth_cb.call_count == 0
+    assert client.api._use_bearer is True
+    assert client.api._session.headers.get("Authorization") == "Bearer OAUTH_TOK"
+
+    # 4. Bearer 401 on Limits falls back cleanly to jKey before re-auth & preserves _quick_susertoken for WS
     client.api._quick_susertoken = "QUICK_WS_TOK"
     client.api.injectOAuthHeader("OAUTH_TOK", "USR404", "USR404", susertoken="QUICK_WS_TOK", use_bearer=True)
     assert client.api._quick_susertoken == "QUICK_WS_TOK"
@@ -1279,7 +1293,7 @@ def test_positionbook_404_no_reauth_and_reconcile_skip(tmp_path: Path) -> None:
     assert client.api._quick_susertoken == "QUICK_WS_TOK"
     assert reauth_cb.call_count == 0
 
-    # 4. RiskManager.reconcile_positions skips PositionBook API call when no internal positions exist
+    # 5. RiskManager.reconcile_positions skips PositionBook API call when no internal positions exist
     rm = RiskManager(settings, client, InstrumentMapper(client))
     client.get_positions = MagicMock()  # type: ignore[method-assign]
     assert rm.reconcile_positions() == []
