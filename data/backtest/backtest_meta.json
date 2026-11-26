@@ -1,0 +1,25 @@
+{
+  "entry_start_time": "09:30",
+  "entry_cutoff_time": "15:00",
+  "orb_start_time": "09:15",
+  "orb_window_minutes": 15,
+  "auto_squareoff_time": "15:15",
+  "start_date": "2025-11-20",
+  "end_date": "2026-11-20",
+  "indices": [
+    "NIFTY",
+    "BANKNIFTY"
+  ],
+  "summary": {
+    "trades": 341,
+    "wins": 114,
+    "losses": 227,
+    "win_rate": 33.43,
+    "gross": 218741.22,
+    "charges": 39254.67,
+    "net": 179486.55,
+    "pf": 1.29,
+    "max_dd": 44948.34,
+    "avg_pnl": 526.35
+  }
+}

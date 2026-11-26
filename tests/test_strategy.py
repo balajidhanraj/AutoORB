@@ -1656,3 +1656,186 @@ def test_live_broker_data_archived_to_db_for_analysis(tmp_path: Path) -> None:
 
 
 
+
+
+def test_strategy_gates_and_timings_update_and_persist(tmp_path: Path) -> None:
+    import json as _json
+    from ui.dashboard import StrategyConfigRequest
+
+    s1 = _make_settings(tmp_path, use_supertrend_filter=True)
+    orch1 = TradingSystemOrchestrator(settings=s1)
+    app = create_app(orch1)
+    handlers = app.state.handlers
+
+    res_get = handlers["api_get_strategy_config"]()
+    cfg0 = _json.loads(res_get.body.decode("utf-8"))["strategy_config"]
+    assert cfg0["orb_window_minutes"] == 30
+    assert cfg0["rsi_bull_threshold"] == 60.0
+    assert cfg0["use_supertrend_filter"] is True
+
+    # Invalid orb_window_minutes must still be rejected cleanly
+    bad_res = handlers["api_set_strategy_config"](StrategyConfigRequest(orb_window_minutes=20))
+    bad_body = _json.loads(bad_res.body.decode("utf-8"))
+    assert bad_body["ok"] is False
+
+    # Update full set of strategy gates and timings
+    req = StrategyConfigRequest(
+        orb_start_time="09:15",
+        orb_window_minutes=15,
+        entry_start_time="09:30",
+        entry_cutoff_time="15:00",
+        nifty_htf_entry_start_time="09:30",
+        auto_squareoff_time="15:20",
+        min_india_vix=11.0,
+        min_orb_range_pct=0.15,
+        max_orb_range_pct=1.10,
+        rsi_bull_threshold=55.0,
+        rsi_bear_threshold=45.0,
+        daily_bias_filter=True,
+        use_ema_filter=False,
+        min_candle_body_ratio=0.30,
+        require_vwap_slope=True,
+        min_vwap_slope_pct=0.02,
+        use_supertrend_filter=False,
+        supertrend_period=7,
+        supertrend_multiplier=2.5,
+        nifty_use_htf_swing_hybrid=True,
+        nifty_use_ema_body_filter=True,
+        nifty_htf_swing_len=3,
+        nifty_htf_break_buf_atr=0.15,
+        nifty_htf_stop_atr_mult=0.6,
+        nifty_htf_opt_sl_cap=40.0,
+        nifty_htf_max_trades_per_day=3,
+        max_trades_per_day=6,
+        max_weekly_losses=3,
+        tuesday_expiry_boost=False,
+        banknifty_be_pyramiding=False,
+    )
+    res_set = handlers["api_set_strategy_config"](req)
+    body = _json.loads(res_set.body.decode("utf-8"))
+    assert body["ok"] is True
+    cfg1 = body["strategy_config"]
+    assert cfg1["orb_window_minutes"] == 15
+    assert cfg1["entry_start_time"] == "09:30"
+    assert cfg1["entry_cutoff_time"] == "15:00"
+    assert cfg1["rsi_bull_threshold"] == 55.0
+    assert cfg1["rsi_bear_threshold"] == 45.0
+    assert cfg1["use_supertrend_filter"] is False
+    assert cfg1["supertrend_period"] == 7
+    assert cfg1["supertrend_multiplier"] == 2.5
+    assert cfg1["max_trades_per_day"] == 6
+    assert body["snapshot"]["strategy_config"]["entry_cutoff_time"] == "15:00"
+
+    # Restart orchestrator on same data dir and verify strategy gates & timings persisted
+    s2 = _make_settings(tmp_path, use_supertrend_filter=True)
+    orch2 = TradingSystemOrchestrator(settings=s2)
+    restored = orch2.get_strategy_config()
+    assert restored["orb_window_minutes"] == 15
+    assert restored["entry_start_time"] == "09:30"
+    assert restored["entry_cutoff_time"] == "15:00"
+    assert restored["rsi_bull_threshold"] == 55.0
+    assert restored["use_supertrend_filter"] is False
+    assert restored["supertrend_period"] == 7
+    assert restored["max_trades_per_day"] == 6
+    assert restored["tuesday_expiry_boost"] is False
+
+
+def test_backtest_0930_to_1500_runner_and_api(tmp_path: Path, monkeypatch: Any) -> None:
+    import json as _json
+    from engine.candle_builder import Candle
+    from scripts.update_backtest_data import run_nf_bnf_sequential_backtest
+    from ui.dashboard import BacktestRunRequest
+
+    # Build deterministic 2-day 5m synthetic candles (Day 1 warmup + Day 2 breakout in 09:30..15:00)
+    nf_candles: list[Candle] = []
+    bnf_candles: list[Candle] = []
+    d1 = date(2026, 6, 15)
+    d2 = date(2026, 6, 16)
+    for day_idx, d in enumerate((d1, d2)):
+        t_cur = _ist_dt(d.year, d.month, d.day, 9, 15)
+        t_end = _ist_dt(d.year, d.month, d.day, 15, 25)
+        bar_n = 0
+        while t_cur <= t_end:
+            nf_px = 25000.0 + bar_n * (0.5 if day_idx == 0 else (3.5 if bar_n >= 3 else 0.5))
+            bnf_px = 60000.0 + bar_n * (1.5 if day_idx == 0 else (18.0 if bar_n >= 3 else 2.0))
+            nf_candles.append(
+                Candle(
+                    timestamp=t_cur,
+                    open=nf_px - 4.0,
+                    high=nf_px + 25.0,
+                    low=nf_px - 25.0,
+                    close=nf_px + (12.0 if (day_idx == 1 and bar_n >= 3) else 0.0),
+                    volume=100000.0,
+                    is_closed=True,
+                )
+            )
+            bnf_candles.append(
+                Candle(
+                    timestamp=t_cur,
+                    open=bnf_px - 10.0,
+                    high=bnf_px + 80.0,
+                    low=bnf_px - 80.0,
+                    close=bnf_px + (35.0 if (day_idx == 1 and bar_n >= 3) else 0.0),
+                    volume=100000.0,
+                    is_closed=True,
+                )
+            )
+            t_cur += timedelta(minutes=5)
+            bar_n += 1
+
+    # Engine defaults to 09:30 - 15:00 IST with 15m ORB
+    trades = run_nf_bnf_sequential_backtest(
+        {"NIFTY": nf_candles, "BANKNIFTY": bnf_candles},
+        entry_start_time="09:30",
+        entry_cutoff_time="15:00",
+        orb_window_minutes=15,
+        min_orb_range_pct=0.05,
+        max_orb_range_pct=2.0,
+        rsi_bull_threshold=45.0,
+        use_supertrend_filter=False,
+        use_ema_filter=False,
+        min_candle_body_ratio=0.0,
+    )
+    assert isinstance(trades, list)
+    for t in trades:
+        assert "09:30" <= t["in_t"] <= "15:00"
+
+    # API runner + trades endpoint + synced mobile UI checks
+    orch = TradingSystemOrchestrator(settings=_make_settings(tmp_path))
+    app = create_app(orch)
+    handlers = app.state.handlers
+
+    import scripts.update_backtest_data as ubd
+    monkeypatch.setattr(ubd, "load_candles_from_cache", lambda idx: nf_candles if idx == "NIFTY" else bnf_candles)
+    monkeypatch.setattr(ubd, "load_vix_map", lambda: {})
+
+    run_resp = handlers["api_run_backtest"](
+        BacktestRunRequest(
+            entry_start_time="09:30",
+            entry_cutoff_time="15:00",
+            orb_window_minutes=15,
+            use_live_gates=False,
+            save=False,
+            min_orb_range_pct=0.05,
+            max_orb_range_pct=2.0,
+            rsi_bull_threshold=45.0,
+            use_supertrend_filter=False,
+            use_ema_filter=False,
+            min_candle_body_ratio=0.0,
+        )
+    )
+    run_body = _json.loads(run_resp.body.decode("utf-8"))
+    assert run_body["ok"] is True
+    assert run_body["meta"]["entry_start_time"] == "09:30"
+    assert run_body["meta"]["entry_cutoff_time"] == "15:00"
+    assert run_body["meta"]["orb_window_minutes"] == 15
+
+    bt_get = _json.loads(handlers["api_backtest_trades"]().body.decode("utf-8"))
+    assert bt_get["ok"] is True
+    assert bt_get["meta"].get("entry_start_time") == "09:30"
+    assert bt_get["meta"].get("entry_cutoff_time") == "15:00"
+
+    mob_html = (Path(__file__).resolve().parent.parent / "mobile" / "www" / "index.html").read_text(encoding="utf-8")
+    assert "sheet-backtest" in mob_html
+    assert "m-pill-backtest" in mob_html
+    assert "ms-rsi-bull" in mob_html

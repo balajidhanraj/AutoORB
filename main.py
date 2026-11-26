@@ -212,6 +212,7 @@ class TradingSystemOrchestrator:
                 "orb_start_time": self.settings.orb_start_time.strftime("%H:%M"),
                 "orb_window_minutes": int(self.settings.orb_window_minutes),
                 "entry_cutoff_time": self.settings.entry_cutoff_time.strftime("%H:%M"),
+                "strategy_config": self.get_strategy_config(),
                 "shoonya_user_id": self.settings.shoonya_user_id,
                 "session_date": today_str,
                 "daily_risk": {
@@ -330,11 +331,18 @@ class TradingSystemOrchestrator:
                         self.settings.orb_window_minutes = mins
                 except (TypeError, ValueError):
                     pass
-            end_dt = datetime.combine(today, self.settings.orb_start_time) + timedelta(minutes=self.settings.orb_window_minutes)
-            self.settings.orb_end_time = end_dt.time()
-
             if state.get("entry_cutoff_time"):
                 self.settings.entry_cutoff_time = _parse_hhmm_local(state["entry_cutoff_time"], self.settings.entry_cutoff_time)
+
+            strat_cfg = state.get("strategy_config")
+            if isinstance(strat_cfg, dict) and strat_cfg:
+                try:
+                    self._apply_strategy_config_locked(strat_cfg, today=today)
+                except ValueError:
+                    pass
+
+            end_dt = datetime.combine(today, self.settings.orb_start_time) + timedelta(minutes=self.settings.orb_window_minutes)
+            self.settings.orb_end_time = end_dt.time()
 
             self.settings.max_daily_loss = self.risk_manager.get_dynamic_max_daily_loss(now_ist)
 
@@ -1089,6 +1097,224 @@ class TradingSystemOrchestrator:
         current_start = getattr(self.settings, "orb_start_time", dt_time(9, 15, 0)).strftime("%H:%M")
         return self.set_orb_anchor(start_time=current_start, minutes=minutes)
 
+    def get_strategy_config(self) -> Dict[str, Any]:
+        """Return all user-editable strategy gates, indicators, risk caps, and session timings."""
+        s = self.settings
+        with self._lock:
+            return {
+                "orb_start_time": s.orb_start_time.strftime("%H:%M"),
+                "orb_window_minutes": int(s.orb_window_minutes),
+                "orb_end_time": s.orb_end_time.strftime("%H:%M"),
+                "entry_start_time": s.entry_start_time.strftime("%H:%M"),
+                "entry_cutoff_time": s.entry_cutoff_time.strftime("%H:%M"),
+                "nifty_htf_entry_start_time": s.nifty_htf_entry_start_time.strftime("%H:%M"),
+                "auto_squareoff_time": s.auto_squareoff_time.strftime("%H:%M"),
+                "min_india_vix": float(s.min_india_vix),
+                "min_orb_range_pct": float(s.min_orb_range_pct),
+                "max_orb_range_pct": float(s.max_orb_range_pct),
+                "rsi_bull_threshold": float(getattr(s, "rsi_bull_threshold", 60.0)),
+                "rsi_bear_threshold": float(getattr(s, "rsi_bear_threshold", 40.0)),
+                "daily_bias_filter": bool(s.daily_bias_filter),
+                "use_ema_filter": bool(s.use_ema_filter),
+                "min_candle_body_ratio": float(s.min_candle_body_ratio),
+                "require_vwap_slope": bool(s.require_vwap_slope),
+                "min_vwap_slope_pct": float(s.min_vwap_slope_pct),
+                "use_supertrend_filter": bool(s.use_supertrend_filter),
+                "supertrend_period": int(s.supertrend_period),
+                "supertrend_multiplier": float(s.supertrend_multiplier),
+                "nifty_use_htf_swing_hybrid": bool(s.nifty_use_htf_swing_hybrid),
+                "nifty_use_ema_body_filter": bool(s.nifty_use_ema_body_filter),
+                "nifty_htf_swing_len": int(s.nifty_htf_swing_len),
+                "nifty_htf_break_buf_atr": float(s.nifty_htf_break_buf_atr),
+                "nifty_htf_stop_atr_mult": float(s.nifty_htf_stop_atr_mult),
+                "nifty_htf_opt_sl_cap": float(s.nifty_htf_opt_sl_cap),
+                "nifty_htf_max_trades_per_day": int(s.nifty_htf_max_trades_per_day),
+                "max_trades_per_day": int(s.max_trades_per_day),
+                "max_weekly_losses": int(s.max_weekly_losses),
+                "tuesday_expiry_boost": bool(s.tuesday_expiry_boost),
+                "banknifty_be_pyramiding": bool(s.banknifty_be_pyramiding),
+            }
+
+    @staticmethod
+    def _parse_strict_hhmm(raw: Any, field_name: str, lo: dt_time, hi: dt_time) -> dt_time:
+        txt = str(raw or "").strip()
+        try:
+            parts = txt.split(":")
+            if len(parts) < 2:
+                raise ValueError("missing colon")
+            t = dt_time(int(parts[0]), int(parts[1]), 0)
+        except Exception as exc:
+            raise ValueError(f"Invalid time format for {field_name}: '{txt}'. Use HH:MM.") from exc
+        if t < lo or t > hi:
+            raise ValueError(
+                f"{field_name} ({t.strftime('%H:%M')}) must be between {lo.strftime('%H:%M')} and {hi.strftime('%H:%M')} IST."
+            )
+        return t
+
+    @staticmethod
+    def _coerce_bool(val: Any) -> bool:
+        if isinstance(val, bool):
+            return val
+        if isinstance(val, (int, float)):
+            return bool(val)
+        return str(val).strip().lower() in {"1", "true", "yes", "y", "on"}
+
+    def _apply_strategy_config_locked(self, updates: Dict[str, Any], today: date) -> bool:
+        """Validate and apply strategy timings and gate overrides under self._lock. Returns True if ORB/indicators need refresh."""
+        s = self.settings
+        clean = {k: v for k, v in updates.items() if v is not None}
+
+        new_orb_start = (
+            self._parse_strict_hhmm(clean["orb_start_time"], "orb_start_time", dt_time(9, 15), dt_time(14, 30))
+            if "orb_start_time" in clean
+            else s.orb_start_time
+        )
+        new_orb_min = int(clean["orb_window_minutes"]) if "orb_window_minutes" in clean else int(s.orb_window_minutes)
+        if new_orb_min not in {5, 15, 30, 45, 60}:
+            raise ValueError("orb_window_minutes must be 5, 15, 30, 45, or 60.")
+
+        new_entry_start = (
+            self._parse_strict_hhmm(clean["entry_start_time"], "entry_start_time", dt_time(9, 15), dt_time(15, 10))
+            if "entry_start_time" in clean
+            else s.entry_start_time
+        )
+        new_cutoff = (
+            self._parse_strict_hhmm(clean["entry_cutoff_time"], "entry_cutoff_time", dt_time(9, 20), dt_time(15, 20))
+            if "entry_cutoff_time" in clean
+            else s.entry_cutoff_time
+        )
+        if new_cutoff < new_entry_start:
+            raise ValueError(
+                f"Entry cutoff ({new_cutoff.strftime('%H:%M')}) cannot be before entry start ({new_entry_start.strftime('%H:%M')})."
+            )
+
+        if "nifty_htf_entry_start_time" in clean:
+            new_nf_start = self._parse_strict_hhmm(
+                clean["nifty_htf_entry_start_time"], "nifty_htf_entry_start_time", dt_time(9, 15), dt_time(15, 10)
+            )
+        elif "entry_start_time" in clean:
+            new_nf_start = new_entry_start
+        else:
+            new_nf_start = s.nifty_htf_entry_start_time
+
+        new_sqoff = (
+            self._parse_strict_hhmm(clean["auto_squareoff_time"], "auto_squareoff_time", dt_time(14, 0), dt_time(15, 25))
+            if "auto_squareoff_time" in clean
+            else s.auto_squareoff_time
+        )
+
+        num_specs = {
+            "min_india_vix": (0.0, 40.0, float),
+            "min_orb_range_pct": (0.0, 5.0, float),
+            "max_orb_range_pct": (0.1, 10.0, float),
+            "rsi_bull_threshold": (40.0, 90.0, float),
+            "rsi_bear_threshold": (10.0, 60.0, float),
+            "min_candle_body_ratio": (0.0, 0.95, float),
+            "min_vwap_slope_pct": (0.0, 1.0, float),
+            "supertrend_period": (3, 30, int),
+            "supertrend_multiplier": (1.0, 8.0, float),
+            "nifty_htf_swing_len": (1, 6, int),
+            "nifty_htf_break_buf_atr": (0.0, 1.0, float),
+            "nifty_htf_stop_atr_mult": (0.1, 3.0, float),
+            "nifty_htf_opt_sl_cap": (10.0, 150.0, float),
+            "nifty_htf_max_trades_per_day": (1, 10, int),
+            "max_trades_per_day": (1, 20, int),
+            "max_weekly_losses": (0, 10, int),
+        }
+        parsed_nums: Dict[str, Any] = {}
+        for k, (lo, hi, caster) in num_specs.items():
+            if k in clean:
+                try:
+                    val = caster(clean[k])
+                except (TypeError, ValueError) as exc:
+                    raise ValueError(f"Invalid numeric value for {k}: {clean[k]}") from exc
+                if val < lo or val > hi:
+                    raise ValueError(f"{k} must be between {lo} and {hi} (got {val}).")
+                parsed_nums[k] = val
+
+        eff_min_orb = parsed_nums.get("min_orb_range_pct", float(s.min_orb_range_pct))
+        eff_max_orb = parsed_nums.get("max_orb_range_pct", float(s.max_orb_range_pct))
+        if eff_max_orb < eff_min_orb:
+            raise ValueError("max_orb_range_pct cannot be less than min_orb_range_pct.")
+
+        eff_bull = parsed_nums.get("rsi_bull_threshold", float(getattr(s, "rsi_bull_threshold", 60.0)))
+        eff_bear = parsed_nums.get("rsi_bear_threshold", float(getattr(s, "rsi_bear_threshold", 40.0)))
+        if eff_bull <= eff_bear:
+            raise ValueError("rsi_bull_threshold must be greater than rsi_bear_threshold.")
+
+        bool_keys = (
+            "daily_bias_filter",
+            "use_ema_filter",
+            "require_vwap_slope",
+            "use_supertrend_filter",
+            "nifty_use_htf_swing_hybrid",
+            "nifty_use_ema_body_filter",
+            "tuesday_expiry_boost",
+            "banknifty_be_pyramiding",
+        )
+        parsed_bools = {k: self._coerce_bool(clean[k]) for k in bool_keys if k in clean}
+
+        orb_or_ind_changed = (
+            new_orb_start != s.orb_start_time
+            or new_orb_min != int(s.orb_window_minutes)
+            or any(
+                k in clean
+                for k in (
+                    "min_orb_range_pct",
+                    "max_orb_range_pct",
+                    "supertrend_period",
+                    "supertrend_multiplier",
+                    "nifty_use_htf_swing_hybrid",
+                    "nifty_htf_swing_len",
+                )
+            )
+        )
+
+        # Commit validated settings atomically
+        s.orb_start_time = new_orb_start
+        s.orb_window_minutes = new_orb_min
+        end_dt = datetime.combine(today, new_orb_start) + timedelta(minutes=new_orb_min)
+        s.orb_end_time = end_dt.time()
+        s.entry_start_time = new_entry_start
+        s.entry_cutoff_time = new_cutoff
+        s.nifty_htf_entry_start_time = new_nf_start
+        s.auto_squareoff_time = new_sqoff
+
+        for k, val in parsed_nums.items():
+            setattr(s, k, val)
+        for k, val in parsed_bools.items():
+            setattr(s, k, val)
+
+        return orb_or_ind_changed
+
+    def update_strategy_config(self, updates: Dict[str, Any]) -> Tuple[bool, str]:
+        """Validate, apply, recalculate ORB/indicators, and persist all strategy gates & timings."""
+        now_ist = datetime.now(IST)
+        today = now_ist.date()
+        try:
+            with self._lock:
+                refresh_needed = self._apply_strategy_config_locked(updates, today=today)
+                if refresh_needed:
+                    self.strategy.reset_daily(today)
+                    for name, builder in self.candle_builders.items():
+                        candles = builder.get_candles()
+                        if candles:
+                            self.strategy.warm_indicators_from_candles(name, candles)
+                            if now_ist.weekday() < 5 and now_ist.time() >= self.settings.orb_end_time:
+                                self.strategy.lock_opening_range(name, candles, session_date=today)
+        except ValueError as exc:
+            return False, str(exc)
+
+        self._persist_runtime_state(sync=True, force_remote=True)
+        cfg = self.get_strategy_config()
+        msg = (
+            f"Strategy updated: ORB {cfg['orb_start_time']}–{cfg['orb_end_time']} ({cfg['orb_window_minutes']}m) | "
+            f"Entry {cfg['entry_start_time']}–{cfg['entry_cutoff_time']} IST | "
+            f"VIX≥{cfg['min_india_vix']:g} | RSI>{cfg['rsi_bull_threshold']:g}/<{cfg['rsi_bear_threshold']:g}."
+        )
+        logger.info(msg)
+        return True, msg
+
     def reset_daily_trades(self) -> Tuple[bool, str]:
         """Reset daily trades count to 0 and clear any risk management halt."""
         self.risk_manager.reset_trades_counter()
@@ -1724,8 +1950,8 @@ class TradingSystemOrchestrator:
             buf_pts = (float(getattr(self.settings, "nifty_htf_break_buf_atr", 0.1) or 0.1) * st.htf_atr) if st.htf_atr else 0.0
             ce_price_ok = bool(spot_ltp is not None and st.htf_swing_high is not None and spot_ltp > (st.htf_swing_high + buf_pts))
             pe_price_ok = bool(spot_ltp is not None and st.htf_swing_low is not None and spot_ltp < (st.htf_swing_low - buf_pts))
-            ce_rsi_ok = bool(st.last_supertrend_dir == 1)
-            pe_rsi_ok = bool(st.last_supertrend_dir == -1)
+            ce_rsi_ok = bool(st.last_supertrend_dir == 1) if getattr(self.settings, "use_supertrend_filter", True) else True
+            pe_rsi_ok = bool(st.last_supertrend_dir == -1) if getattr(self.settings, "use_supertrend_filter", True) else True
             dist_to_orh = round(st.htf_swing_high - spot_ltp, 2) if (spot_ltp is not None and st.htf_swing_high is not None) else None
             dist_to_orl = round(spot_ltp - st.htf_swing_low, 2) if (spot_ltp is not None and st.htf_swing_low is not None) else None
         else:
@@ -1748,8 +1974,10 @@ class TradingSystemOrchestrator:
                 and spot_ltp < st.orl
                 and (st.last_vwap is None or spot_ltp < st.last_vwap)
             )
-            ce_rsi_ok = bool(st.last_rsi is not None and (st.last_rsi > 60.0))
-            pe_rsi_ok = bool(st.last_rsi is not None and (st.last_rsi < 40.0))
+            rsi_bull = float(getattr(self.settings, "rsi_bull_threshold", 60.0) or 60.0)
+            rsi_bear = float(getattr(self.settings, "rsi_bear_threshold", 40.0) or 40.0)
+            ce_rsi_ok = bool(st.last_rsi is not None and (st.last_rsi > rsi_bull))
+            pe_rsi_ok = bool(st.last_rsi is not None and (st.last_rsi < rsi_bear))
             dist_to_orh = round(st.orh - spot_ltp, 2) if (spot_ltp is not None and st.orh is not None) else None
             dist_to_orl = round(spot_ltp - st.orl, 2) if (spot_ltp is not None and st.orl is not None) else None
 
@@ -1848,17 +2076,19 @@ class TradingSystemOrchestrator:
         elif orb_ready and ce_price_ok:
             radar_state = "IMMINENT_CE_BREAKOUT"
             if ce_rsi_ok and vix_ready and in_window:
-                radar_summary = f"ALL 5 GATES MET! Auto-BUY {candidate_ce} arms on 5m close."
+                radar_summary = f"ALL GATES MET! Auto-BUY {candidate_ce} arms on 5m close."
             else:
                 rsi_txt = f"{st.last_rsi:.1f}" if st.last_rsi is not None else "--"
-                radar_summary = f"Above ORH & VWAP! Need RSI > 60 (now {rsi_txt}) & 5m close -> {candidate_ce}."
+                rsi_b = float(getattr(self.settings, "rsi_bull_threshold", 60.0) or 60.0)
+                radar_summary = f"Above ORH & VWAP! Need RSI > {rsi_b:g} (now {rsi_txt}) & 5m close -> {candidate_ce}."
         elif orb_ready and pe_price_ok:
             radar_state = "IMMINENT_PE_BREAKOUT"
             if pe_rsi_ok and vix_ready and in_window:
-                radar_summary = f"ALL 5 GATES MET! Auto-BUY {candidate_pe} arms on 5m close."
+                radar_summary = f"ALL GATES MET! Auto-BUY {candidate_pe} arms on 5m close."
             else:
                 rsi_txt = f"{st.last_rsi:.1f}" if st.last_rsi is not None else "--"
-                radar_summary = f"Below ORL & VWAP! Need RSI < 40 (now {rsi_txt}) & 5m close -> {candidate_pe}."
+                rsi_br = float(getattr(self.settings, "rsi_bear_threshold", 40.0) or 40.0)
+                radar_summary = f"Below ORL & VWAP! Need RSI < {rsi_br:g} (now {rsi_txt}) & 5m close -> {candidate_pe}."
         else:
             radar_state = "SCANNING_RANGE"
             orh_txt = f"{dist_to_orh:+.2f}" if dist_to_orh is not None else "--"
@@ -2134,6 +2364,7 @@ class TradingSystemOrchestrator:
             "max_daily_loss": self.risk_manager.get_dynamic_max_daily_loss(now_ist),
             "is_custom_max_daily_loss": self.risk_manager.custom_max_daily_loss is not None,
             "enabled_indices": self.risk_manager.get_enabled_indices(),
+            "strategy_config": self.get_strategy_config(),
             "halted": self.risk_manager.halted,
             "halt_reason": self.risk_manager.halt_reason,
             "cached_contracts": self.mapper.cached_count,

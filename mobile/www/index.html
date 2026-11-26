@@ -312,6 +312,10 @@
           <span class="material-symbols-outlined text-[14px] text-amber-tactical">timelapse</span>
           <span id="m-pill-cut-txt" class="font-label-caps">Cutoff 13:15</span>
         </button>
+        <button id="m-pill-backtest" onclick="openMobileBacktest()" type="button" class="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-primary-container/20 text-profit border border-primary-container/40 shadow-sm cursor-pointer">
+          <span class="material-symbols-outlined text-[14px]">bar_chart</span>
+          <span class="font-label-caps font-bold">Backtest</span>
+        </button>
         <button id="m-pill-manual" type="button" class="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-primary-container text-on-primary-fixed font-bold shadow-sm cursor-pointer">
           <span class="material-symbols-outlined text-[15px]">bolt</span>
           <span class="font-label-caps font-bold">One-Click</span>
@@ -600,6 +604,30 @@
         <div id="mc-timeline" class="space-y-2 font-body-sm"></div>
       </div>
 
+      <!-- Strategy Gates & Backtest Quick Access Card -->
+      <div class="rounded-xl bg-surface-container-low glass-panel p-3 space-y-2.5">
+        <div class="flex items-center justify-between gap-2">
+          <div class="flex items-center gap-2 min-w-0">
+            <span class="material-symbols-outlined text-primary text-[18px]">tune</span>
+            <h3 class="font-headline-md text-[13px] font-bold uppercase tracking-wider truncate">Strategy Gates &amp; Backtest</h3>
+          </div>
+          <span class="font-label-caps text-profit font-bold shrink-0">CONFIGURABLE</span>
+        </div>
+        <div id="mc-strat-summary" class="p-2 rounded-lg bg-surface-container font-data-mono-sm text-on-surface-variant text-[10.5px]">
+          ORB 09:15 (15m) &bull; Window 09:30&ndash;15:00 &bull; ST(10,3)
+        </div>
+        <div class="grid grid-cols-2 gap-2">
+          <button onclick="openMobileOrbSheet()" type="button" class="h-10 rounded-xl bg-surface-container-high text-on-surface font-label-caps font-bold flex items-center justify-center gap-1 cursor-pointer">
+            <span class="material-symbols-outlined text-[16px] text-primary">tune</span>
+            <span>GATES &amp; TIMES</span>
+          </button>
+          <button onclick="openMobileBacktest()" type="button" class="h-10 rounded-xl bg-primary-container text-on-primary-fixed font-label-caps font-bold flex items-center justify-center gap-1 cursor-pointer">
+            <span class="material-symbols-outlined text-[16px]">bar_chart</span>
+            <span>BACKTEST 9:30–15</span>
+          </button>
+        </div>
+      </div>
+
       <!-- Emergency Kill Switch Card -->
       <div class="rounded-xl bg-error-container/20 glass-panel p-space-md space-y-3">
         <div class="flex items-center gap-2 text-loss">
@@ -640,33 +668,75 @@
 
   <!-- ==================== MOBILE BOTTOM SHEETS ==================== -->
 
-  <!-- SHEET 1: ORB Anchor & Cutoff -->
+  <!-- SHEET 1: Full Strategy Gates & Timings -->
   <div id="sheet-orb" class="fixed inset-0 z-50 hidden bg-black/75 backdrop-blur-md items-end justify-center">
-    <div class="w-full max-w-lg max-h-[86dvh] overflow-y-auto bg-surface-container-low rounded-t-2xl p-3.5 sheet-safe space-y-3 shadow-2xl">
+    <div class="w-full max-w-lg max-h-[88dvh] overflow-y-auto bg-surface-container-low rounded-t-2xl p-3.5 sheet-safe space-y-3 shadow-2xl">
       <div class="w-10 h-1 rounded-full bg-outline-variant mx-auto"></div>
       <div class="flex items-center justify-between">
-        <h3 class="font-headline-md text-on-surface">ORB Window &amp; Cutoff</h3>
+        <div>
+          <h3 class="font-headline-md text-on-surface">Strategy Gates &amp; Timings</h3>
+          <span class="font-body-sm text-on-surface-variant text-[11px]">Modify all times, ORB, VIX, RSI, EMA, VWAP &amp; Hybrid parameters.</span>
+        </div>
         <button onclick="closeSheet('sheet-orb')" type="button" class="w-8 h-8 rounded bg-surface-container-high flex items-center justify-center"><span class="material-symbols-outlined">close</span></button>
       </div>
+      <div class="grid grid-cols-2 gap-2">
+        <button type="button" onclick="applyMobileOrbPreset('0930_15m')" class="py-2 px-2 rounded-lg bg-primary-container/20 text-profit border border-primary-container/40 font-label-caps text-[10px] font-bold">09:30–15:00 (15m ORB)</button>
+        <button type="button" onclick="applyMobileOrbPreset('default_30m')" class="py-2 px-2 rounded-lg bg-surface-container-high text-on-surface font-label-caps text-[10px]">10:00–13:15 (30m)</button>
+      </div>
       <form id="m-form-orb" class="space-y-3 text-body-sm">
-        <div>
-          <label class="font-label-caps text-on-surface-variant block mb-1">Anchor Start (IST)</label>
-          <input id="ms-start" type="text" value="09:15" class="w-full p-2.5 rounded-lg bg-surface-container-lowest font-data-mono-md text-on-surface"/>
-        </div>
-        <div>
-          <label class="font-label-caps text-on-surface-variant block mb-1">Window Duration (Minutes)</label>
-          <div class="grid grid-cols-3 gap-2">
-            <button type="button" onclick="document.getElementById('ms-min').value=15" class="py-2 rounded-lg bg-surface-container-high font-data-mono-sm">15m</button>
-            <button type="button" onclick="document.getElementById('ms-min').value=30" class="py-2 rounded-lg bg-surface-container-high font-data-mono-sm">30m</button>
-            <button type="button" onclick="document.getElementById('ms-min').value=45" class="py-2 rounded-lg bg-surface-container-high font-data-mono-sm">45m</button>
+        <div class="p-2.5 rounded-xl bg-surface-container space-y-2">
+          <div class="font-label-caps text-primary font-bold text-[10.5px]">Session Timings (IST)</div>
+          <div class="grid grid-cols-2 gap-2">
+            <div><label class="font-label-caps text-[9.5px] text-on-surface-variant block mb-0.5">ORB Start</label><input id="ms-start" type="text" value="09:15" class="w-full p-2 rounded-lg bg-surface-container-lowest font-data-mono-sm text-on-surface"/></div>
+            <div><label class="font-label-caps text-[9.5px] text-on-surface-variant block mb-0.5">ORB Min</label><select id="ms-min" class="w-full p-2 rounded-lg bg-surface-container-lowest font-data-mono-sm text-on-surface"><option value="5">5m</option><option value="15">15m</option><option value="30">30m</option><option value="45">45m</option><option value="60">60m</option></select></div>
+            <div><label class="font-label-caps text-[9.5px] text-on-surface-variant block mb-0.5">Entry Start</label><input id="ms-entry-start" type="text" value="10:00" class="w-full p-2 rounded-lg bg-surface-container-lowest font-data-mono-sm text-on-surface"/></div>
+            <div><label class="font-label-caps text-[9.5px] text-on-surface-variant block mb-0.5">Entry Cutoff</label><input id="ms-cut" type="text" value="13:15" class="w-full p-2 rounded-lg bg-surface-container-lowest font-data-mono-sm text-on-surface"/></div>
+            <div><label class="font-label-caps text-[9.5px] text-on-surface-variant block mb-0.5">NIFTY Hybrid Start</label><input id="ms-nf-start" type="text" value="09:30" class="w-full p-2 rounded-lg bg-surface-container-lowest font-data-mono-sm text-on-surface"/></div>
+            <div><label class="font-label-caps text-[9.5px] text-on-surface-variant block mb-0.5">Auto Square-Off</label><input id="ms-sqoff" type="text" value="15:15" class="w-full p-2 rounded-lg bg-surface-container-lowest font-data-mono-sm text-on-surface"/></div>
           </div>
-          <input id="ms-min" type="number" value="30" class="mt-2 w-full p-2.5 rounded-lg bg-surface-container-lowest font-data-mono-md text-on-surface"/>
         </div>
-        <div>
-          <label class="font-label-caps text-on-surface-variant block mb-1">Entry Cutoff (IST)</label>
-          <input id="ms-cut" type="text" value="13:15" class="w-full p-2.5 rounded-lg bg-surface-container-lowest font-data-mono-md text-on-surface"/>
+
+        <div class="p-2.5 rounded-xl bg-surface-container space-y-2">
+          <div class="font-label-caps text-primary font-bold text-[10.5px]">Breakout &amp; Technical Gates</div>
+          <div class="grid grid-cols-3 gap-2">
+            <div><label class="font-label-caps text-[9.5px] text-on-surface-variant block mb-0.5">Min VIX</label><input id="ms-vix" type="number" step="0.5" class="w-full p-2 rounded-lg bg-surface-container-lowest font-data-mono-sm text-on-surface"/></div>
+            <div><label class="font-label-caps text-[9.5px] text-on-surface-variant block mb-0.5">ORB Min%</label><input id="ms-orb-min" type="number" step="0.05" class="w-full p-2 rounded-lg bg-surface-container-lowest font-data-mono-sm text-on-surface"/></div>
+            <div><label class="font-label-caps text-[9.5px] text-on-surface-variant block mb-0.5">ORB Max%</label><input id="ms-orb-max" type="number" step="0.05" class="w-full p-2 rounded-lg bg-surface-container-lowest font-data-mono-sm text-on-surface"/></div>
+            <div><label class="font-label-caps text-[9.5px] text-on-surface-variant block mb-0.5">RSI Bull&gt;</label><input id="ms-rsi-bull" type="number" step="1" class="w-full p-2 rounded-lg bg-surface-container-lowest font-data-mono-sm text-on-surface"/></div>
+            <div><label class="font-label-caps text-[9.5px] text-on-surface-variant block mb-0.5">RSI Bear&lt;</label><input id="ms-rsi-bear" type="number" step="1" class="w-full p-2 rounded-lg bg-surface-container-lowest font-data-mono-sm text-on-surface"/></div>
+            <div><label class="font-label-caps text-[9.5px] text-on-surface-variant block mb-0.5">Body Ratio</label><input id="ms-body" type="number" step="0.05" class="w-full p-2 rounded-lg bg-surface-container-lowest font-data-mono-sm text-on-surface"/></div>
+            <div><label class="font-label-caps text-[9.5px] text-on-surface-variant block mb-0.5">ST Period</label><input id="ms-st-per" type="number" class="w-full p-2 rounded-lg bg-surface-container-lowest font-data-mono-sm text-on-surface"/></div>
+            <div><label class="font-label-caps text-[9.5px] text-on-surface-variant block mb-0.5">ST Mult</label><input id="ms-st-mult" type="number" step="0.1" class="w-full p-2 rounded-lg bg-surface-container-lowest font-data-mono-sm text-on-surface"/></div>
+            <div><label class="font-label-caps text-[9.5px] text-on-surface-variant block mb-0.5">VWAP Slope%</label><input id="ms-vwap-pct" type="number" step="0.005" class="w-full p-2 rounded-lg bg-surface-container-lowest font-data-mono-sm text-on-surface"/></div>
+          </div>
+          <div class="grid grid-cols-2 gap-1.5 pt-1 font-label-caps text-[10px]">
+            <label class="inline-flex items-center gap-1.5"><input id="ms-use-st" type="checkbox" class="w-3.5 h-3.5 accent-indigo-500"/>Supertrend Filter</label>
+            <label class="inline-flex items-center gap-1.5"><input id="ms-use-ema" type="checkbox" class="w-3.5 h-3.5 accent-indigo-500"/>20-EMA Filter</label>
+            <label class="inline-flex items-center gap-1.5"><input id="ms-daily-bias" type="checkbox" class="w-3.5 h-3.5 accent-indigo-500"/>Daily Bias</label>
+            <label class="inline-flex items-center gap-1.5"><input id="ms-vwap-slope" type="checkbox" class="w-3.5 h-3.5 accent-indigo-500"/>VWAP Slope</label>
+          </div>
         </div>
-        <button type="submit" class="w-full py-3 rounded-xl bg-primary-container text-on-primary-fixed font-bold">APPLY TIMINGS</button>
+
+        <div class="p-2.5 rounded-xl bg-surface-container space-y-2">
+          <div class="font-label-caps text-primary font-bold text-[10.5px]">NIFTY Hybrid &amp; Execution Limits</div>
+          <div class="grid grid-cols-3 gap-2">
+            <div><label class="font-label-caps text-[9.5px] text-on-surface-variant block mb-0.5">Max Tr/Day</label><input id="ms-max-tr" type="number" class="w-full p-2 rounded-lg bg-surface-container-lowest font-data-mono-sm text-on-surface"/></div>
+            <div><label class="font-label-caps text-[9.5px] text-on-surface-variant block mb-0.5">Max Wk Loss</label><input id="ms-max-wk" type="number" class="w-full p-2 rounded-lg bg-surface-container-lowest font-data-mono-sm text-on-surface"/></div>
+            <div><label class="font-label-caps text-[9.5px] text-on-surface-variant block mb-0.5">NF Max/Day</label><input id="ms-nf-max" type="number" class="w-full p-2 rounded-lg bg-surface-container-lowest font-data-mono-sm text-on-surface"/></div>
+            <div><label class="font-label-caps text-[9.5px] text-on-surface-variant block mb-0.5">NF SL Cap</label><input id="ms-nf-sl" type="number" step="5" class="w-full p-2 rounded-lg bg-surface-container-lowest font-data-mono-sm text-on-surface"/></div>
+            <div><label class="font-label-caps text-[9.5px] text-on-surface-variant block mb-0.5">NF SwingLen</label><input id="ms-nf-swing" type="number" class="w-full p-2 rounded-lg bg-surface-container-lowest font-data-mono-sm text-on-surface"/></div>
+            <div><label class="font-label-caps text-[9.5px] text-on-surface-variant block mb-0.5">NF Buf ATR</label><input id="ms-nf-buf" type="number" step="0.05" class="w-full p-2 rounded-lg bg-surface-container-lowest font-data-mono-sm text-on-surface"/></div>
+            <div><label class="font-label-caps text-[9.5px] text-on-surface-variant block mb-0.5">NF Stop ATR</label><input id="ms-nf-stop" type="number" step="0.1" class="w-full p-2 rounded-lg bg-surface-container-lowest font-data-mono-sm text-on-surface"/></div>
+          </div>
+          <div class="grid grid-cols-2 gap-1.5 pt-1 font-label-caps text-[10px]">
+            <label class="inline-flex items-center gap-1.5"><input id="ms-nf-hybrid" type="checkbox" class="w-3.5 h-3.5 accent-indigo-500"/>NIFTY HTF Hybrid</label>
+            <label class="inline-flex items-center gap-1.5"><input id="ms-nf-emabody" type="checkbox" class="w-3.5 h-3.5 accent-indigo-500"/>NF EMA+Body</label>
+            <label class="inline-flex items-center gap-1.5"><input id="ms-tue-boost" type="checkbox" class="w-3.5 h-3.5 accent-indigo-500"/>Tuesday Boost</label>
+            <label class="inline-flex items-center gap-1.5"><input id="ms-bnf-pyr" type="checkbox" class="w-3.5 h-3.5 accent-indigo-500"/>BNF Pyramiding</label>
+          </div>
+        </div>
+
+        <button type="submit" class="w-full py-3 rounded-xl bg-primary-container text-on-primary-fixed font-bold">APPLY ALL GATES &amp; TIMINGS</button>
       </form>
     </div>
   </div>
@@ -788,6 +858,93 @@
       </div>
 
       <button onclick="closeSheet('sheet-kill')" type="button" class="w-full py-2.5 rounded-xl bg-surface-container text-on-surface font-title-sm">Cancel / Return to Safety</button>
+    </div>
+  </div>
+
+  <!-- SHEET 8: Mobile Backtest Analytics & 09:30-15:00 Runner -->
+  <div id="sheet-backtest" class="fixed inset-0 z-50 hidden bg-black/75 backdrop-blur-md items-end justify-center">
+    <div class="w-full max-w-lg rounded-t-2xl bg-surface-container-high p-space-md space-y-3 border-t border-outline-variant/40 max-h-[90vh] overflow-y-auto">
+      <div class="flex items-center justify-between sticky top-0 bg-surface-container-high py-1 z-10 border-b border-outline-variant/25">
+        <div>
+          <h3 class="font-headline-md text-[15px] font-bold">Backtest Analytics</h3>
+          <span id="m-bt-meta-badge" class="font-data-mono-sm text-[10.5px] text-profit">Window 09:30–15:00 IST &bull; 15m ORB</span>
+        </div>
+        <button onclick="closeSheet('sheet-backtest')" type="button" class="w-8 h-8 rounded bg-surface-container flex items-center justify-center cursor-pointer"><span class="material-symbols-outlined">close</span></button>
+      </div>
+
+      <!-- Window & Gates Runner -->
+      <div class="p-2.5 rounded-xl bg-surface-container space-y-2">
+        <div class="flex items-center justify-between">
+          <span class="font-label-caps text-on-surface-variant font-bold">BACKTEST ORDER WINDOW</span>
+          <label class="inline-flex items-center gap-1.5 font-label-caps text-[10px] text-on-surface cursor-pointer">
+            <input id="m-bt-use-gates" type="checkbox" checked class="w-3.5 h-3.5 accent-indigo-500 rounded"/>
+            <span>Use Live Strategy Gates</span>
+          </label>
+        </div>
+        <div class="grid grid-cols-3 gap-2">
+          <div>
+            <label class="font-label-caps text-[9.5px] text-on-surface-variant block mb-0.5">Order Start</label>
+            <input id="m-bt-start" type="time" value="09:30" class="w-full h-9 px-2 rounded-lg bg-surface-container-low border border-outline-variant/40 font-data-mono-sm"/>
+          </div>
+          <div>
+            <label class="font-label-caps text-[9.5px] text-on-surface-variant block mb-0.5">Order Cutoff</label>
+            <input id="m-bt-end" type="time" value="15:00" class="w-full h-9 px-2 rounded-lg bg-surface-container-low border border-outline-variant/40 font-data-mono-sm"/>
+          </div>
+          <div>
+            <label class="font-label-caps text-[9.5px] text-on-surface-variant block mb-0.5">ORB Min</label>
+            <select id="m-bt-orb" class="w-full h-9 px-2 rounded-lg bg-surface-container-low border border-outline-variant/40 font-data-mono-sm">
+              <option value="5">5m</option>
+              <option value="15" selected>15m</option>
+              <option value="30">30m</option>
+              <option value="45">45m</option>
+              <option value="60">60m</option>
+            </select>
+          </div>
+        </div>
+        <button id="m-bt-run-btn" onclick="runMobileBacktest()" type="button" class="w-full h-9 rounded-lg bg-primary-container text-on-primary-fixed font-label-caps font-bold cursor-pointer">RUN 09:30–15:00 BACKTEST</button>
+      </div>
+
+      <!-- Filter Pills -->
+      <div class="flex items-center justify-between gap-2 flex-wrap">
+        <div class="inline-flex rounded-lg bg-surface-container p-0.5 gap-0.5">
+          <button data-mbt-h="ALL" type="button" class="mbt-h px-2 py-1 rounded bg-surface-container-high text-primary font-label-caps text-[10px] font-bold">ALL</button>
+          <button data-mbt-h="180" type="button" class="mbt-h px-2 py-1 rounded text-on-surface-variant font-label-caps text-[10px]">6M</button>
+          <button data-mbt-h="90" type="button" class="mbt-h px-2 py-1 rounded text-on-surface-variant font-label-caps text-[10px]">90D</button>
+          <button data-mbt-h="30" type="button" class="mbt-h px-2 py-1 rounded text-on-surface-variant font-label-caps text-[10px]">30D</button>
+        </div>
+        <div class="inline-flex rounded-lg bg-surface-container p-0.5 gap-0.5">
+          <button data-mbt-i="ALL" type="button" class="mbt-i px-2 py-1 rounded bg-surface-container-high text-primary font-label-caps text-[10px] font-bold">ALL</button>
+          <button data-mbt-i="NIFTY" type="button" class="mbt-i px-2 py-1 rounded text-on-surface-variant font-label-caps text-[10px]">NF</button>
+          <button data-mbt-i="BANKNIFTY" type="button" class="mbt-i px-2 py-1 rounded text-on-surface-variant font-label-caps text-[10px]">BNF</button>
+        </div>
+      </div>
+
+      <!-- KPIs -->
+      <div class="grid grid-cols-4 gap-1.5 font-data-mono-sm text-center tabular-nums">
+        <div class="p-2 rounded-lg bg-surface-container"><span class="font-label-caps text-[9px] text-on-surface-variant block">NET P&amp;L</span><b id="m-bt-pnl" class="text-profit">--</b></div>
+        <div class="p-2 rounded-lg bg-surface-container"><span class="font-label-caps text-[9px] text-on-surface-variant block">WIN %</span><b id="m-bt-wr">--</b></div>
+        <div class="p-2 rounded-lg bg-surface-container"><span class="font-label-caps text-[9px] text-on-surface-variant block">PF</span><b id="m-bt-pf">--</b></div>
+        <div class="p-2 rounded-lg bg-surface-container"><span class="font-label-caps text-[9px] text-on-surface-variant block">MAX DD</span><b id="m-bt-dd" class="text-loss">--</b></div>
+      </div>
+
+      <!-- Equity Curve -->
+      <div class="p-2.5 rounded-xl bg-surface-container space-y-1">
+        <div class="flex items-center justify-between font-label-caps text-[10px]">
+          <span class="text-on-surface-variant">EQUITY CURVE &bull; <b id="m-bt-wl" class="text-on-surface">--</b></span>
+          <span id="m-bt-peak" class="text-profit font-bold">PEAK --</span>
+        </div>
+        <div id="m-bt-equity" class="h-28 w-full"></div>
+      </div>
+
+      <!-- Attribution + Monthly -->
+      <div id="m-bt-indices" class="grid grid-cols-2 gap-2"></div>
+      <div id="m-bt-months" class="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-1"></div>
+
+      <!-- Ledger -->
+      <div class="space-y-1.5 pb-2">
+        <input id="m-bt-search" type="search" placeholder="Filter trades by NIFTY, BANKNIFTY, reason..." class="w-full h-9 px-2.5 rounded-lg bg-surface-container border border-outline-variant/40 font-data-mono-sm"/>
+        <div id="m-bt-ledger" class="space-y-1.5 max-h-60 overflow-y-auto"></div>
+      </div>
     </div>
   </div>
 
@@ -922,8 +1079,12 @@
         document.getElementById('m-vix-val').textContent = snap.india_vix ? Number(snap.india_vix).toFixed(2) : '--';
         document.getElementById('m-vix-badge').textContent = !snap.india_vix ? 'WAIT' : snap.india_vix >= 12 ? 'OPTIMAL' : 'LOW';
         document.getElementById('m-trades-cap').textContent = `${snap.trades_taken || 0}/${snap.max_trades || 4}`;
-        document.getElementById('m-pill-orb-txt').textContent = `ORB ${snap.orb_window_minutes || 30}m`;
-        document.getElementById('m-pill-cut-txt').textContent = `Cut ${snap.entry_cutoff_time || '13:15'}`;
+        document.getElementById('m-pill-orb-txt').textContent = `${snap.orb_window_minutes || 30}m Gates`;
+        document.getElementById('m-pill-cut-txt').textContent = `${snap.entry_start_time || '10:00'}–${snap.entry_cutoff_time || '13:15'}`;
+        const mcSum = document.getElementById('mc-strat-summary');
+        if (mcSum) {
+          mcSum.textContent = `ORB ${snap.orb_start_time || '09:15'} (${snap.orb_window_minutes || 30}m) • Window ${snap.entry_start_time || '10:00'}–${snap.entry_cutoff_time || '13:15'} • ST(${snap.supertrend_period || 10},${snap.supertrend_multiplier || 3}) • RSI ${snap.rsi_bull_threshold || 60}/${snap.rsi_bear_threshold || 40}`;
+        }
         document.getElementById('m-ping-txt').textContent = A.state.lastPingMs ? `Sync: ${A.state.lastPingMs}ms` : 'Sync: --';
 
         renderMobileRadarCards();
@@ -1329,14 +1490,208 @@
       document.getElementById('mc-btn-kill').addEventListener('click', () => openSheet('sheet-kill'));
       document.getElementById('m-btn-user').addEventListener('click', () => { syncMAuth(); openSheet('sheet-auth'); });
       document.getElementById('m-pill-orb').addEventListener('click', () => {
-        document.getElementById('ms-start').value = snap.orb_start_time || '09:15';
-        document.getElementById('ms-min').value = snap.orb_window_minutes || 30;
-        document.getElementById('ms-cut').value = snap.entry_cutoff_time || '13:15';
-        openSheet('sheet-orb');
+        openMobileOrbSheet();
       });
       document.getElementById('m-pill-cutoff').addEventListener('click', () => document.getElementById('m-pill-orb').click());
       document.getElementById('m-pill-manual').addEventListener('click', () => openSheet('sheet-manual'));
       document.getElementById('m-pill-guide').addEventListener('click', () => openSheet('sheet-guide'));
+
+      let mBtTrades = [], mBtMeta = {}, mBtHorizon = 'ALL', mBtIdx = 'ALL';
+
+      function fillMobileStrategyForm(cfg) {
+        if (!cfg) return;
+        const setV = (id, v) => { const el = document.getElementById(id); if (el && v !== undefined && v !== null) el.value = v; };
+        const setC = (id, v) => { const el = document.getElementById(id); if (el && typeof v === 'boolean') el.checked = v; };
+        setV('ms-start', cfg.orb_start_time || '09:15');
+        setV('ms-min', cfg.orb_window_minutes || 30);
+        setV('ms-entry-start', cfg.entry_start_time || '10:00');
+        setV('ms-cut', cfg.entry_cutoff_time || '13:15');
+        setV('ms-nf-start', cfg.nifty_htf_entry_start_time || '09:30');
+        setV('ms-sqoff', cfg.auto_squareoff_time || '15:15');
+        setV('ms-vix', cfg.min_india_vix ?? 12.0);
+        setV('ms-orb-min', cfg.min_orb_range_pct ?? 0.20);
+        setV('ms-orb-max', cfg.max_orb_range_pct ?? 0.85);
+        setV('ms-rsi-bull', cfg.rsi_bull_threshold ?? 60.0);
+        setV('ms-rsi-bear', cfg.rsi_bear_threshold ?? 40.0);
+        setV('ms-body', cfg.min_candle_body_ratio ?? 0.40);
+        setV('ms-st-per', cfg.supertrend_period ?? 10);
+        setV('ms-st-mult', cfg.supertrend_multiplier ?? 3.0);
+        setV('ms-vwap-pct', cfg.min_vwap_slope_pct ?? 0.015);
+        setV('ms-max-tr', cfg.max_trades_per_day ?? 4);
+        setV('ms-max-wk', cfg.max_weekly_losses ?? 2);
+        setV('ms-nf-max', cfg.nifty_htf_max_trades_per_day ?? 2);
+        setV('ms-nf-sl', cfg.nifty_htf_opt_sl_cap ?? 35.0);
+        setV('ms-nf-swing', cfg.nifty_htf_swing_len ?? 2);
+        setV('ms-nf-buf', cfg.nifty_htf_break_buf_atr ?? 0.1);
+        setV('ms-nf-stop', cfg.nifty_htf_stop_atr_mult ?? 0.5);
+        setC('ms-use-st', cfg.use_supertrend_filter !== false);
+        setC('ms-use-ema', cfg.use_ema_filter !== false);
+        setC('ms-daily-bias', Boolean(cfg.daily_bias_filter));
+        setC('ms-vwap-slope', Boolean(cfg.require_vwap_slope));
+        setC('ms-nf-hybrid', cfg.nifty_use_htf_swing_hybrid !== false);
+        setC('ms-nf-emabody', Boolean(cfg.nifty_use_ema_body_filter));
+        setC('ms-tue-boost', cfg.tuesday_expiry_boost !== false);
+        setC('ms-bnf-pyr', cfg.banknifty_be_pyramiding !== false);
+      }
+
+      window.applyMobileOrbPreset = (preset) => {
+        if (preset === '0930_15m') {
+          fillMobileStrategyForm({
+            orb_start_time: '09:15',
+            orb_window_minutes: 15,
+            entry_start_time: '09:30',
+            entry_cutoff_time: '15:00',
+            nifty_htf_entry_start_time: '09:30',
+          });
+        } else {
+          fillMobileStrategyForm({
+            orb_start_time: '09:15',
+            orb_window_minutes: 30,
+            entry_start_time: '10:00',
+            entry_cutoff_time: '13:15',
+            nifty_htf_entry_start_time: '09:30',
+          });
+        }
+      };
+
+      window.openMobileOrbSheet = async () => {
+        fillMobileStrategyForm(snap.strategy_config || snap);
+        openSheet('sheet-orb');
+        try {
+          const r = await A.api.getStrategyConfig();
+          if (r && r.strategy_config) fillMobileStrategyForm(r.strategy_config);
+        } catch (_e) {}
+      };
+
+      function renderMobileBacktest() {
+        let trades = mBtTrades.slice();
+        if (mBtHorizon !== 'ALL') {
+          const days = Number(mBtHorizon);
+          const cutoff = new Date(Date.now() - days * 86400 * 1000).toISOString().slice(0, 10);
+          trades = trades.filter(t => String(t.date || '') >= cutoff);
+        }
+        if (mBtIdx !== 'ALL') {
+          trades = trades.filter(t => (t.idx || t.index_name || '') === mBtIdx);
+        }
+        const badge = document.getElementById('m-bt-meta-badge');
+        if (badge && mBtMeta) {
+          badge.textContent = `Window ${mBtMeta.entry_start_time || '09:30'}–${mBtMeta.entry_cutoff_time || '15:00'} IST • ${mBtMeta.orb_window_minutes || 15}m ORB • ${trades.length} trades`;
+        }
+        const pnls = trades.map(t => Number(t.net ?? t.net_pnl ?? t.pnl ?? 0));
+        const total = pnls.reduce((a, b) => a + b, 0);
+        const wins = pnls.filter(p => p > 0);
+        const losses = pnls.filter(p => p < 0);
+        const gw = wins.reduce((a, b) => a + b, 0);
+        const gl = Math.abs(losses.reduce((a, b) => a + b, 0));
+        const pf = gl > 0 ? (gw / gl) : (gw > 0 ? 9.99 : 0);
+        const wr = trades.length ? (wins.length / trades.length) * 100 : 0;
+        let cum = 0, peak = 0, dd = 0;
+        const eq = [0];
+        pnls.forEach(p => { cum += p; if (cum > peak) peak = cum; dd = Math.max(dd, peak - cum); eq.push(cum); });
+        const pnlEl = document.getElementById('m-bt-pnl');
+        if (pnlEl) {
+          pnlEl.textContent = A.fmtSignedINR(total, 0);
+          pnlEl.className = total >= 0 ? 'text-profit' : 'text-loss';
+        }
+        document.getElementById('m-bt-wr').textContent = `${wr.toFixed(1)}%`;
+        document.getElementById('m-bt-pf').textContent = pf.toFixed(2);
+        document.getElementById('m-bt-dd').textContent = `-${A.fmtINR(dd, 0)}`;
+        document.getElementById('m-bt-wl').textContent = `${trades.length} (${wins.length}W/${losses.length}L)`;
+        document.getElementById('m-bt-peak').textContent = `PEAK ${A.fmtSignedINR(peak, 0)}`;
+        document.getElementById('m-bt-equity').innerHTML = A.buildEquityCurveSvg(eq);
+
+        const byIdx = {};
+        trades.forEach(t => {
+          const k = t.idx || t.index_name || 'OTHER';
+          if (!byIdx[k]) byIdx[k] = { n: 0, w: 0, net: 0 };
+          const p = Number(t.net ?? t.net_pnl ?? t.pnl ?? 0);
+          byIdx[k].n += 1; if (p > 0) byIdx[k].w += 1; byIdx[k].net += p;
+        });
+        document.getElementById('m-bt-indices').innerHTML = Object.entries(byIdx).map(([k, v]) => `<div class="p-2 rounded-lg bg-surface-container font-data-mono-sm">
+          <div class="font-bold">${esc(k)} <span class="text-on-surface-variant font-normal">(${v.n})</span></div>
+          <div class="font-bold ${v.net >= 0 ? 'text-profit' : 'text-loss'}">${A.fmtSignedINR(v.net, 0)} &bull; ${v.n ? ((v.w / v.n) * 100).toFixed(0) : 0}%</div>
+        </div>`).join('');
+
+        const mMap = {};
+        trades.forEach(t => {
+          const ym = String(t.date || '').slice(0, 7);
+          if (!ym) return;
+          mMap[ym] = (mMap[ym] || 0) + Number(t.net ?? t.net_pnl ?? t.pnl ?? 0);
+        });
+        document.getElementById('m-bt-months').innerHTML = Object.keys(mMap).sort().map(ym => {
+          const v = mMap[ym];
+          return `<span class="shrink-0 px-2 py-1 rounded bg-surface-container font-data-mono-sm"><b class="text-on-surface-variant">${ym.slice(2)}:</b> <b class="${v >= 0 ? 'text-profit' : 'text-loss'}">${A.fmtSignedINR(v, 0)}</b></span>`;
+        }).join('');
+
+        const q = (document.getElementById('m-bt-search').value || '').trim().toLowerCase();
+        const rows = trades.filter(t => !q || `${t.date} ${t.idx} ${t.tradingsymbol} ${t.reason} ${t.side}`.toLowerCase().includes(q));
+        document.getElementById('m-bt-ledger').innerHTML = rows.slice().reverse().slice(0, 80).map(t => {
+          const p = Number(t.net ?? t.net_pnl ?? t.pnl ?? 0);
+          return `<div class="p-2 rounded-lg bg-surface-container flex items-center justify-between gap-2 font-data-mono-sm">
+            <div class="min-w-0">
+              <div class="font-bold text-on-surface truncate">${esc(t.tradingsymbol || t.idx)} <span class="text-on-surface-variant font-normal">${esc(t.date)} ${esc(t.in_t)}&rarr;${esc(t.out_t)}</span></div>
+              <div class="text-[10px] text-on-surface-variant truncate">${esc(t.reason)} &bull; ₹${Number(t.in_px).toFixed(1)} &rarr; ₹${Number(t.out_px).toFixed(1)}</div>
+            </div>
+            <div class="font-bold shrink-0 ${p >= 0 ? 'text-profit' : 'text-loss'}">${A.fmtSignedINR(p, 0)}</div>
+          </div>`;
+        }).join('') || '<div class="text-center text-on-surface-variant py-4 font-body-sm">No matching trades.</div>';
+      }
+
+      window.openMobileBacktest = async () => {
+        openSheet('sheet-backtest');
+        if (!mBtTrades.length) {
+          document.getElementById('m-bt-ledger').innerHTML = '<div class="text-center text-on-surface-variant py-4 font-body-sm">Loading backtest data...</div>';
+          try {
+            const res = await A.api.getBacktestTrades();
+            mBtTrades = res.trades || [];
+            mBtMeta = res.meta || {};
+          } catch (e) {
+            A.showToast(e.message, 'error');
+          }
+        }
+        renderMobileBacktest();
+      };
+
+      window.runMobileBacktest = async () => {
+        const btn = document.getElementById('m-bt-run-btn');
+        if (btn) btn.textContent = 'RUNNING BACKTEST...';
+        try {
+          const res = await A.api.runBacktest({
+            entry_start_time: document.getElementById('m-bt-start').value || '09:30',
+            entry_cutoff_time: document.getElementById('m-bt-end').value || '15:00',
+            orb_window_minutes: Number(document.getElementById('m-bt-orb').value || 15),
+            use_live_gates: document.getElementById('m-bt-use-gates').checked,
+            save: false,
+          });
+          mBtTrades = res.trades || [];
+          mBtMeta = res.meta || {};
+          renderMobileBacktest();
+          A.showToast(res.message || 'Backtest complete');
+        } catch (e) {
+          A.showToast(e.message, 'error');
+        } finally {
+          if (btn) btn.textContent = 'RUN 09:30–15:00 BACKTEST';
+        }
+      };
+
+      document.querySelectorAll('.mbt-h').forEach(b => b.addEventListener('click', () => {
+        mBtHorizon = b.getAttribute('data-mbt-h');
+        document.querySelectorAll('.mbt-h').forEach(x => {
+          const act = x.getAttribute('data-mbt-h') === mBtHorizon;
+          x.className = act ? 'mbt-h px-2 py-1 rounded bg-surface-container-high text-primary font-label-caps text-[10px] font-bold' : 'mbt-h px-2 py-1 rounded text-on-surface-variant font-label-caps text-[10px]';
+        });
+        renderMobileBacktest();
+      }));
+      document.querySelectorAll('.mbt-i').forEach(b => b.addEventListener('click', () => {
+        mBtIdx = b.getAttribute('data-mbt-i');
+        document.querySelectorAll('.mbt-i').forEach(x => {
+          const act = x.getAttribute('data-mbt-i') === mBtIdx;
+          x.className = act ? 'mbt-i px-2 py-1 rounded bg-surface-container-high text-primary font-label-caps text-[10px] font-bold' : 'mbt-i px-2 py-1 rounded text-on-surface-variant font-label-caps text-[10px]';
+        });
+        renderMobileBacktest();
+      }));
+      const mBtSearchEl = document.getElementById('m-bt-search');
+      if (mBtSearchEl) mBtSearchEl.addEventListener('input', renderMobileBacktest);
 
       document.getElementById('m-seg-strategy').addEventListener('click', () => {
         posSubView = 'strategy';
@@ -1522,12 +1877,42 @@
       document.getElementById('m-form-orb').addEventListener('submit', async (e) => {
         e.preventDefault();
         try {
-          await A.api.setOrbAnchor(document.getElementById('ms-start').value.trim(), Number(document.getElementById('ms-min').value));
-          const r = await A.api.setEntryCutoff(document.getElementById('ms-cut').value.trim());
+          const r = await A.api.setStrategyConfig({
+            orb_start_time: document.getElementById('ms-start').value.trim(),
+            orb_window_minutes: Number(document.getElementById('ms-min').value),
+            entry_start_time: document.getElementById('ms-entry-start').value.trim(),
+            entry_cutoff_time: document.getElementById('ms-cut').value.trim(),
+            nifty_htf_entry_start_time: document.getElementById('ms-nf-start').value.trim(),
+            auto_squareoff_time: document.getElementById('ms-sqoff').value.trim(),
+            min_india_vix: Number(document.getElementById('ms-vix').value),
+            min_orb_range_pct: Number(document.getElementById('ms-orb-min').value),
+            max_orb_range_pct: Number(document.getElementById('ms-orb-max').value),
+            rsi_bull_threshold: Number(document.getElementById('ms-rsi-bull').value),
+            rsi_bear_threshold: Number(document.getElementById('ms-rsi-bear').value),
+            min_candle_body_ratio: Number(document.getElementById('ms-body').value),
+            supertrend_period: Number(document.getElementById('ms-st-per').value),
+            supertrend_multiplier: Number(document.getElementById('ms-st-mult').value),
+            min_vwap_slope_pct: Number(document.getElementById('ms-vwap-pct').value),
+            max_trades_per_day: Number(document.getElementById('ms-max-tr').value),
+            max_weekly_losses: Number(document.getElementById('ms-max-wk').value),
+            nifty_htf_max_trades_per_day: Number(document.getElementById('ms-nf-max').value),
+            nifty_htf_opt_sl_cap: Number(document.getElementById('ms-nf-sl').value),
+            nifty_htf_swing_len: Number(document.getElementById('ms-nf-swing').value),
+            nifty_htf_break_buf_atr: Number(document.getElementById('ms-nf-buf').value),
+            nifty_htf_stop_atr_mult: Number(document.getElementById('ms-nf-stop').value),
+            use_supertrend_filter: document.getElementById('ms-use-st').checked,
+            use_ema_filter: document.getElementById('ms-use-ema').checked,
+            daily_bias_filter: document.getElementById('ms-daily-bias').checked,
+            require_vwap_slope: document.getElementById('ms-vwap-slope').checked,
+            nifty_use_htf_swing_hybrid: document.getElementById('ms-nf-hybrid').checked,
+            nifty_use_ema_body_filter: document.getElementById('ms-nf-emabody').checked,
+            tuesday_expiry_boost: document.getElementById('ms-tue-boost').checked,
+            banknifty_be_pyramiding: document.getElementById('ms-bnf-pyr').checked,
+          });
           snap = r.snapshot || snap;
           renderMobile();
           closeSheet('sheet-orb');
-          A.showToast('ORB settings applied');
+          A.showToast(r.message || 'Strategy gates & timings applied', r.ok ? 'info' : 'error');
         } catch (err) { A.showToast(err.message, 'error'); }
       });
 
@@ -1585,7 +1970,7 @@
       window.showLandingScreen = function () {
         document.documentElement.classList.remove('autoorb-authed');
         stopPolling();
-        ['sheet-auth', 'sheet-broker', 'sheet-kill', 'sheet-orb', 'sheet-manual', 'sheet-sl', 'sheet-guide'].forEach(closeSheet);
+        ['sheet-auth', 'sheet-broker', 'sheet-kill', 'sheet-orb', 'sheet-manual', 'sheet-sl', 'sheet-guide', 'sheet-backtest'].forEach(closeSheet);
         const passEl = document.getElementById('ma-pass');
         const otpEl = document.getElementById('ma-otp');
         const otpRow = document.getElementById('ma-otp-row');
@@ -1603,7 +1988,7 @@
       window.showLoginScreen = function (defaultSubTab) {
         document.documentElement.classList.remove('autoorb-authed');
         stopPolling();
-        ['sheet-auth', 'sheet-broker', 'sheet-kill', 'sheet-orb', 'sheet-manual', 'sheet-sl', 'sheet-guide'].forEach(closeSheet);
+        ['sheet-auth', 'sheet-broker', 'sheet-kill', 'sheet-orb', 'sheet-manual', 'sheet-sl', 'sheet-guide', 'sheet-backtest'].forEach(closeSheet);
         const passEl = document.getElementById('ma-pass');
         const otpEl = document.getElementById('ma-otp');
         const otpRow = document.getElementById('ma-otp-row');

@@ -296,8 +296,8 @@ class ORBStrategy:
             )
             return None
 
-        rsi_bull = 60.0
-        rsi_bear = 40.0
+        rsi_bull = float(getattr(self.settings, "rsi_bull_threshold", 60.0) or 60.0)
+        rsi_bear = float(getattr(self.settings, "rsi_bear_threshold", 40.0) or 40.0)
 
         ce_signal = (close_px > state.orh) and (close_px > vwap) and (rsi > rsi_bull)
         pe_signal = (close_px < state.orl) and (close_px < vwap) and (rsi < rsi_bear)
@@ -448,7 +448,10 @@ class ORBStrategy:
             logger.info("NIFTY Hybrid skipped: India VIX %.2f < %.2f", vix_val, self.settings.min_india_vix)
             return None
 
-        if htf_a is None or st_val is None or st_dir == 0 or len(candles_seq) < 2 or len(series) < 2:
+        use_st = bool(getattr(self.settings, "use_supertrend_filter", True))
+        if htf_a is None or len(candles_seq) < 2 or len(series) < 2:
+            return None
+        if use_st and (st_val is None or st_dir == 0):
             return None
 
         prev_close = float(candles_seq[-2].close)
@@ -473,8 +476,10 @@ class ORBStrategy:
             and prev_close >= (ref_f - ref_bf)
         )
 
-        ce_signal = brk_up and (st_dir == 1 and close_px > st_val)
-        pe_signal = brk_dn and (st_dir == -1 and close_px < st_val)
+        st_bull_ok = (st_dir == 1 and st_val is not None and close_px > st_val) if use_st else True
+        st_bear_ok = (st_dir == -1 and st_val is not None and close_px < st_val) if use_st else True
+        ce_signal = brk_up and st_bull_ok
+        pe_signal = brk_dn and st_bear_ok
 
         if ce_signal and pe_signal:
             if close_px >= float(closed_candle.open):
@@ -484,7 +489,7 @@ class ORBStrategy:
 
         if ce_signal and htf_c is not None:
             spot_sl = round(max(0.0, min(float(closed_candle.low), htf_c) - stop_mult * htf_a), 2)
-            state.last_signal = f"CE HTF @ {close_px:.2f} (> {htf_c:.1f} | ST {st_val:.1f})"
+            state.last_signal = f"CE HTF @ {close_px:.2f} (> {htf_c:.1f} | ST {st_val:.1f})" if st_val is not None else f"CE HTF @ {close_px:.2f} (> {htf_c:.1f})"
             return ORBSignal(
                 index_name="NIFTY",
                 signal_type="CE",
@@ -498,12 +503,12 @@ class ORBStrategy:
                 strategy_mode="HTF_SWING_HYBRID",
                 spot_sl_price=spot_sl,
                 opt_sl_cap_pts=opt_sl_cap,
-                pure_supertrend_trail=True,
+                pure_supertrend_trail=use_st,
             )
 
         if pe_signal and htf_f is not None:
             spot_sl = round(max(float(closed_candle.high), htf_f) + stop_mult * htf_a, 2)
-            state.last_signal = f"PE HTF @ {close_px:.2f} (< {htf_f:.1f} | ST {st_val:.1f})"
+            state.last_signal = f"PE HTF @ {close_px:.2f} (< {htf_f:.1f} | ST {st_val:.1f})" if st_val is not None else f"PE HTF @ {close_px:.2f} (< {htf_f:.1f})"
             return ORBSignal(
                 index_name="NIFTY",
                 signal_type="PE",
@@ -517,7 +522,7 @@ class ORBStrategy:
                 strategy_mode="HTF_SWING_HYBRID",
                 spot_sl_price=spot_sl,
                 opt_sl_cap_pts=opt_sl_cap,
-                pure_supertrend_trail=True,
+                pure_supertrend_trail=use_st,
             )
 
         return None

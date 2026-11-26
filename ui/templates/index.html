@@ -715,6 +715,24 @@
                 <button data-horizon="90" type="button" class="bt-horizon px-3 py-1 rounded text-on-surface-variant font-label-caps text-label-caps cursor-pointer">90D</button>
                 <button data-horizon="30" type="button" class="bt-horizon px-3 py-1 rounded text-on-surface-variant font-label-caps text-label-caps cursor-pointer">30D</button>
               </div>
+              <div class="flex flex-wrap items-center gap-2 ml-auto">
+                <span id="bt-window-badge" class="px-2 py-1 rounded bg-primary-container/15 text-profit font-data-mono-sm text-[11px] font-bold">09:30–15:00 IST &bull; 15m ORB</span>
+                <label class="font-label-caps text-[10px] text-on-surface-variant">Start</label>
+                <input id="bt-run-start" type="time" value="09:30" class="h-7 px-2 rounded bg-surface-container-lowest border border-outline-variant/40 font-data-mono-sm text-[11px]"/>
+                <label class="font-label-caps text-[10px] text-on-surface-variant">End</label>
+                <input id="bt-run-end" type="time" value="15:00" class="h-7 px-2 rounded bg-surface-container-lowest border border-outline-variant/40 font-data-mono-sm text-[11px]"/>
+                <select id="bt-run-orb" class="h-7 px-2 rounded bg-surface-container-lowest border border-outline-variant/40 font-data-mono-sm text-[11px]">
+                  <option value="5">5m ORB</option>
+                  <option value="15" selected>15m ORB</option>
+                  <option value="30">30m ORB</option>
+                  <option value="45">45m ORB</option>
+                  <option value="60">60m ORB</option>
+                </select>
+                <label class="inline-flex items-center gap-1 font-label-caps text-[10px] text-on-surface cursor-pointer">
+                  <input id="bt-run-use-gates" type="checkbox" checked class="w-3.5 h-3.5 accent-indigo-500 rounded"/>
+                  <span>Live Gates</span>
+                </label>
+                <button id="btn-run-backtest" onclick="runDesktopBacktest()" type="button" class="h-7 px-3 rounded bg-primary-container text-on-primary-fixed font-label-caps text-[10.5px] font-bold cursor-pointer">RUN 09:30–15:00</button>
             </div>
 
             <div class="w-full h-56 bg-surface-container-lowest rounded-lg p-space-md flex flex-col justify-between relative overflow-hidden">
@@ -993,32 +1011,74 @@
     </div>
   </div>
 
-  <!-- MODAL 3: ORB Window & Entry Cutoff Config -->
+  <!-- MODAL 3: Full Strategy Gates & Timings Config -->
   <div id="modal-config" class="fixed inset-0 z-50 hidden bg-black/75 backdrop-blur-md items-center justify-center p-4">
-    <div class="w-full max-w-md bg-surface-container-low glass-panel rounded-2xl shadow-2xl p-6 space-y-4">
+    <div class="w-full max-w-2xl bg-surface-container-low glass-panel rounded-2xl shadow-2xl p-6 space-y-4 max-h-[90vh] overflow-y-auto">
       <div class="flex items-center justify-between">
-        <h3 class="font-headline-md text-on-surface">ORB Window &amp; Cutoff</h3>
+        <div>
+          <h3 class="font-headline-md text-on-surface">Strategy Gates &amp; Timings Setup</h3>
+          <span class="font-body-sm text-on-surface-variant">Modify ORB window, order timings, RSI/EMA/VWAP/Supertrend gates &amp; NIFTY Hybrid parameters.</span>
+        </div>
         <button onclick="closeModal('modal-config')" type="button" class="w-8 h-8 rounded bg-surface-container-high flex items-center justify-center cursor-pointer"><span class="material-symbols-outlined">close</span></button>
       </div>
-      <form id="form-orb-config" class="space-y-3 text-body-sm">
-        <div>
-          <label class="font-label-caps text-label-caps text-on-surface-variant block mb-1">ORB Anchor Start Time (IST)</label>
-          <input id="cfg-start-time" type="text" value="09:15" placeholder="09:15" class="w-full p-2 rounded-lg bg-surface-container-lowest border border-outline-variant/50 font-data-mono-md text-on-surface"/>
-        </div>
-        <div>
-          <label class="font-label-caps text-label-caps text-on-surface-variant block mb-1">ORB Window Minutes</label>
-          <div class="grid grid-cols-3 gap-2">
-            <button type="button" onclick="document.getElementById('cfg-minutes').value=15" class="py-1.5 rounded bg-surface-container hover:bg-surface-high font-data-mono-sm cursor-pointer">15 MIN</button>
-            <button type="button" onclick="document.getElementById('cfg-minutes').value=30" class="py-1.5 rounded bg-surface-container hover:bg-surface-high font-data-mono-sm cursor-pointer">30 MIN</button>
-            <button type="button" onclick="document.getElementById('cfg-minutes').value=45" class="py-1.5 rounded bg-surface-container hover:bg-surface-high font-data-mono-sm cursor-pointer">45 MIN</button>
+      <div class="flex flex-wrap gap-2">
+        <button onclick="applyDesktopOrbPreset('0930_15m')" type="button" class="px-3 py-1 rounded bg-primary-container/20 text-profit border border-primary-container/40 font-label-caps text-label-caps font-bold cursor-pointer">Preset: 09:30–15:00 (15m ORB)</button>
+        <button onclick="applyDesktopOrbPreset('default_30m')" type="button" class="px-3 py-1 rounded bg-surface-container text-on-surface border border-outline-variant/40 font-label-caps text-label-caps cursor-pointer">Preset: 10:00–13:15 (30m Default)</button>
+      </div>
+      <form id="form-orb-config" class="space-y-4 text-body-sm">
+        <div class="p-3 rounded-xl bg-surface-container space-y-2.5">
+          <div class="font-label-caps text-primary font-bold">Session &amp; Order Window Timings (IST)</div>
+          <div class="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+            <div><label class="font-label-caps text-label-caps text-on-surface-variant block mb-1">ORB Start</label><input id="cfg-start-time" type="text" value="09:15" placeholder="09:15" class="w-full p-2 rounded-lg bg-surface-container-lowest border border-outline-variant/50 font-data-mono-sm text-on-surface"/></div>
+            <div><label class="font-label-caps text-label-caps text-on-surface-variant block mb-1">ORB Window</label><select id="cfg-minutes" class="w-full p-2 rounded-lg bg-surface-container-lowest border border-outline-variant/50 font-data-mono-sm text-on-surface"><option value="5">5m</option><option value="15">15m</option><option value="30">30m</option><option value="45">45m</option><option value="60">60m</option></select></div>
+            <div><label class="font-label-caps text-label-caps text-on-surface-variant block mb-1">ORB Entry Start</label><input id="cfg-entry-start" type="text" value="10:00" placeholder="10:00" class="w-full p-2 rounded-lg bg-surface-container-lowest border border-outline-variant/50 font-data-mono-sm text-on-surface"/></div>
+            <div><label class="font-label-caps text-label-caps text-on-surface-variant block mb-1">Entry Cutoff</label><input id="cfg-cutoff-time" type="text" value="13:15" placeholder="13:15" class="w-full p-2 rounded-lg bg-surface-container-lowest border border-outline-variant/50 font-data-mono-sm text-on-surface"/></div>
+            <div><label class="font-label-caps text-label-caps text-on-surface-variant block mb-1">NIFTY Hybrid Start</label><input id="cfg-nf-start" type="text" value="09:30" placeholder="09:30" class="w-full p-2 rounded-lg bg-surface-container-lowest border border-outline-variant/50 font-data-mono-sm text-on-surface"/></div>
+            <div><label class="font-label-caps text-label-caps text-on-surface-variant block mb-1">Auto Square-Off</label><input id="cfg-squareoff" type="text" value="15:15" placeholder="15:15" class="w-full p-2 rounded-lg bg-surface-container-lowest border border-outline-variant/50 font-data-mono-sm text-on-surface"/></div>
           </div>
-          <input id="cfg-minutes" type="number" min="5" max="120" value="30" class="mt-2 w-full p-2 rounded-lg bg-surface-container-lowest border border-outline-variant/50 font-data-mono-md text-on-surface"/>
         </div>
-        <div>
-          <label class="font-label-caps text-label-caps text-on-surface-variant block mb-1">Entry Cutoff Time (IST)</label>
-          <input id="cfg-cutoff-time" type="text" value="13:15" placeholder="13:15" class="w-full p-2 rounded-lg bg-surface-container-lowest border border-outline-variant/50 font-data-mono-md text-on-surface"/>
+
+        <div class="p-3 rounded-xl bg-surface-container space-y-2.5">
+          <div class="font-label-caps text-primary font-bold">Breakout &amp; Indicator Filter Gates</div>
+          <div class="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+            <div><label class="font-label-caps text-on-surface-variant block mb-1">Min India VIX</label><input id="cfg-vix" type="number" step="0.5" min="0" max="50" class="w-full p-2 rounded-lg bg-surface-container-lowest border border-outline-variant/50 font-data-mono-sm text-on-surface"/></div>
+            <div><label class="font-label-caps text-on-surface-variant block mb-1">ORB Min Range %</label><input id="cfg-orb-min" type="number" step="0.05" min="0" max="5" class="w-full p-2 rounded-lg bg-surface-container-lowest border border-outline-variant/50 font-data-mono-sm text-on-surface"/></div>
+            <div><label class="font-label-caps text-on-surface-variant block mb-1">ORB Max Range %</label><input id="cfg-orb-max" type="number" step="0.05" min="0.1" max="10" class="w-full p-2 rounded-lg bg-surface-container-lowest border border-outline-variant/50 font-data-mono-sm text-on-surface"/></div>
+            <div><label class="font-label-caps text-on-surface-variant block mb-1">RSI Bull &gt;</label><input id="cfg-rsi-bull" type="number" step="1" min="40" max="90" class="w-full p-2 rounded-lg bg-surface-container-lowest border border-outline-variant/50 font-data-mono-sm text-on-surface"/></div>
+            <div><label class="font-label-caps text-on-surface-variant block mb-1">RSI Bear &lt;</label><input id="cfg-rsi-bear" type="number" step="1" min="10" max="60" class="w-full p-2 rounded-lg bg-surface-container-lowest border border-outline-variant/50 font-data-mono-sm text-on-surface"/></div>
+            <div><label class="font-label-caps text-on-surface-variant block mb-1">Min Body Ratio</label><input id="cfg-body-ratio" type="number" step="0.05" min="0" max="1" class="w-full p-2 rounded-lg bg-surface-container-lowest border border-outline-variant/50 font-data-mono-sm text-on-surface"/></div>
+            <div><label class="font-label-caps text-on-surface-variant block mb-1">Supertrend Period</label><input id="cfg-st-period" type="number" min="2" max="50" class="w-full p-2 rounded-lg bg-surface-container-lowest border border-outline-variant/50 font-data-mono-sm text-on-surface"/></div>
+            <div><label class="font-label-caps text-on-surface-variant block mb-1">Supertrend Mult</label><input id="cfg-st-mult" type="number" step="0.1" min="0.5" max="10" class="w-full p-2 rounded-lg bg-surface-container-lowest border border-outline-variant/50 font-data-mono-sm text-on-surface"/></div>
+            <div><label class="font-label-caps text-on-surface-variant block mb-1">VWAP Slope Min %</label><input id="cfg-vwap-slope" type="number" step="0.005" min="0" max="2" class="w-full p-2 rounded-lg bg-surface-container-lowest border border-outline-variant/50 font-data-mono-sm text-on-surface"/></div>
+          </div>
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1 font-label-caps">
+            <label class="inline-flex items-center gap-1.5 cursor-pointer"><input id="cfg-use-st" type="checkbox" class="w-3.5 h-3.5 accent-indigo-500"/>Supertrend Filter</label>
+            <label class="inline-flex items-center gap-1.5 cursor-pointer"><input id="cfg-use-ema" type="checkbox" class="w-3.5 h-3.5 accent-indigo-500"/>20-EMA Filter</label>
+            <label class="inline-flex items-center gap-1.5 cursor-pointer"><input id="cfg-daily-bias" type="checkbox" class="w-3.5 h-3.5 accent-indigo-500"/>Daily Bias</label>
+            <label class="inline-flex items-center gap-1.5 cursor-pointer"><input id="cfg-req-vwap" type="checkbox" class="w-3.5 h-3.5 accent-indigo-500"/>VWAP Slope</label>
+          </div>
         </div>
-        <button type="submit" class="w-full py-2.5 rounded-xl bg-primary-container text-on-primary-fixed font-bold cursor-pointer">APPLY STRATEGY TIMINGS</button>
+
+        <div class="p-3 rounded-xl bg-surface-container space-y-2.5">
+          <div class="font-label-caps text-primary font-bold">NIFTY Hybrid &amp; Execution Limits</div>
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+            <div><label class="font-label-caps text-on-surface-variant block mb-1">Max Trades/Day</label><input id="cfg-max-trades" type="number" min="1" max="20" class="w-full p-2 rounded-lg bg-surface-container-lowest border border-outline-variant/50 font-data-mono-sm text-on-surface"/></div>
+            <div><label class="font-label-caps text-on-surface-variant block mb-1">Max Weekly Loss</label><input id="cfg-max-wk-losses" type="number" min="1" max="10" class="w-full p-2 rounded-lg bg-surface-container-lowest border border-outline-variant/50 font-data-mono-sm text-on-surface"/></div>
+            <div><label class="font-label-caps text-on-surface-variant block mb-1">NF Max/Day</label><input id="cfg-nf-max" type="number" min="1" max="10" class="w-full p-2 rounded-lg bg-surface-container-lowest border border-outline-variant/50 font-data-mono-sm text-on-surface"/></div>
+            <div><label class="font-label-caps text-on-surface-variant block mb-1">NF Opt SL Cap (₹)</label><input id="cfg-nf-sl-cap" type="number" step="5" min="5" max="200" class="w-full p-2 rounded-lg bg-surface-container-lowest border border-outline-variant/50 font-data-mono-sm text-on-surface"/></div>
+            <div><label class="font-label-caps text-on-surface-variant block mb-1">NF Swing Len</label><input id="cfg-nf-swing" type="number" min="1" max="10" class="w-full p-2 rounded-lg bg-surface-container-lowest border border-outline-variant/50 font-data-mono-sm text-on-surface"/></div>
+            <div><label class="font-label-caps text-on-surface-variant block mb-1">NF Break Buf ATR</label><input id="cfg-nf-buf" type="number" step="0.05" min="0" max="2" class="w-full p-2 rounded-lg bg-surface-container-lowest border border-outline-variant/50 font-data-mono-sm text-on-surface"/></div>
+            <div><label class="font-label-caps text-on-surface-variant block mb-1">NF Stop ATR Mult</label><input id="cfg-nf-stop" type="number" step="0.1" min="0.1" max="3" class="w-full p-2 rounded-lg bg-surface-container-lowest border border-outline-variant/50 font-data-mono-sm text-on-surface"/></div>
+          </div>
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1 font-label-caps">
+            <label class="inline-flex items-center gap-1.5 cursor-pointer"><input id="cfg-nf-hybrid" type="checkbox" class="w-3.5 h-3.5 accent-indigo-500"/>NIFTY HTF Hybrid</label>
+            <label class="inline-flex items-center gap-1.5 cursor-pointer"><input id="cfg-nf-emabody" type="checkbox" class="w-3.5 h-3.5 accent-indigo-500"/>NF EMA+Body</label>
+            <label class="inline-flex items-center gap-1.5 cursor-pointer"><input id="cfg-tue-boost" type="checkbox" class="w-3.5 h-3.5 accent-indigo-500"/>Tuesday Boost</label>
+            <label class="inline-flex items-center gap-1.5 cursor-pointer"><input id="cfg-bnf-pyr" type="checkbox" class="w-3.5 h-3.5 accent-indigo-500"/>BNF Pyramiding</label>
+          </div>
+        </div>
+
+        <button type="submit" class="w-full py-2.5 rounded-xl bg-primary-container text-on-primary-fixed font-bold cursor-pointer">APPLY ALL STRATEGY GATES &amp; TIMINGS</button>
       </form>
     </div>
   </div>
@@ -1378,8 +1438,8 @@
         document.getElementById('rad-candle-timer').textContent = nextSec
           ? ((sigSec !== null && sigSec !== undefined) ? `1m:${sigSec}s | 5m:${nextSec}s` : `${nextSec}s`)
           : (sigLast ? `DONE (${sigLast})` : 'CLOSED');
-        document.getElementById('rad-orb-window').textContent = `ORB: ${snap.orb_start_time || '09:15'} - ${snap.orb_end_time || '09:45'}`;
-        document.getElementById('rad-cutoff').textContent = `CUTOFF ${snap.entry_cutoff_time || '13:15'} IST`;
+        document.getElementById('rad-orb-window').textContent = `ORB: ${snap.orb_start_time || '09:15'} - ${snap.orb_end_time || '09:30'} (${snap.orb_window_minutes || 15}m)`;
+        document.getElementById('rad-cutoff').textContent = `WINDOW ${snap.entry_start_time || '10:00'} - ${snap.entry_cutoff_time || '13:15'} IST`;
 
         const enIdx = snap.enabled_indices || { NIFTY: true, BANKNIFTY: true };
         const ttChkNf = document.getElementById('tt-chk-nifty');
@@ -1691,7 +1751,7 @@
                 <div class="flex items-center gap-1.5 flex-wrap">
                   ${gates.map(([gName, ok]) => `<span class="px-2 py-0.5 rounded font-label-caps text-[10px] font-bold ${ok ? 'bg-primary-container/20 text-profit border border-primary-container/30' : 'bg-surface-container text-on-surface-variant'}">${ok ? '✓' : '•'} ${gName}</span>`).join('')}
                 </div>
-                <span class="font-body-sm text-on-surface-variant">${esc(r.radar_summary || 'Dual Engine active (10:00–13:15 IST • VIX >= 12 • ST 10,3).')}</span>
+                <span class="font-body-sm text-on-surface-variant">${esc(r.radar_summary || `Dual Engine (${snap.entry_start_time || '10:00'}–${snap.entry_cutoff_time || '13:15'} IST • ST ${snap.supertrend_period || 10},${snap.supertrend_multiplier || 3}).`)}</span>
               </div>
             </div>
           </div>`;
@@ -1898,13 +1958,43 @@
       });
 
       // ---------- Analytics & Backtest ----------
+      function updateBacktestBadge(meta) {
+        const el = document.getElementById('bt-window-badge');
+        if (el && meta) {
+          el.textContent = `${meta.entry_start_time || '09:30'}–${meta.entry_cutoff_time || '15:00'} IST • ${meta.orb_window_minutes || 15}m ORB`;
+        }
+      }
+
       async function loadBacktest() {
         try {
           const res = await A.api.getBacktestTrades();
           backtestTrades = res.trades || [];
+          if (res.meta) updateBacktestBadge(res.meta);
           renderBacktest();
         } catch (_e) {}
       }
+
+      window.runDesktopBacktest = async () => {
+        const btn = document.getElementById('btn-run-backtest');
+        if (btn) btn.textContent = 'RUNNING...';
+        try {
+          const res = await A.api.runBacktest({
+            entry_start_time: (document.getElementById('bt-run-start') && document.getElementById('bt-run-start').value) || '09:30',
+            entry_cutoff_time: (document.getElementById('bt-run-end') && document.getElementById('bt-run-end').value) || '15:00',
+            orb_window_minutes: Number((document.getElementById('bt-run-orb') && document.getElementById('bt-run-orb').value) || 15),
+            use_live_gates: document.getElementById('bt-run-use-gates') ? document.getElementById('bt-run-use-gates').checked : true,
+            save: false,
+          });
+          backtestTrades = res.trades || [];
+          if (res.meta) updateBacktestBadge(res.meta);
+          renderBacktest();
+          A.showToast(res.message || 'Backtest complete');
+        } catch (err) {
+          A.showToast(err.message, 'error');
+        } finally {
+          if (btn) btn.textContent = 'RUN 09:30–15:00';
+        }
+      };
 
       function renderBacktest() {
         let trades = backtestTrades.slice();
@@ -2272,11 +2362,13 @@
       // Buttons wiring
       document.getElementById('btn-hdr-manual').addEventListener('click', () => openModal('modal-manual'));
       document.getElementById('btn-rad-ticket').addEventListener('click', () => openModal('modal-manual'));
-      document.getElementById('btn-hdr-config').addEventListener('click', () => {
-        document.getElementById('cfg-start-time').value = snap.orb_start_time || '09:15';
-        document.getElementById('cfg-minutes').value = snap.orb_window_minutes || 30;
-        document.getElementById('cfg-cutoff-time').value = snap.entry_cutoff_time || '13:15';
+      document.getElementById('btn-hdr-config').addEventListener('click', async () => {
+        fillDesktopStrategyModal(snap.strategy_config || snap);
         openModal('modal-config');
+        try {
+          const r = await A.api.getStrategyConfig();
+          if (r && r.strategy_config) fillDesktopStrategyModal(r.strategy_config);
+        } catch (_e) {}
       });
       document.getElementById('btn-rad-tune').addEventListener('click', () => document.getElementById('btn-hdr-config').click());
       document.getElementById('btn-hdr-guide').addEventListener('click', () => openModal('modal-guide'));
@@ -2351,18 +2443,101 @@
         } catch (err) { A.showToast(err.message, 'error'); }
       });
 
+      function fillDesktopStrategyModal(cfg) {
+        if (!cfg) return;
+        const setV = (id, v) => { const el = document.getElementById(id); if (el && v !== undefined && v !== null) el.value = v; };
+        const setC = (id, v) => { const el = document.getElementById(id); if (el && typeof v === 'boolean') el.checked = v; };
+        setV('cfg-start-time', cfg.orb_start_time || '09:15');
+        setV('cfg-minutes', cfg.orb_window_minutes || 30);
+        setV('cfg-entry-start', cfg.entry_start_time || '10:00');
+        setV('cfg-cutoff-time', cfg.entry_cutoff_time || '13:15');
+        setV('cfg-nf-start', cfg.nifty_htf_entry_start_time || '09:30');
+        setV('cfg-squareoff', cfg.auto_squareoff_time || '15:15');
+        setV('cfg-vix', cfg.min_india_vix ?? 12.0);
+        setV('cfg-orb-min', cfg.min_orb_range_pct ?? 0.20);
+        setV('cfg-orb-max', cfg.max_orb_range_pct ?? 0.85);
+        setV('cfg-rsi-bull', cfg.rsi_bull_threshold ?? 60.0);
+        setV('cfg-rsi-bear', cfg.rsi_bear_threshold ?? 40.0);
+        setV('cfg-body-ratio', cfg.min_candle_body_ratio ?? 0.40);
+        setV('cfg-st-period', cfg.supertrend_period ?? 10);
+        setV('cfg-st-mult', cfg.supertrend_multiplier ?? 3.0);
+        setV('cfg-vwap-slope', cfg.min_vwap_slope_pct ?? 0.015);
+        setV('cfg-max-trades', cfg.max_trades_per_day ?? 4);
+        setV('cfg-max-wk-losses', cfg.max_weekly_losses ?? 2);
+        setV('cfg-nf-max', cfg.nifty_htf_max_trades_per_day ?? 2);
+        setV('cfg-nf-sl-cap', cfg.nifty_htf_opt_sl_cap ?? 35.0);
+        setV('cfg-nf-swing', cfg.nifty_htf_swing_len ?? 2);
+        setV('cfg-nf-buf', cfg.nifty_htf_break_buf_atr ?? 0.1);
+        setV('cfg-nf-stop', cfg.nifty_htf_stop_atr_mult ?? 0.5);
+        setC('cfg-use-st', cfg.use_supertrend_filter !== false);
+        setC('cfg-use-ema', cfg.use_ema_filter !== false);
+        setC('cfg-daily-bias', Boolean(cfg.daily_bias_filter));
+        setC('cfg-req-vwap', Boolean(cfg.require_vwap_slope));
+        setC('cfg-nf-hybrid', cfg.nifty_use_htf_swing_hybrid !== false);
+        setC('cfg-nf-emabody', Boolean(cfg.nifty_use_ema_body_filter));
+        setC('cfg-tue-boost', cfg.tuesday_expiry_boost !== false);
+        setC('cfg-bnf-pyr', cfg.banknifty_be_pyramiding !== false);
+      }
+
+      window.applyDesktopOrbPreset = (preset) => {
+        if (preset === '0930_15m') {
+          fillDesktopStrategyModal({
+            orb_start_time: '09:15',
+            orb_window_minutes: 15,
+            entry_start_time: '09:30',
+            entry_cutoff_time: '15:00',
+            nifty_htf_entry_start_time: '09:30',
+          });
+        } else {
+          fillDesktopStrategyModal({
+            orb_start_time: '09:15',
+            orb_window_minutes: 30,
+            entry_start_time: '10:00',
+            entry_cutoff_time: '13:15',
+            nifty_htf_entry_start_time: '09:30',
+          });
+        }
+      };
+
       document.getElementById('form-orb-config').addEventListener('submit', async (e) => {
         e.preventDefault();
         try {
-          const st = document.getElementById('cfg-start-time').value.trim();
-          const min = Number(document.getElementById('cfg-minutes').value);
-          const cut = document.getElementById('cfg-cutoff-time').value.trim();
-          await A.api.setOrbAnchor(st, min);
-          const r2 = await A.api.setEntryCutoff(cut);
-          snap = r2.snapshot || snap;
+          const r = await A.api.setStrategyConfig({
+            orb_start_time: document.getElementById('cfg-start-time').value.trim(),
+            orb_window_minutes: Number(document.getElementById('cfg-minutes').value),
+            entry_start_time: document.getElementById('cfg-entry-start').value.trim(),
+            entry_cutoff_time: document.getElementById('cfg-cutoff-time').value.trim(),
+            nifty_htf_entry_start_time: document.getElementById('cfg-nf-start').value.trim(),
+            auto_squareoff_time: document.getElementById('cfg-squareoff').value.trim(),
+            min_india_vix: Number(document.getElementById('cfg-vix').value),
+            min_orb_range_pct: Number(document.getElementById('cfg-orb-min').value),
+            max_orb_range_pct: Number(document.getElementById('cfg-orb-max').value),
+            rsi_bull_threshold: Number(document.getElementById('cfg-rsi-bull').value),
+            rsi_bear_threshold: Number(document.getElementById('cfg-rsi-bear').value),
+            min_candle_body_ratio: Number(document.getElementById('cfg-body-ratio').value),
+            supertrend_period: Number(document.getElementById('cfg-st-period').value),
+            supertrend_multiplier: Number(document.getElementById('cfg-st-mult').value),
+            min_vwap_slope_pct: Number(document.getElementById('cfg-vwap-slope').value),
+            max_trades_per_day: Number(document.getElementById('cfg-max-trades').value),
+            max_weekly_losses: Number(document.getElementById('cfg-max-wk-losses').value),
+            nifty_htf_max_trades_per_day: Number(document.getElementById('cfg-nf-max').value),
+            nifty_htf_opt_sl_cap: Number(document.getElementById('cfg-nf-sl-cap').value),
+            nifty_htf_swing_len: Number(document.getElementById('cfg-nf-swing').value),
+            nifty_htf_break_buf_atr: Number(document.getElementById('cfg-nf-buf').value),
+            nifty_htf_stop_atr_mult: Number(document.getElementById('cfg-nf-stop').value),
+            use_supertrend_filter: document.getElementById('cfg-use-st').checked,
+            use_ema_filter: document.getElementById('cfg-use-ema').checked,
+            daily_bias_filter: document.getElementById('cfg-daily-bias').checked,
+            require_vwap_slope: document.getElementById('cfg-req-vwap').checked,
+            nifty_use_htf_swing_hybrid: document.getElementById('cfg-nf-hybrid').checked,
+            nifty_use_ema_body_filter: document.getElementById('cfg-nf-emabody').checked,
+            tuesday_expiry_boost: document.getElementById('cfg-tue-boost').checked,
+            banknifty_be_pyramiding: document.getElementById('cfg-bnf-pyr').checked,
+          });
+          snap = r.snapshot || snap;
           renderAll();
           closeModal('modal-config');
-          A.showToast('ORB timings updated');
+          A.showToast(r.message || 'Strategy gates & timings updated', r.ok ? 'info' : 'error');
         } catch (err) { A.showToast(err.message, 'error'); }
       });
 

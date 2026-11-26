@@ -102,6 +102,69 @@ class EnabledIndicesRequest(BaseModel):
     banknifty: Optional[bool] = None
 
 
+class StrategyConfigRequest(BaseModel):
+    orb_start_time: Optional[str] = None
+    orb_window_minutes: Optional[int] = None
+    entry_start_time: Optional[str] = None
+    entry_cutoff_time: Optional[str] = None
+    nifty_htf_entry_start_time: Optional[str] = None
+    auto_squareoff_time: Optional[str] = None
+    min_india_vix: Optional[float] = None
+    min_orb_range_pct: Optional[float] = None
+    max_orb_range_pct: Optional[float] = None
+    rsi_bull_threshold: Optional[float] = None
+    rsi_bear_threshold: Optional[float] = None
+    daily_bias_filter: Optional[bool] = None
+    use_ema_filter: Optional[bool] = None
+    min_candle_body_ratio: Optional[float] = None
+    require_vwap_slope: Optional[bool] = None
+    min_vwap_slope_pct: Optional[float] = None
+    use_supertrend_filter: Optional[bool] = None
+    supertrend_period: Optional[int] = None
+    supertrend_multiplier: Optional[float] = None
+    nifty_use_htf_swing_hybrid: Optional[bool] = None
+    nifty_use_ema_body_filter: Optional[bool] = None
+    nifty_htf_swing_len: Optional[int] = None
+    nifty_htf_break_buf_atr: Optional[float] = None
+    nifty_htf_stop_atr_mult: Optional[float] = None
+    nifty_htf_opt_sl_cap: Optional[float] = None
+    nifty_htf_max_trades_per_day: Optional[int] = None
+    max_trades_per_day: Optional[int] = None
+    max_weekly_losses: Optional[int] = None
+    tuesday_expiry_boost: Optional[bool] = None
+    banknifty_be_pyramiding: Optional[bool] = None
+
+
+class BacktestRunRequest(BaseModel):
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+    orb_start_time: Optional[str] = None
+    orb_window_minutes: Optional[int] = None
+    entry_start_time: Optional[str] = "09:30"
+    entry_cutoff_time: Optional[str] = "15:00"
+    nifty_htf_entry_start_time: Optional[str] = None
+    auto_squareoff_time: Optional[str] = None
+    max_trades_per_day: Optional[int] = None
+    daily_loss_limit: Optional[float] = None
+    indices: Optional[list] = None
+    use_live_gates: bool = True
+    save: bool = False
+    min_india_vix: Optional[float] = None
+    min_orb_range_pct: Optional[float] = None
+    max_orb_range_pct: Optional[float] = None
+    rsi_bull_threshold: Optional[float] = None
+    rsi_bear_threshold: Optional[float] = None
+    use_ema_filter: Optional[bool] = None
+    min_candle_body_ratio: Optional[float] = None
+    require_vwap_slope: Optional[bool] = None
+    min_vwap_slope_pct: Optional[float] = None
+    use_supertrend_filter: Optional[bool] = None
+    supertrend_period: Optional[int] = None
+    supertrend_multiplier: Optional[float] = None
+    nifty_use_htf_swing_hybrid: Optional[bool] = None
+    tuesday_expiry_boost: Optional[bool] = None
+
+
 def create_app(orchestrator: Any) -> FastAPI:
     """Build and return the FastAPI web dashboard application."""
     from api.auth_router import router as auth_router
@@ -248,15 +311,148 @@ def create_app(orchestrator: Any) -> FastAPI:
 
     @app.get("/api/backtest/trades")
     def api_backtest_trades() -> JSONResponse:
+        import json
         p = Path("data/backtest/all_trades_180d.json")
+        meta_path = Path("data/backtest/backtest_meta.json")
+        meta = {}
+        if meta_path.exists():
+            try:
+                meta = json.loads(meta_path.read_text(encoding="utf-8"))
+            except Exception:
+                meta = {}
         if p.exists():
-            import json
             try:
                 data = json.loads(p.read_text(encoding="utf-8"))
-                return JSONResponse(content={"ok": True, "count": len(data), "trades": data})
+                summary = meta.get("summary")
+                if summary is None:
+                    try:
+                        from scripts.update_backtest_data import compute_metrics
+                        summary = compute_metrics(data)
+                    except Exception:
+                        summary = {}
+                return JSONResponse(
+                    content={
+                        "ok": True,
+                        "count": len(data),
+                        "trades": data,
+                        "summary": summary,
+                        "meta": meta,
+                    }
+                )
             except Exception as e:
                 return JSONResponse(status_code=500, content={"ok": False, "error": str(e)})
-        return JSONResponse(content={"ok": True, "count": 0, "trades": []})
+        return JSONResponse(content={"ok": True, "count": 0, "trades": [], "summary": {}, "meta": meta})
+
+    @app.post("/api/backtest/run")
+    def api_run_backtest(payload: Optional[BacktestRunRequest] = None) -> JSONResponse:
+        import json
+        from datetime import date as date_cls
+        try:
+            from scripts.update_backtest_data import (
+                compute_metrics,
+                load_candles_from_cache,
+                load_vix_map,
+                run_nf_bnf_sequential_backtest,
+            )
+            req = payload or BacktestRunRequest()
+            cfg = orchestrator.get_strategy_config() if req.use_live_gates and hasattr(orchestrator, "get_strategy_config") else {}
+
+            def pick(name: str, fallback: Any) -> Any:
+                val = getattr(req, name, None)
+                if val is not None:
+                    return val
+                return cfg.get(name, fallback)
+
+            req_indices = req.indices or ["NIFTY", "BANKNIFTY"]
+            active_indices = tuple(
+                idx for idx in ("BANKNIFTY", "NIFTY")
+                if idx in [str(x).upper() for x in req_indices]
+            ) or ("BANKNIFTY", "NIFTY")
+
+            candles_by_index = {idx: load_candles_from_cache(idx) for idx in active_indices}
+            vix_map = load_vix_map()
+
+            start_d = date_cls.fromisoformat(req.start_date) if req.start_date else None
+            end_d = date_cls.fromisoformat(req.end_date) if req.end_date else None
+            entry_start_val = pick("entry_start_time", "09:30")
+            entry_cut_val = pick("entry_cutoff_time", "15:00")
+            nifty_start_val = (
+                req.nifty_htf_entry_start_time
+                if req.nifty_htf_entry_start_time is not None
+                else (cfg.get("nifty_htf_entry_start_time") if req.use_live_gates and req.entry_start_time is None else entry_start_val)
+            )
+            orb_start_val = pick("orb_start_time", "09:15")
+            orb_min_val = int(pick("orb_window_minutes", 15))
+            squareoff_val = pick("auto_squareoff_time", "15:15")
+            max_tr_val = int(pick("max_trades_per_day", 4))
+            daily_risk_val = float(req.daily_loss_limit if req.daily_loss_limit is not None else getattr(orchestrator.settings, "max_daily_loss", 10000.0))
+
+            trades = run_nf_bnf_sequential_backtest(
+                candles_by_index,
+                vix_map=vix_map,
+                start_date=start_d,
+                end_date=end_d,
+                max_trades_per_day=max_tr_val,
+                daily_loss_limit=daily_risk_val,
+                orb_start_time=orb_start_val,
+                orb_window_minutes=orb_min_val,
+                entry_start_time=entry_start_val,
+                entry_cutoff_time=entry_cut_val,
+                nifty_htf_entry_start_time=nifty_start_val,
+                auto_squareoff_time=squareoff_val,
+                active_indices=active_indices,
+                min_india_vix=float(pick("min_india_vix", 12.0)),
+                min_orb_range_pct=float(pick("min_orb_range_pct", 0.20)),
+                max_orb_range_pct=float(pick("max_orb_range_pct", 0.85)),
+                rsi_bull_threshold=float(pick("rsi_bull_threshold", 60.0)),
+                rsi_bear_threshold=float(pick("rsi_bear_threshold", 40.0)),
+                use_ema_filter=bool(pick("use_ema_filter", True)),
+                min_candle_body_ratio=float(pick("min_candle_body_ratio", 0.40)),
+                require_vwap_slope=bool(pick("require_vwap_slope", False)),
+                min_vwap_slope_pct=float(pick("min_vwap_slope_pct", 0.015)),
+                use_supertrend_filter=bool(pick("use_supertrend_filter", True)),
+                supertrend_period=int(pick("supertrend_period", 10)),
+                supertrend_multiplier=float(pick("supertrend_multiplier", 3.0)),
+                nifty_use_htf_swing_hybrid=bool(pick("nifty_use_htf_swing_hybrid", True)),
+                nifty_htf_swing_len=int(cfg.get("nifty_htf_swing_len", 2)),
+                nifty_htf_break_buf_atr=float(cfg.get("nifty_htf_break_buf_atr", 0.1)),
+                nifty_htf_stop_atr_mult=float(cfg.get("nifty_htf_stop_atr_mult", 0.5)),
+                nifty_htf_opt_sl_cap=float(cfg.get("nifty_htf_opt_sl_cap", 35.0)),
+                nifty_htf_max_trades_per_day=int(cfg.get("nifty_htf_max_trades_per_day", 2)),
+                tuesday_expiry_boost=bool(pick("tuesday_expiry_boost", True)),
+            )
+            trades.sort(key=lambda t: (t["date"], t["in_t"]))
+            summary = compute_metrics(trades)
+            meta = {
+                "entry_start_time": str(entry_start_val),
+                "entry_cutoff_time": str(entry_cut_val),
+                "orb_start_time": str(orb_start_val),
+                "orb_window_minutes": orb_min_val,
+                "auto_squareoff_time": str(squareoff_val),
+                "indices": list(active_indices),
+                "start_date": req.start_date or (trades[0]["date"] if trades else ""),
+                "end_date": req.end_date or (trades[-1]["date"] if trades else ""),
+                "summary": summary,
+            }
+            if req.save:
+                out_dir = Path("data/backtest")
+                out_dir.mkdir(parents=True, exist_ok=True)
+                (out_dir / "all_trades_180d.json").write_text(json.dumps(trades, indent=2), encoding="utf-8")
+                (out_dir / "trades_minified.json").write_text(json.dumps(trades, separators=(",", ":")), encoding="utf-8")
+                (out_dir / "backtest_meta.json").write_text(json.dumps(meta, indent=2), encoding="utf-8")
+
+            return JSONResponse(
+                content={
+                    "ok": True,
+                    "count": len(trades),
+                    "trades": trades,
+                    "summary": summary,
+                    "meta": meta,
+                    "message": f"Backtest complete ({entry_start_val}-{entry_cut_val} IST, {orb_min_val}m ORB): {len(trades)} trades.",
+                }
+            )
+        except Exception as e:
+            return JSONResponse(status_code=500, content={"ok": False, "error": str(e)})
 
     @app.get("/api/backtest/csv")
     def api_backtest_csv() -> Response:
@@ -431,6 +627,29 @@ def create_app(orchestrator: Any) -> FastAPI:
                 "orb_start_time": orchestrator.settings.orb_start_time.strftime("%H:%M"),
                 "orb_window_minutes": orchestrator.settings.orb_window_minutes,
                 "orb_end_time": orchestrator.settings.orb_end_time.strftime("%H:%M"),
+                "snapshot": orchestrator.get_status_snapshot(),
+            }
+        )
+
+    @app.get("/api/settings/strategy")
+    def api_get_strategy_config() -> JSONResponse:
+        return JSONResponse(
+            content={
+                "ok": True,
+                "strategy_config": orchestrator.get_strategy_config(),
+            }
+        )
+
+    @app.post("/api/settings/strategy")
+    def api_set_strategy_config(payload: StrategyConfigRequest) -> JSONResponse:
+        raw = payload.model_dump() if hasattr(payload, "model_dump") else payload.dict()
+        updates = {k: v for k, v in raw.items() if v is not None}
+        ok, msg = orchestrator.update_strategy_config(updates)
+        return JSONResponse(
+            content={
+                "ok": ok,
+                "message": msg,
+                "strategy_config": orchestrator.get_strategy_config(),
                 "snapshot": orchestrator.get_status_snapshot(),
             }
         )
@@ -632,6 +851,10 @@ def create_app(orchestrator: Any) -> FastAPI:
         "api_broker_order": api_broker_order,
         "api_set_orb_window": api_set_orb_window,
         "api_set_orb_anchor": api_set_orb_anchor,
+        "api_get_strategy_config": api_get_strategy_config,
+        "api_set_strategy_config": api_set_strategy_config,
+        "api_backtest_trades": api_backtest_trades,
+        "api_run_backtest": api_run_backtest,
         "api_set_entry_cutoff": api_set_entry_cutoff,
         "api_set_lots": api_set_lots,
         "api_set_product_type": api_set_product_type,

@@ -278,8 +278,10 @@ def _simulate_fixed_sl_trade(
     p0: float,
     st_by_ts: Optional[Dict[datetime, Tuple[Optional[float], int]]] = None,
     exit_slippage: float = 1.0,
+    use_supertrend_trail: bool = True,
+    squareoff_time: time = time(15, 15),
 ) -> Dict[str, Any]:
-    """Simulate Fixed SL (25pt NF / 45pt BNF), BE (+20/+45), T1 50% (+40/+80), Supertrend(10,3) line trail, and 15:15 EOD."""
+    """Simulate Fixed SL (25pt NF / 45pt BNF), BE (+20/+45), T1 50% (+40/+80), Supertrend trail, and EOD."""
     iv_mult = 1.12 if index_name == "BANKNIFTY" else 1.0
     sl_price = max(1.0, p0 - spec.sl_pts)
     be_ts: Optional[datetime] = None
@@ -288,7 +290,7 @@ def _simulate_fixed_sl_trade(
     remaining_qty = total_qty
 
     exit_ts = entry_candle.timestamp
-    exit_time_str = "15:15"
+    exit_time_str = squareoff_time.strftime("%H:%M")
     exit_px = p0
     exit_reason = "EOD_SQUAREOFF"
     last_vix = vix_map.get(entry_candle.timestamp, 14.5)
@@ -330,8 +332,8 @@ def _simulate_fixed_sl_trade(
             be_ts = bar.timestamp
             sl_price = max(sl_price, p0)
 
-        # Supertrend(10, 3) Trailing Exit on 5-minute candle close across the Supertrend line
-        if st_by_ts is not None:
+        # Supertrend Trailing Exit on 5-minute candle close across the Supertrend line
+        if use_supertrend_trail and st_by_ts is not None:
             st_line, st_dir = st_by_ts.get(bar.timestamp, (None, 0))
             if st_line is not None and st_dir != 0:
                 st_crossed = (
@@ -345,7 +347,7 @@ def _simulate_fixed_sl_trade(
                     exit_reason = "SUPERTREND_TRAIL"
                     break
 
-        if b_time >= time(15, 15):
+        if b_time >= squareoff_time:
             exit_px = o_close
             exit_ts = bar.timestamp
             exit_time_str = bar.timestamp.strftime("%H:%M")
@@ -398,11 +400,13 @@ def _simulate_nifty_htf_hybrid_trade(
     st_by_ts: Dict[datetime, Tuple[Optional[float], int]],
     opt_sl_cap: float = 35.0,
     exit_slippage: float = 1.0,
+    use_supertrend_trail: bool = True,
+    squareoff_time: time = time(15, 15),
 ) -> Dict[str, Any]:
-    """Simulate H1 Hybrid NIFTY trade: Spot ATR SL + 35pt Option SL Cap + Pure Supertrend(10,3) Trail + 15:15 EOD."""
+    """Simulate H1 Hybrid NIFTY trade: Spot ATR SL + Option SL Cap + Supertrend Trail + EOD."""
     opt_sl = max(1.0, p0 - opt_sl_cap)
     exit_ts = entry_candle.timestamp
-    exit_time_str = "15:15"
+    exit_time_str = squareoff_time.strftime("%H:%M")
     exit_px = p0
     exit_reason = "EOD_SQUAREOFF"
     last_vix = vix_map.get(entry_candle.timestamp, 14.5)
@@ -438,20 +442,21 @@ def _simulate_nifty_htf_hybrid_trade(
             exit_reason = "STOP_LOSS"
             break
 
-        st_line, st_dir = st_by_ts.get(bar.timestamp, (None, 0))
-        if st_line is not None and st_dir != 0:
-            st_crossed = (
-                (sig_type == "CE" and (bar.close < st_line or st_dir == -1))
-                or (sig_type == "PE" and (bar.close > st_line or st_dir == 1))
-            )
-            if st_crossed:
-                exit_px = max(0.5, o_close - exit_slippage)
-                exit_ts = bar.timestamp
-                exit_time_str = bar.timestamp.strftime("%H:%M")
-                exit_reason = "SUPERTREND_TRAIL"
-                break
+        if use_supertrend_trail:
+            st_line, st_dir = st_by_ts.get(bar.timestamp, (None, 0))
+            if st_line is not None and st_dir != 0:
+                st_crossed = (
+                    (sig_type == "CE" and (bar.close < st_line or st_dir == -1))
+                    or (sig_type == "PE" and (bar.close > st_line or st_dir == 1))
+                )
+                if st_crossed:
+                    exit_px = max(0.5, o_close - exit_slippage)
+                    exit_ts = bar.timestamp
+                    exit_time_str = bar.timestamp.strftime("%H:%M")
+                    exit_reason = "SUPERTREND_TRAIL"
+                    break
 
-        if b_time >= time(15, 15):
+        if b_time >= squareoff_time:
             exit_px = max(0.5, o_close - exit_slippage)
             exit_ts = bar.timestamp
             exit_time_str = bar.timestamp.strftime("%H:%M")
@@ -486,6 +491,20 @@ def _simulate_nifty_htf_hybrid_trade(
     }
 
 
+def _parse_hhmm_time(val: Any, default: time) -> time:
+    """Parse HH:MM string or datetime.time into datetime.time."""
+    if isinstance(val, time):
+        return val
+    if isinstance(val, str):
+        try:
+            parts = val.strip().split(":")
+            if len(parts) >= 2:
+                return time(int(parts[0]), int(parts[1]))
+        except Exception:
+            pass
+    return default
+
+
 def run_nf_bnf_sequential_backtest(
     candles_by_index: Dict[str, List[Candle]],
     vix_map: Optional[Dict[datetime, float]] = None,
@@ -493,12 +512,51 @@ def run_nf_bnf_sequential_backtest(
     end_date: Optional[date] = None,
     max_trades_per_day: int = 4,
     daily_loss_limit: float = 10000.0,
+    orb_start_time: Any = time(9, 15),
+    orb_window_minutes: int = 15,
+    entry_start_time: Any = time(9, 30),
+    entry_cutoff_time: Any = time(15, 0),
+    nifty_htf_entry_start_time: Any = None,
+    auto_squareoff_time: Any = time(15, 15),
+    active_indices: Tuple[str, ...] = ("BANKNIFTY", "NIFTY"),
+    min_india_vix: float = 12.0,
+    min_orb_range_pct: float = 0.20,
+    max_orb_range_pct: float = 0.85,
+    rsi_bull_threshold: float = 60.0,
+    rsi_bear_threshold: float = 40.0,
+    use_ema_filter: bool = True,
+    min_candle_body_ratio: float = 0.40,
+    require_vwap_slope: bool = False,
+    min_vwap_slope_pct: float = 0.015,
+    use_supertrend_filter: bool = True,
+    supertrend_period: int = 10,
+    supertrend_multiplier: float = 3.0,
+    nifty_use_htf_swing_hybrid: bool = True,
+    nifty_htf_swing_len: int = 2,
+    nifty_htf_break_buf_atr: float = 0.1,
+    nifty_htf_stop_atr_mult: float = 0.5,
+    nifty_htf_opt_sl_cap: float = 35.0,
+    nifty_htf_max_trades_per_day: int = 2,
+    tuesday_expiry_boost: bool = True,
 ) -> List[Dict[str, Any]]:
-    """Run Hybrid NIFTY (H1: 15m HTF Swing Break + VIX >= 12 + ST(10,3)) + BANKNIFTY (5-Gate ORB + ST(10,3))
-    with strict GLOBAL single-active-order lock (Rs 1L capital safe)."""
+    """Run dual-engine Hybrid NIFTY + ORB backtest with configurable gates and entry window."""
     vix_lookup = vix_map or {}
+    orb_start_t = _parse_hhmm_time(orb_start_time, time(9, 15))
+    orb_min = max(5, min(60, int(orb_window_minutes or 15)))
+    orb_end_t = (datetime.combine(date(2000, 1, 1), orb_start_t) + timedelta(minutes=orb_min)).time()
+    entry_start_t = _parse_hhmm_time(entry_start_time, time(9, 30))
+    entry_end_t = _parse_hhmm_time(entry_cutoff_time, time(15, 0))
+    nifty_htf_start_t = (
+        _parse_hhmm_time(nifty_htf_entry_start_time, entry_start_t)
+        if nifty_htf_entry_start_time is not None
+        else entry_start_t
+    )
+    squareoff_t = _parse_hhmm_time(auto_squareoff_time, time(15, 15))
+    st_period = max(2, int(supertrend_period or 10))
+    st_mult = max(0.5, float(supertrend_multiplier or 3.0))
+
     # Priority order when both trigger on the exact same candle: BANKNIFTY first, then NIFTY
-    indices = ("BANKNIFTY", "NIFTY")
+    indices = tuple(i for i in ("BANKNIFTY", "NIFTY") if i in active_indices) or ("BANKNIFTY", "NIFTY")
 
     days_by_idx: Dict[str, Dict[date, List[Candle]]] = {idx: {} for idx in indices}
     all_dates_set = set()
@@ -508,19 +566,21 @@ def run_nf_bnf_sequential_backtest(
             days_by_idx[idx].setdefault(d, []).append(c)
             all_dates_set.add(d)
 
-    # Precompute non-repainting 15m HTF Swing levels for NIFTY
-    nf_candles = candles_by_index.get("NIFTY", [])
-    nf_htf_series = build_htf_15m_series(nf_candles, swing_len=2, atr_period=14)
+    # Precompute non-repainting 15m HTF Swing levels for NIFTY when Hybrid mode is active
     nf_htf_by_ts: Dict[datetime, Tuple[Optional[float], Optional[float], Optional[float], int, Optional[Tuple[Optional[float], Optional[float], Optional[float], int]], Optional[float]]] = {}
-    for pos_k, c in enumerate(nf_candles):
-        htf_c, htf_f, htf_a, htf_b = nf_htf_series[pos_k]
-        prev_tuple = nf_htf_series[pos_k - 1] if pos_k >= 1 else None
-        prev_cls = nf_candles[pos_k - 1].close if pos_k >= 1 else None
-        nf_htf_by_ts[c.timestamp] = (htf_c, htf_f, htf_a, htf_b, prev_tuple, prev_cls)
+    if "NIFTY" in indices and nifty_use_htf_swing_hybrid:
+        nf_candles = candles_by_index.get("NIFTY", [])
+        nf_htf_series = build_htf_15m_series(nf_candles, swing_len=max(1, int(nifty_htf_swing_len)), atr_period=14)
+        for pos_k, c in enumerate(nf_candles):
+            htf_c, htf_f, htf_a, htf_b = nf_htf_series[pos_k]
+            prev_tuple = nf_htf_series[pos_k - 1] if pos_k >= 1 else None
+            prev_cls = nf_candles[pos_k - 1].close if pos_k >= 1 else None
+            nf_htf_by_ts[c.timestamp] = (htf_c, htf_f, htf_a, htf_b, prev_tuple, prev_cls)
 
     seen_by_idx: Dict[str, List[Candle]] = {idx: [] for idx in indices}
     prev_close_by_idx: Dict[str, Optional[float]] = {idx: None for idx in indices}
     trade_dicts: List[Dict[str, Any]] = []
+    min_oc_bars = max(1, (orb_min // 5) - 1)
 
     for sess_date in sorted(all_dates_set):
         in_window = (
@@ -548,19 +608,19 @@ def run_nf_bnf_sequential_backtest(
                 all_ts_set.add(c.timestamp)
                 day_st_map[idx][c.timestamp] = calculate_supertrend(
                     (prior_tail + dc[: i + 1])[-60:],
-                    period=10,
-                    multiplier=3.0,
+                    period=st_period,
+                    multiplier=st_mult,
                 )
-            oc = [c for c in dc if time(9, 15) <= c.timestamp.time() <= time(9, 40)]
-            if len(dc) >= 6 and len(oc) >= 5:
+            oc = [c for c in dc if orb_start_t <= c.timestamp.time() < orb_end_t]
+            if len(dc) >= (min_oc_bars + 1) and len(oc) >= min_oc_bars:
                 orh = max(c.high for c in oc)
                 orl = min(c.low for c in oc)
                 rp = ((orh - orl) / orl) * 100.0 if orl > 0 else 999.0
-                orb_info[idx] = (orh, orl) if (0.20 <= rp <= 0.85) else None
+                orb_info[idx] = (orh, orl) if (min_orb_range_pct <= rp <= max_orb_range_pct) else None
             else:
                 orb_info[idx] = None
 
-        day_lots = 3 if sess_date.weekday() == 1 else 2
+        day_lots = 3 if (tuesday_expiry_boost and sess_date.weekday() == 1) else 2
         trades_today_global = 0
         trades_by_idx = {idx: 0 for idx in indices}
         sl_hit_by_idx = {idx: False for idx in indices}
@@ -593,7 +653,7 @@ def run_nf_bnf_sequential_backtest(
 
             if day_halted or trades_today_global >= max_trades_per_day:
                 continue
-            if not (time(10, 0) <= ts.time() <= time(13, 15)):
+            if ts.time() > entry_end_t or ts.time() >= squareoff_t:
                 continue
             # Strict GLOBAL single-active-order lock: hold ALL new signals while ANY order is running
             if global_active_exit_ts is not None:
@@ -609,12 +669,14 @@ def run_nf_bnf_sequential_backtest(
                 candle = dc[pos_i]
                 spec = INDEX_SPECS[idx]
 
-                if idx == "NIFTY":
-                    # Hybrid H1 NIFTY (15m HTF Swing Break + VIX >= 12 + ST(10,3), max 2 trades/day)
-                    if trades_by_idx["NIFTY"] >= 2:
+                if idx == "NIFTY" and nifty_use_htf_swing_hybrid:
+                    # Hybrid H1 NIFTY (15m HTF Swing Break + VIX + optional ST, bounded by entry window)
+                    if not (nifty_htf_start_t <= ts.time() <= entry_end_t):
+                        continue
+                    if trades_by_idx["NIFTY"] >= nifty_htf_max_trades_per_day:
                         continue
                     vix_now = vix_lookup.get(ts, 14.5)
-                    if vix_now < 12.0:
+                    if vix_now < min_india_vix:
                         continue
                     htf_info = nf_htf_by_ts.get(ts)
                     if not htf_info:
@@ -622,12 +684,9 @@ def run_nf_bnf_sequential_backtest(
                     htf_c, htf_f, htf_a, _htf_b, prev_htf_tup, prev_cls = htf_info
                     if htf_a is None or prev_cls is None or prev_htf_tup is None:
                         continue
-                    st_val, st_dir = day_st_map["NIFTY"].get(ts, (None, 0))
-                    if st_val is None or st_dir == 0:
-                        continue
-                    buf_pts = 0.1 * htf_a
+                    buf_pts = float(nifty_htf_break_buf_atr) * htf_a
                     prev_c_lv, prev_f_lv, prev_a, _ = prev_htf_tup
-                    prev_buf = (0.1 * prev_a) if prev_a is not None else buf_pts
+                    prev_buf = (float(nifty_htf_break_buf_atr) * prev_a) if prev_a is not None else buf_pts
                     brk_up = (
                         htf_c is not None
                         and candle.close > (htf_c + buf_pts)
@@ -638,16 +697,24 @@ def run_nf_bnf_sequential_backtest(
                         and candle.close < (htf_f - buf_pts)
                         and prev_cls >= ((prev_f_lv if prev_f_lv is not None else htf_f) - (prev_buf if prev_f_lv is not None else buf_pts))
                     )
-                    ce_signal = brk_up and (st_dir == 1 and candle.close > st_val)
-                    pe_signal = brk_dn and (st_dir == -1 and candle.close < st_val)
+                    if use_supertrend_filter:
+                        st_val, st_dir = day_st_map["NIFTY"].get(ts, (None, 0))
+                        if st_val is None or st_dir == 0:
+                            continue
+                        ce_signal = brk_up and (st_dir == 1 and candle.close > st_val)
+                        pe_signal = brk_dn and (st_dir == -1 and candle.close < st_val)
+                    else:
+                        ce_signal = brk_up
+                        pe_signal = brk_dn
                     if not ce_signal and not pe_signal:
                         continue
 
                     sig_type = "CE" if ce_signal else "PE"
+                    stop_mult = float(nifty_htf_stop_atr_mult)
                     spot_sl = (
-                        max(0.0, min(candle.low, htf_c) - 0.5 * htf_a)
+                        max(0.0, min(candle.low, htf_c) - stop_mult * htf_a)
                         if ce_signal and htf_c is not None
-                        else (max(candle.high, htf_f) + 0.5 * htf_a if htf_f is not None else None)
+                        else (max(candle.high, htf_f) + stop_mult * htf_a if htf_f is not None else None)
                     )
                     atm_strike = int(round(candle.close / spec.strike_step) * spec.strike_step)
                     expiry_d = get_target_expiry(idx, sess_date)
@@ -667,14 +734,16 @@ def run_nf_bnf_sequential_backtest(
                         p0=p0,
                         spot_sl=spot_sl,
                         st_by_ts=day_st_map["NIFTY"],
-                        opt_sl_cap=35.0,
+                        opt_sl_cap=float(nifty_htf_opt_sl_cap),
+                        use_supertrend_trail=use_supertrend_filter,
+                        squareoff_time=squareoff_t,
                     )
                 else:
-                    # BANKNIFTY: 5-Gate 30m ORB (10:00-13:15) + India VIX >= 12 + Supertrend(10,3)
-                    if not (time(10, 0) <= ts.time() <= time(13, 15)):
+                    # 5-Gate ORB + Configurable RSI / EMA / Body / VWAP Slope / Supertrend
+                    if ts.time() < orb_end_t or not (entry_start_t <= ts.time() <= entry_end_t):
                         continue
                     vix_now = vix_lookup.get(ts, 14.5)
-                    if vix_now < 12.0:
+                    if vix_now < min_india_vix:
                         continue
                     if sl_hit_by_idx[idx] or orb_info.get(idx) is None:
                         continue
@@ -687,33 +756,41 @@ def run_nf_bnf_sequential_backtest(
                     ce_signal = (
                         (candle.close > orh)
                         and (vwap is None or candle.close > vwap)
-                        and (rsi is not None and rsi > 60.0)
+                        and (rsi is not None and rsi > rsi_bull_threshold)
                         and (prev_c is None or candle.close >= prev_c)
                     )
                     pe_signal = (
                         (candle.close < orl)
                         and (vwap is None or candle.close < vwap)
-                        and (rsi is not None and rsi < 40.0)
+                        and (rsi is not None and rsi < rsi_bear_threshold)
                         and (prev_c is None or candle.close <= prev_c)
                     )
                     if ce_signal or pe_signal:
-                        st_val, st_dir = calculate_supertrend(seen_by_idx[idx][-60:], period=10, multiplier=3.0)
-                        if st_val is not None and st_dir != 0:
-                            if ce_signal and (st_dir != 1 or candle.close <= st_val):
+                        if use_supertrend_filter:
+                            st_val, st_dir = day_st_map[idx].get(ts, (None, 0))
+                            if st_val is not None and st_dir != 0:
+                                if ce_signal and (st_dir != 1 or candle.close <= st_val):
+                                    ce_signal = False
+                                if pe_signal and (st_dir != -1 or candle.close >= st_val):
+                                    pe_signal = False
+                        if use_ema_filter:
+                            ema20 = calculate_ema(closes_win, period=20)
+                            if ema20 is not None:
+                                if ce_signal and candle.close <= ema20:
+                                    ce_signal = False
+                                if pe_signal and candle.close >= ema20:
+                                    pe_signal = False
+                        if min_candle_body_ratio > 0:
+                            c_range = candle.high - candle.low
+                            c_body = abs(candle.close - candle.open)
+                            if c_range > 0 and (c_body / c_range) < min_candle_body_ratio:
                                 ce_signal = False
-                            if pe_signal and (st_dir != -1 or candle.close >= st_val):
                                 pe_signal = False
-                        ema20 = calculate_ema(closes_win, period=20)
-                        if ema20 is not None:
-                            if ce_signal and candle.close <= ema20:
+                        if require_vwap_slope:
+                            if ce_signal and not _vwap_is_sloping(dc, pos_i, sess_date, "CE", min_slope_pct=min_vwap_slope_pct):
                                 ce_signal = False
-                            if pe_signal and candle.close >= ema20:
+                            if pe_signal and not _vwap_is_sloping(dc, pos_i, sess_date, "PE", min_slope_pct=min_vwap_slope_pct):
                                 pe_signal = False
-                        c_range = candle.high - candle.low
-                        c_body = abs(candle.close - candle.open)
-                        if c_range > 0 and (c_body / c_range) < 0.40:
-                            ce_signal = False
-                            pe_signal = False
 
                     if not ce_signal and not pe_signal:
                         continue
@@ -721,7 +798,7 @@ def run_nf_bnf_sequential_backtest(
                     sig_type = "CE" if ce_signal else "PE"
                     atm_strike = int(round(candle.close / spec.strike_step) * spec.strike_step)
                     expiry_d = get_target_expiry(idx, sess_date)
-                    sigma_now = max(0.09, (vix_now / 100.0) * 1.12)
+                    sigma_now = max(0.09, (vix_now / 100.0) * (1.12 if idx == "BANKNIFTY" else 1.0))
                     t_entry = _time_to_expiry_years(ts, expiry_d)
                     p0 = round(bs_option_price(candle.close, atm_strike, t_entry, sigma_now, sig_type) + 1.0, 2)
                     total_qty = spec.lot_size * day_lots
@@ -738,6 +815,8 @@ def run_nf_bnf_sequential_backtest(
                         total_qty=total_qty,
                         p0=p0,
                         st_by_ts=day_st_map[idx],
+                        use_supertrend_trail=use_supertrend_filter,
+                        squareoff_time=squareoff_t,
                     )
 
                 trades_today_global += 1
@@ -859,7 +938,7 @@ def print_report(
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Fetch 5m candles and run BANKNIFTY-ONLY 15m ORB backtest.")
+    parser = argparse.ArgumentParser(description="Fetch 5m candles and run Dual-Engine ORB backtest.")
     parser.add_argument("--start", type=str, default="2025-11-20", help="Start date YYYY-MM-DD")
     parser.add_argument("--end", type=str, default="2026-11-20", help="End date YYYY-MM-DD")
     parser.add_argument("--fetch", action="store_true", help="Fetch fresh 5m candles from Shoonya TPSeries")
@@ -867,6 +946,11 @@ def main() -> None:
     parser.add_argument("--max-trades", type=int, default=4, help="Max trades per day (default 4)")
     parser.add_argument("--daily-risk", type=float, default=10000.0, help="Daily max loss cap (Rs)")
     parser.add_argument("--bnf-only", action="store_true", help="Run BANKNIFTY only (default: NIFTY + BANKNIFTY)")
+    parser.add_argument("--entry-start", type=str, default="09:30", help="Entry window start HH:MM IST (default 09:30)")
+    parser.add_argument("--entry-end", type=str, default="15:00", help="Entry window cutoff HH:MM IST (default 15:00)")
+    parser.add_argument("--orb-start", type=str, default="09:15", help="ORB start HH:MM IST (default 09:15)")
+    parser.add_argument("--orb-min", type=int, default=15, help="ORB window minutes (default 15)")
+    parser.add_argument("--squareoff", type=str, default="15:15", help="EOD square-off HH:MM IST (default 15:15)")
     args = parser.parse_args()
 
     start_d = date.fromisoformat(args.start)
@@ -912,6 +996,13 @@ def main() -> None:
         end_date=end_d,
         max_trades_per_day=args.max_trades,
         daily_loss_limit=args.daily_risk,
+        orb_start_time=args.orb_start,
+        orb_window_minutes=args.orb_min,
+        entry_start_time=args.entry_start,
+        entry_cutoff_time=args.entry_end,
+        nifty_htf_entry_start_time=args.entry_start,
+        auto_squareoff_time=args.squareoff,
+        active_indices=active_indices,
     )
     all_trades.sort(key=lambda t: (t["date"], t["in_t"]))
     # Verify strict GLOBAL zero-overlap across NIFTY + BANKNIFTY combined
@@ -926,7 +1017,7 @@ def main() -> None:
                 )
 
     print_report(
-        f"OPTION 2 DUAL-ENGINE BACKTEST (10:00-13:15, VIX>=12, ST(10,3), Max {args.max_trades}/day, Rs 1L Lock)",
+        f"DUAL-ENGINE BACKTEST ({args.entry_start}-{args.entry_end} IST, {args.orb_min}m ORB, ST(10,3), Max {args.max_trades}/day)",
         all_trades,
         date_ranges,
     )
@@ -942,6 +1033,25 @@ def main() -> None:
     with open(min_path, "w", encoding="utf-8") as f:
         json.dump(all_trades, f, separators=(",", ":"))
 
+    summary = compute_metrics(all_trades)
+    meta_path = out_dir / "backtest_meta.json"
+    with open(meta_path, "w", encoding="utf-8") as f:
+        json.dump(
+            {
+                "entry_start_time": args.entry_start,
+                "entry_cutoff_time": args.entry_end,
+                "orb_start_time": args.orb_start,
+                "orb_window_minutes": args.orb_min,
+                "auto_squareoff_time": args.squareoff,
+                "start_date": args.start,
+                "end_date": args.end,
+                "indices": list(active_indices),
+                "summary": summary,
+            },
+            f,
+            indent=2,
+        )
+
     csv_path = out_dir / f"backtest_1y_{start_d.strftime('%Y%m%d')}_to_{end_d.strftime('%Y%m%d')}.csv"
     if all_trades:
         fieldnames = list(all_trades[0].keys())
@@ -950,7 +1060,7 @@ def main() -> None:
             writer.writeheader()
             writer.writerows(all_trades)
 
-    print(f"Saved {len(all_trades)} verified Option 2 dual-engine trades -> {full_path}, {min_path}, {csv_path}", flush=True)
+    print(f"Saved {len(all_trades)} verified dual-engine trades -> {full_path}, {min_path}, {meta_path}, {csv_path}", flush=True)
 
 
 if __name__ == "__main__":
