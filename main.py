@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import re
 import threading
 import time
@@ -29,6 +30,7 @@ from config.settings import (
 from engine.candle_builder import Candle, CandleBuilder
 from engine.risk_manager import RiskManager
 from engine.strategy_orb import ORBStrategy
+from services.broker_archive_store import BrokerArchiveStore
 from services.runtime_state_store import RuntimeStateStore
 from ui.dashboard import create_app
 from utils.logger import get_logger, get_recent_logs, setup_logging
@@ -95,11 +97,21 @@ class TradingSystemOrchestrator:
         self.public_ip: str = "detecting..."
         self.previous_public_ip: str = ""
         self._last_ip_check_monotonic: float = time.monotonic()
+        self._last_self_ping_monotonic: float = 0.0
+        self._last_broker_archive_monotonic: float = 0.0
         self._ip_sync_lock = threading.Lock()
+        self._user_mutated_state: bool = False
 
+        self.broker_archive = BrokerArchiveStore(self.settings.data_dir)
         self.state_store = RuntimeStateStore(self.settings.data_dir)
         self.auth.register_token_persist_callback(self._on_token_persisted)
+        self.risk_manager.register_state_change_callback(self._on_risk_state_changed)
         restored_token_payload = self._restore_runtime_state()
+
+        if getattr(self.state_store, "_remote_enabled", False) and not getattr(
+            self.state_store, "remote_load_ok", True
+        ):
+            self._start_delayed_remote_restore()
 
         threading.Thread(
             target=self._detect_public_ip,
@@ -113,7 +125,69 @@ class TradingSystemOrchestrator:
                 logger.debug("Startup cached token check skipped: %s", exc)
 
     def _on_token_persisted(self, _payload: Dict[str, Any]) -> None:
-        self._persist_runtime_state(sync=False)
+        self._persist_runtime_state(sync=False, force_remote=False)
+
+    def _on_risk_state_changed(self) -> None:
+        self._persist_runtime_state(sync=False, force_remote=False)
+        if self.settings.mode == "LIVE":
+            threading.Thread(
+                target=self.sync_live_broker_archive,
+                kwargs={"trigger_event": "ORDER_EVENT", "force_refresh": True, "sync": False},
+                name="broker-archive-event-sync",
+                daemon=True,
+            ).start()
+
+    def sync_live_broker_archive(
+        self,
+        trigger_event: str = "PERIODIC",
+        force_refresh: bool = False,
+        sync: bool = False,
+    ) -> Dict[str, Any]:
+        """In LIVE mode, capture all Shoonya broker limits, orders, trades, positions, and holdings to DB."""
+        if self.settings.mode != "LIVE":
+            return {"stored": False, "reason": "not_live_mode"}
+        try:
+            snap = self.client.get_live_broker_snapshot(force=force_refresh)
+            raw = self.client.get_last_raw_broker_payload()
+            return self.broker_archive.archive_live_snapshot(
+                snap,
+                raw_payload=raw,
+                trigger_event=trigger_event,
+                sync=sync,
+            )
+        except Exception as exc:
+            logger.warning("LIVE broker archive sync error (%s): %s", trigger_event, exc)
+            return {"stored": False, "error": str(exc)}
+
+    def _start_delayed_remote_restore(self) -> None:
+        """Retry loading state from Neon Postgres when cold start timed out."""
+
+        def _worker() -> None:
+            for _attempt in range(6):
+                if self._stop_event.wait(10.0):
+                    return
+                if self.state_store.remote_load_ok or self._user_mutated_state:
+                    return
+                try:
+                    remote_state = self.state_store.load()
+                    if (
+                        self.state_store.remote_load_ok
+                        and remote_state
+                        and not self._user_mutated_state
+                    ):
+                        tok = self._restore_runtime_state(state=remote_state)
+                        if tok and not self.auth.last_token_date:
+                            self.auth.load_cached_token(external_payload=tok)
+                        logger.info("Delayed Neon Postgres state recovery applied after cold start.")
+                        return
+                except Exception as exc:
+                    logger.debug("Delayed remote state retry failed: %s", exc)
+
+        threading.Thread(
+            target=_worker,
+            name="delayed-remote-state-restore",
+            daemon=True,
+        ).start()
 
     def _build_runtime_state_payload(self) -> Dict[str, Any]:
         today = datetime.now(IST).date()
@@ -152,28 +226,33 @@ class TradingSystemOrchestrator:
                     "halted": bool(self.risk_manager.halted),
                     "halt_reason": self.risk_manager.halt_reason,
                 },
+                "risk_session": self.risk_manager.export_session_state(),
+                "paper_broker": self.client.export_paper_state(),
                 "milestones_done": done_today,
                 "milestone_overrides": overrides_today,
                 "shoonya_token": token_payload,
                 "updated_at_ist": datetime.now(IST).isoformat(),
             }
 
-    def _persist_runtime_state(self, sync: bool = False) -> None:
+    def _persist_runtime_state(self, sync: bool = False, force_remote: bool = False) -> None:
+        if force_remote:
+            self._user_mutated_state = True
         try:
             payload = self._build_runtime_state_payload()
             if sync:
-                self.state_store.save_sync(payload, timeout=5.0)
+                self.state_store.save_sync(payload, timeout=10.0, force_remote=force_remote)
             else:
-                self.state_store.save(payload)
+                self.state_store.save(payload, force_remote=force_remote)
         except Exception as exc:
             logger.warning("Failed persisting runtime state: %s", exc)
 
-    def _restore_runtime_state(self) -> Optional[Dict[str, Any]]:
-        try:
-            state = self.state_store.load()
-        except Exception as exc:
-            logger.warning("Runtime state restore failed: %s", exc)
-            return None
+    def _restore_runtime_state(self, state: Optional[Dict[str, Any]] = None) -> Optional[Dict[str, Any]]:
+        if state is None:
+            try:
+                state = self.state_store.load()
+            except Exception as exc:
+                logger.warning("Runtime state restore failed: %s", exc)
+                return None
         if not isinstance(state, dict) or not state:
             return None
 
@@ -288,12 +367,33 @@ class TradingSystemOrchestrator:
                             )
 
                 tok = state.get("shoonya_token")
+                paper_raw = state.get("paper_broker")
+                if isinstance(paper_raw, dict):
+                    self.client.restore_paper_state(paper_raw)
+                risk_raw = state.get("risk_session")
+                restored_pos = 0
+                if isinstance(risk_raw, dict):
+                    restored_pos = self.risk_manager.restore_session_state(
+                        risk_raw, session_date=today_str
+                    )
+                restored_trades = len(
+                    [
+                        t
+                        for t in self.risk_manager.completed_trades
+                        if str(t.mode or "").upper() != "BACKTEST"
+                    ]
+                )
+                if restored_pos > 0 or restored_trades > 0:
+                    self._milestone_done["reset"] = today
+
                 logger.info(
-                    "Restored persistent runtime state: MODE=%s CAP=₹%.0f IDX=%s LOTS=%s",
+                    "Restored persistent runtime state: MODE=%s CAP=₹%.0f IDX=%s LOTS=%s POS=%d TRADES=%d",
                     self.settings.mode,
                     self.settings.capital,
                     self.risk_manager.get_enabled_indices(),
                     self.custom_lots,
+                    restored_pos,
+                    restored_trades,
                 )
                 return tok if isinstance(tok, dict) else None
 
@@ -438,7 +538,7 @@ class TradingSystemOrchestrator:
                         self._milestone_overrides[k] = (today, "PENDING", now_t)
                     self.strategy.reset_daily(today)
                 logger.info("All daily schedule milestones reset to PENDING by user at %s", now_t.strftime("%H:%M:%S"))
-                self._persist_runtime_state(sync=True)
+                self._persist_runtime_state(sync=True, force_remote=True)
                 return True, "All daily schedule milestones reset to PENDING."
 
             # Restart / re-run the morning pipeline
@@ -459,7 +559,7 @@ class TradingSystemOrchestrator:
                 if sched_t is not None and now_t >= sched_t:
                     self._milestone_overrides[k] = (today, "PENDING", now_t)
             logger.info("Daily startup milestones (OAuth, NFO Cache=%d, WS/7D Backfill) restarted by user", cnt)
-            self._persist_runtime_state(sync=True)
+            self._persist_runtime_state(sync=True, force_remote=True)
             return True, f"Restarted morning milestones (OAuth, {cnt} NFO contracts, WS & 7D backfill)."
 
         if key not in labels:
@@ -473,7 +573,7 @@ class TradingSystemOrchestrator:
                 if key == "orb_lock":
                     self.strategy.reset_daily(today)
             logger.info("Milestone '%s' (%s) reset to PENDING by user at %s", label, key, now_t.strftime("%H:%M:%S"))
-            self._persist_runtime_state(sync=True)
+            self._persist_runtime_state(sync=True, force_remote=True)
             return True, f"{label} reset to PENDING."
 
         if act == "done":
@@ -481,7 +581,7 @@ class TradingSystemOrchestrator:
                 self._mark_milestone(key, today)
                 self._milestone_overrides[key] = (today, "DONE", now_t)
             logger.info("Milestone '%s' (%s) marked DONE by user", label, key)
-            self._persist_runtime_state(sync=True)
+            self._persist_runtime_state(sync=True, force_remote=True)
             return True, f"{label} marked DONE."
 
         # act in ("restart", "run")
@@ -656,6 +756,8 @@ class TradingSystemOrchestrator:
         token = self.auth.ensure_authenticated(force_refresh=force_refresh)
         if token:
             self.client.get_live_broker_snapshot(force=True)
+            if self.settings.mode == "LIVE":
+                self.sync_live_broker_archive(trigger_event="LOGIN", force_refresh=False, sync=False)
         return token
 
     def connect_shoonya_account(
@@ -695,7 +797,9 @@ class TradingSystemOrchestrator:
         ok, msg = self.auth.authenticate_once()
         if ok:
             self.client.get_live_broker_snapshot(force=True)
-            self._persist_runtime_state(sync=True)
+            self._persist_runtime_state(sync=True, force_remote=True)
+            if self.settings.mode == "LIVE":
+                self.sync_live_broker_archive(trigger_event="ACCOUNT_CONNECT", force_refresh=False, sync=False)
         return ok, msg
 
     def add_or_update_funds(self, amount: float, action: str = "add") -> Tuple[bool, str]:
@@ -715,7 +819,7 @@ class TradingSystemOrchestrator:
                 return False, "Added fund amount must be greater than zero."
             self.settings.capital = round(self.settings.capital + amt, 2)
 
-        self._persist_runtime_state(sync=True)
+        self._persist_runtime_state(sync=True, force_remote=True)
         self.client.get_live_broker_snapshot(force=True)
         msg = f"Strategy capital updated to ₹{self.settings.capital:,.2f}; broker balances synced."
         logger.info(msg)
@@ -723,7 +827,10 @@ class TradingSystemOrchestrator:
 
     def refresh_broker_data(self) -> Dict[str, Any]:
         """Force refresh of live Shoonya limits, orders, and positions."""
-        return self.client.get_live_broker_snapshot(force=True)
+        snap = self.client.get_live_broker_snapshot(force=True)
+        if self.settings.mode == "LIVE":
+            self.sync_live_broker_archive(trigger_event="MANUAL_REFRESH", force_refresh=False, sync=False)
+        return snap
 
     def place_manual_broker_order(
         self,
@@ -779,13 +886,20 @@ class TradingSystemOrchestrator:
             else str(resp.get("emsg") or resp)
         )
         logger.info("Manual broker order (%s %s qty=%s): ok=%s msg=%s", buy_or_sell, tsym, quantity, ok, msg)
+        if self.settings.mode == "LIVE":
+            self.sync_live_broker_archive(trigger_event="MANUAL_ORDER", force_refresh=False, sync=False)
         return ok, msg, resp
 
     def run_instrument_cache(self) -> int:
         return self.mapper.refresh_instrument_cache()
 
     def run_ws_connect_and_backfill(self) -> None:
-        tokens = [spec.spot_key for spec in INDEX_SPECS.values()] + [INDIA_VIX_KEY]
+        pos_tokens = [
+            f"{p.contract.exchange}|{p.contract.token}"
+            for p in list(self.risk_manager.positions.values())
+            if getattr(p.contract, "token", "")
+        ]
+        tokens = [spec.spot_key for spec in INDEX_SPECS.values()] + [INDIA_VIX_KEY] + pos_tokens
         self.client.subscribe(tokens)
         if self.settings.mode == "LIVE" or self.auth.last_token_date:
             if not self.client.ws_connected:
@@ -812,11 +926,15 @@ class TradingSystemOrchestrator:
     def run_eod_squareoff(self) -> None:
         self.risk_manager.auto_square_off_all()
         self._persist_runtime_state(sync=False)
+        if self.settings.mode == "LIVE":
+            self.sync_live_broker_archive(trigger_event="EOD_SQUAREOFF", force_refresh=True, sync=True)
 
     def run_eod_report(self) -> None:
         csv_path = self.risk_manager.export_daily_trades_csv()
         mtm = self.risk_manager.total_mtm()
         count = len(self.risk_manager.completed_trades)
+        if self.settings.mode == "LIVE":
+            self.sync_live_broker_archive(trigger_event="EOD_REPORT", force_refresh=True, sync=True)
         msg = (
             f"<b>EOD Report [{self.settings.mode}]</b>\n"
             f"Trades: {count} | Total Gross P&L: ₹{mtm:+.2f}\n"
@@ -963,7 +1081,7 @@ class TradingSystemOrchestrator:
         end_str = self.settings.orb_end_time.strftime("%H:%M")
         msg = f"ORB window set to {mins}m ({start_str}–{end_str} IST); opening range recalculated."
         logger.info(msg)
-        self._persist_runtime_state(sync=True)
+        self._persist_runtime_state(sync=True, force_remote=True)
         return True, msg
 
     def set_orb_window(self, minutes: int) -> Tuple[bool, str]:
@@ -974,7 +1092,7 @@ class TradingSystemOrchestrator:
     def reset_daily_trades(self) -> Tuple[bool, str]:
         """Reset daily trades count to 0 and clear any risk management halt."""
         self.risk_manager.reset_trades_counter()
-        self._persist_runtime_state(sync=True)
+        self._persist_runtime_state(sync=True, force_remote=True)
         msg = f"Daily trades counter reset to 0/{self.settings.max_trades_per_day}; strategy unhalted."
         logger.info(msg)
         return True, msg
@@ -983,7 +1101,7 @@ class TradingSystemOrchestrator:
         """Modify the Daily Max Loss Guardrail (₹) or pass None/0 for dynamic AUTO sizing."""
         ok, msg = self.risk_manager.set_max_daily_loss(amount)
         if ok:
-            self._persist_runtime_state(sync=True)
+            self._persist_runtime_state(sync=True, force_remote=True)
         return ok, msg
 
     def set_enabled_indices(
@@ -994,14 +1112,14 @@ class TradingSystemOrchestrator:
         """Toggle whether NIFTY and/or BANKNIFTY are enabled for live strategy execution."""
         ok, msg = self.risk_manager.set_enabled_indices(nifty=nifty, banknifty=banknifty)
         if ok:
-            self._persist_runtime_state(sync=True)
+            self._persist_runtime_state(sync=True, force_remote=True)
         return ok, msg
 
     def reset_risk_guardrails(self, reset_type: str = "all") -> Tuple[bool, str]:
         """Reset system halts, daily order count, weekly loss guard, and/or daily MTM loss."""
         ok, msg = self.risk_manager.reset_halt_and_limits(reset_type=reset_type)
         if ok:
-            self._persist_runtime_state(sync=True)
+            self._persist_runtime_state(sync=True, force_remote=True)
         return ok, msg
 
     def set_entry_cutoff_time(self, cutoff_time_str: str) -> Tuple[bool, str]:
@@ -1025,7 +1143,7 @@ class TradingSystemOrchestrator:
         with self._lock:
             self.settings.entry_cutoff_time = cutoff_t
 
-        self._persist_runtime_state(sync=True)
+        self._persist_runtime_state(sync=True, force_remote=True)
         msg = f"Auto breakout entry window updated to {self.settings.orb_end_time.strftime('%H:%M')}–{cutoff_t.strftime('%H:%M')} IST."
         logger.info(msg)
         return True, msg
@@ -1052,7 +1170,7 @@ class TradingSystemOrchestrator:
         tot_qty = spec.lot_size * val
         msg = f"Updated {idx} to {val} lot(s) ({tot_qty} quantity). Dynamic Max Daily Loss set to ₹{dynamic_max_loss:,.0f}."
         logger.info(msg)
-        self._persist_runtime_state(sync=True)
+        self._persist_runtime_state(sync=True, force_remote=True)
         return True, msg
 
     def set_index_product_type(self, index_name: str, product_type: str) -> Tuple[bool, str]:
@@ -1076,7 +1194,7 @@ class TradingSystemOrchestrator:
 
         msg = f"Updated {idx} order product type to {lbl}."
         logger.info(msg)
-        self._persist_runtime_state(sync=True)
+        self._persist_runtime_state(sync=True, force_remote=True)
         return True, msg
 
     def trigger_auto_order(
@@ -1150,7 +1268,9 @@ class TradingSystemOrchestrator:
             return False, "Strategy entry execution skipped or rejected by risk manager.", {}
 
         self.client.get_live_broker_snapshot(force=True)
-        self._persist_runtime_state(sync=True)
+        self._persist_runtime_state(sync=True, force_remote=True)
+        if self.settings.mode == "LIVE":
+            self.sync_live_broker_archive(trigger_event="AUTO_ENTRY", force_refresh=False, sync=False)
         order_id = pos.entry_order_id or "SUBMITTED"
         msg = f"Auto-order triggered successfully: {idx} {pos.contract.tradingsymbol} qty={pos.initial_qty} (Order ID: {order_id}) in {self.settings.mode} mode."
         logger.info(msg)
@@ -1164,14 +1284,18 @@ class TradingSystemOrchestrator:
 
     def trigger_kill_switch(self, reason: str = "MANUAL_UI_KILL_SWITCH") -> None:
         self.risk_manager.emergency_kill_switch(reason=reason)
-        self._persist_runtime_state(sync=True)
+        self._persist_runtime_state(sync=True, force_remote=True)
+        if self.settings.mode == "LIVE":
+            self.sync_live_broker_archive(trigger_event="KILL_SWITCH", force_refresh=True, sync=False)
 
     def exit_position(self, index_name: str) -> Tuple[bool, str]:
         """Manually exit / square off an active position for an index or commodity."""
         idx = index_name.strip().upper()
         ok = self.risk_manager.exit_position(idx, reason="UI_MANUAL_EXIT")
         if ok:
-            self._persist_runtime_state(sync=True)
+            self._persist_runtime_state(sync=True, force_remote=True)
+            if self.settings.mode == "LIVE":
+                self.sync_live_broker_archive(trigger_event="MANUAL_EXIT", force_refresh=True, sync=False)
             msg = f"Successfully squared off {idx} position."
             logger.info(msg)
             return True, msg
@@ -1179,7 +1303,12 @@ class TradingSystemOrchestrator:
 
     def modify_position_sl(self, index_name: str, new_sl_price: float) -> Tuple[bool, str]:
         """Manually modify the stop-loss trigger price for an active position."""
-        return self.risk_manager.modify_position_sl(index_name, new_sl_price)
+        ok, msg = self.risk_manager.modify_position_sl(index_name, new_sl_price)
+        if ok:
+            self._persist_runtime_state(sync=True, force_remote=True)
+            if self.settings.mode == "LIVE":
+                self.sync_live_broker_archive(trigger_event="SL_MODIFY", force_refresh=True, sync=False)
+        return ok, msg
 
     def toggle_mode(self, force_clear_paper: bool = True) -> Tuple[bool, str]:
         with self._lock:
@@ -1195,7 +1324,9 @@ class TradingSystemOrchestrator:
             new_mode = "LIVE" if self.settings.mode == "PAPER" else "PAPER"
             self.settings.mode = new_mode
             logger.warning("Trading MODE switched to %s via UI", new_mode)
-        self._persist_runtime_state(sync=True)
+        self._persist_runtime_state(sync=True, force_remote=True)
+        if new_mode == "LIVE":
+            self.sync_live_broker_archive(trigger_event="MODE_SWITCH_LIVE", force_refresh=True, sync=False)
         return True, f"Switched mode to {new_mode}"
 
     def run_minute_signal_check(self, now_ist: Optional[datetime] = None) -> Dict[str, Any]:
@@ -1251,6 +1382,29 @@ class TradingSystemOrchestrator:
                 st_cur = self.strategy.get_state(name)
                 if not st_cur.is_locked and builder.get_candles():
                     self.strategy.lock_opening_range(name, builder.get_candles(), session_date=dt.date())
+
+        # Refresh active option LTP via REST when WS ticks are stale so PAPER/LIVE MTM & SL stay live
+        for pos_key, pos in list(self.risk_manager.positions.items()):
+            c = pos.contract
+            if not c.token or str(c.token).startswith("SIM_"):
+                continue
+            opt_key = f"{c.exchange}|{c.token}"
+            if tick_stale or self.client.get_ltp(opt_key) is None:
+                try:
+                    q_opt = self.client.get_quotes(c.exchange, c.token)
+                    if isinstance(q_opt, dict):
+                        raw_opt = (
+                            q_opt.get("lp")
+                            or q_opt.get("bp1")
+                            or q_opt.get("sp1")
+                            or q_opt.get("c")
+                        )
+                        if raw_opt is not None and float(raw_opt) > 0:
+                            opt_lp = float(raw_opt)
+                            self.client.update_ltp(opt_key, opt_lp)
+                            self.risk_manager.on_option_tick(pos_key, opt_lp)
+                except Exception as exc:
+                    logger.debug("1m option REST refresh skipped for %s: %s", c.tradingsymbol, exc)
 
         vix = self.client.get_ltp(INDIA_VIX_KEY)
         summary_parts = []
@@ -1333,6 +1487,25 @@ class TradingSystemOrchestrator:
                 daemon=True,
             ).start()
 
+        # Self keep-alive ping during market prep/hours or while positions are open
+        if not os.getenv("PYTEST_CURRENT_TEST"):
+            ping_base = (
+                os.getenv("KEEPALIVE_URL") or os.getenv("RENDER_EXTERNAL_URL") or ""
+            ).strip().rstrip("/")
+            if ping_base:
+                in_keepalive_window = (
+                    is_nse_trading_day(today)
+                    and dt_time(7, 30, 0) <= current_t <= dt_time(16, 0, 0)
+                ) or bool(self.risk_manager.positions)
+                if in_keepalive_window and (now_mono - self._last_self_ping_monotonic >= 480.0):
+                    self._last_self_ping_monotonic = now_mono
+                    threading.Thread(
+                        target=self._send_keepalive_ping,
+                        args=(f"{ping_base}/health",),
+                        name="self-keepalive-ping",
+                        daemon=True,
+                    ).start()
+
         # Skip trading schedule on weekends and official NSE holidays
         if is_nse_trading_day(today):
             if self._milestone_ready("reset", today, current_t):
@@ -1356,6 +1529,13 @@ class TradingSystemOrchestrator:
                     paper_no_creds = self.settings.mode == "PAPER" and not self.settings.shoonya_user_id
                     if token or paper_no_creds or current_t >= self.settings.market_close_time:
                         self._mark_milestone("auth", today)
+                        if not need_refresh or paper_no_creds:
+                            acct = self.settings.shoonya_user_id or "PAPER_SANDBOX"
+                            status_txt = self.auth.last_login_status or "ACTIVE"
+                            self.notifier.send_async(
+                                f"<b>🔑 08:40 IST Auto OAuth Ready [{self.settings.mode}]</b>\n"
+                                f"Account: <code>{acct}</code> | Status: {status_txt}"
+                            )
                     else:
                         logger.warning("Auto OAuth Login incomplete; scheduler will retry in 120s")
 
@@ -1461,6 +1641,18 @@ class TradingSystemOrchestrator:
                     self.risk_manager.reconcile_positions()
                     self._last_reconcile_monotonic = now_m
 
+                if (
+                    self.settings.mode == "LIVE"
+                    and (now_m - self._last_broker_archive_monotonic >= 300.0)
+                ):
+                    self._last_broker_archive_monotonic = now_m
+                    threading.Thread(
+                        target=self.sync_live_broker_archive,
+                        kwargs={"trigger_event": "PERIODIC", "force_refresh": True, "sync": False},
+                        name="broker-archive-sync",
+                        daemon=True,
+                    ).start()
+
     def start_background_loop(self) -> None:
         if self._loop_thread is not None and self._loop_thread.is_alive():
             return
@@ -1492,6 +1684,15 @@ class TradingSystemOrchestrator:
         if self._loop_thread is not None and self._loop_thread.is_alive():
             self._loop_thread.join(timeout=3.0)
         self.notifier.stop()
+
+    @staticmethod
+    def _send_keepalive_ping(url: str) -> None:
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": "AutoORB-KeepAlive/1.0"})
+            with urllib.request.urlopen(req, timeout=8.0):
+                pass
+        except Exception as exc:
+            logger.debug("Self keep-alive ping failed: %s", exc)
 
     def _build_index_radar(
         self,
@@ -1916,6 +2117,9 @@ class TradingSystemOrchestrator:
             "sebi_algo_id": self.settings.sebi_algo_id,
             "ist_time": now_ist.strftime("%Y-%m-%d %H:%M:%S"),
             "ws_connected": self.client.ws_connected,
+            "telegram_enabled": self.notifier.enabled,
+            "remote_state_synced": bool(getattr(self.state_store, "remote_load_ok", False)),
+            "broker_archive_last_sync": self.broker_archive.last_archive_time_ist,
             "public_ip": self.public_ip,
             "previous_public_ip": self.previous_public_ip,
             "last_synced_backup_ip": self.auth.last_synced_backup_ip or self.public_ip,

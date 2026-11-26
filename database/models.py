@@ -131,3 +131,111 @@ class SystemRuntimeState(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
+class BrokerAccountSnapshot(Base):
+    """Time-series LIVE Shoonya account margin, balance, P&L, and holdings snapshot."""
+
+    __tablename__ = "broker_account_snapshots"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    session_date = Column(String(10), nullable=False, index=True)
+    captured_at_ist = Column(String(32), nullable=False, index=True)
+    trigger_event = Column(String(32), default="PERIODIC")
+    user_id = Column(String(64), nullable=False, default="", index=True)
+    account_id = Column(String(64), nullable=False, default="")
+    mode = Column(String(16), default="LIVE")
+    cash = Column(Float, default=0.0)
+    payin = Column(Float, default=0.0)
+    payout = Column(Float, default=0.0)
+    collateral = Column(Float, default=0.0)
+    margin_used = Column(Float, default=0.0)
+    net_available = Column(Float, default=0.0)
+    realized_pnl = Column(Float, default=0.0)
+    unrealized_pnl = Column(Float, default=0.0)
+    total_pnl = Column(Float, default=0.0)
+    orders_count = Column(Integer, default=0)
+    trades_count = Column(Integer, default=0)
+    open_positions_count = Column(Integer, default=0)
+    holdings_count = Column(Integer, default=0)
+    raw_limits_json = Column(Text, nullable=True)
+    raw_holdings_json = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class BrokerOrderRecord(Base):
+    """Deduplicated Shoonya OrderBook record archived for live tracking & analysis."""
+
+    __tablename__ = "broker_orders"
+
+    order_key = Column(String(128), primary_key=True)
+    session_date = Column(String(10), nullable=False, index=True)
+    user_id = Column(String(64), nullable=False, default="", index=True)
+    norenordno = Column(String(64), nullable=False, index=True)
+    exchordid = Column(String(64), nullable=True)
+    norentm = Column(String(32), nullable=True)
+    exch = Column(String(16), default="")
+    tsym = Column(String(64), default="", index=True)
+    trantype = Column(String(8), default="")
+    prd = Column(String(16), default="")
+    prctyp = Column(String(16), default="")
+    qty = Column(Integer, default=0)
+    fillshares = Column(Integer, default=0)
+    prc = Column(Float, default=0.0)
+    avgprc = Column(Float, default=0.0)
+    trgprc = Column(Float, default=0.0)
+    status = Column(String(32), default="", index=True)
+    ordersource = Column(String(32), nullable=True)
+    remarks = Column(Text, nullable=True)
+    rejreason = Column(Text, nullable=True)
+    raw_json = Column(Text, nullable=True)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class BrokerTradeRecord(Base):
+    """Deduplicated Shoonya TradeBook fill record archived for post-trade analysis."""
+
+    __tablename__ = "broker_trades"
+
+    trade_key = Column(String(128), primary_key=True)
+    session_date = Column(String(10), nullable=False, index=True)
+    user_id = Column(String(64), nullable=False, default="", index=True)
+    flid = Column(String(64), nullable=False, default="", index=True)
+    norenordno = Column(String(64), nullable=False, default="", index=True)
+    exchordid = Column(String(64), nullable=True)
+    fltm = Column(String(32), nullable=True)
+    exch = Column(String(16), default="")
+    tsym = Column(String(64), default="", index=True)
+    trantype = Column(String(8), default="")
+    prd = Column(String(16), default="")
+    flqty = Column(Integer, default=0)
+    flprc = Column(Float, default=0.0)
+    ordersource = Column(String(32), nullable=True)
+    remarks = Column(Text, nullable=True)
+    raw_json = Column(Text, nullable=True)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class BrokerPositionRecord(Base):
+    """Deduplicated Shoonya PositionBook daily summary archived for P&L attribution."""
+
+    __tablename__ = "broker_positions"
+
+    position_key = Column(String(160), primary_key=True)
+    session_date = Column(String(10), nullable=False, index=True)
+    user_id = Column(String(64), nullable=False, default="", index=True)
+    exch = Column(String(16), default="")
+    tsym = Column(String(64), default="", index=True)
+    prd = Column(String(16), default="")
+    netqty = Column(Integer, default=0)
+    daybuyqty = Column(Integer, default=0)
+    daysellqty = Column(Integer, default=0)
+    netavgprc = Column(Float, default=0.0)
+    daybuyavgprc = Column(Float, default=0.0)
+    daysellavgprc = Column(Float, default=0.0)
+    lp = Column(Float, default=0.0)
+    rpnl = Column(Float, default=0.0)
+    urmtom = Column(Float, default=0.0)
+    total_pnl = Column(Float, default=0.0)
+    raw_json = Column(Text, nullable=True)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+

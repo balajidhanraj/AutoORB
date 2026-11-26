@@ -2,6 +2,9 @@ name: Keep Render Free Tier Awake (IST Active Hours)
 
 on:
   schedule:
+    # Dedicated pre-market IST wakes before 08:40 IST OAuth scheduler (02:50 UTC = 08:20 IST, 03:05 UTC = 08:35 IST)
+    - cron: "50 2 * * 1-5"
+    - cron: "5 3 * * 1-5"
     # Mon-Fri NSE market prep & session: every 5 min from 02:00-11:55 UTC (07:30-17:25 IST)
     - cron: "*/5 2-11 * * 1-5"
     # Overnight & weekends: keep Free Tier container warm so runtime state stays active 24/7

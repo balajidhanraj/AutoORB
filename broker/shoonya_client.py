@@ -240,14 +240,14 @@ class CompatibleNorenApi:
                         return self._post(endpoint, body, _retry=False, _allow_jkey_fallback=False)
 
             if res is None:
-                if resp.status_code == 404 and endpoint in ("PositionBook", "OrderBook", "TradeBook"):
+                if resp.status_code == 404 and endpoint in ("PositionBook", "OrderBook", "TradeBook", "Holdings"):
                     return []
                 resp.raise_for_status()
                 return {}
 
             if isinstance(res, dict) and res.get("stat") == "Not_Ok":
                 emsg = str(res.get("emsg") or "").lower()
-                if endpoint in ("PositionBook", "OrderBook", "TradeBook") and "no data" in emsg:
+                if endpoint in ("PositionBook", "OrderBook", "TradeBook", "Holdings") and "no data" in emsg:
                     return []
                 if _retry and self._reauth_callback:
                     if any(err in emsg for err in ("session", "invalid session", "not logged in", "expired")):
@@ -353,6 +353,29 @@ class CompatibleNorenApi:
         resp = self._post(
             "OrderBook",
             {"uid": self.username},
+            _retry=_retry,
+            _allow_jkey_fallback=_allow_jkey_fallback,
+        )
+        return resp if isinstance(resp, list) else []
+
+    def get_trade_book(self, _retry: bool = True, _allow_jkey_fallback: bool = True) -> List[Dict[str, Any]]:
+        resp = self._post(
+            "TradeBook",
+            {"uid": self.username, "actid": self.account_id},
+            _retry=_retry,
+            _allow_jkey_fallback=_allow_jkey_fallback,
+        )
+        return resp if isinstance(resp, list) else []
+
+    def get_holdings(
+        self,
+        product_type: str = "C",
+        _retry: bool = True,
+        _allow_jkey_fallback: bool = True,
+    ) -> List[Dict[str, Any]]:
+        resp = self._post(
+            "Holdings",
+            {"uid": self.username, "actid": self.account_id, "prd": product_type},
             _retry=_retry,
             _allow_jkey_fallback=_allow_jkey_fallback,
         )
@@ -466,6 +489,7 @@ class ShoonyaClient:
         self._broker_snapshot_ts: float = 0.0
         self._broker_snapshot_fetch_lock = threading.Lock()
         self._cached_user_details: Optional[Dict[str, str]] = None
+        self._last_raw_broker_payload: Dict[str, Any] = {}
 
         # External callback hooks
         self._tick_listeners: List[Callable[[Dict[str, Any]], None]] = []
@@ -783,6 +807,29 @@ class ShoonyaClient:
         with self._lock:
             return [dict(pos) for pos in self._paper_positions.values()]
 
+    def get_trade_book(self) -> List[Dict[str, Any]]:
+        if self.settings.mode == "LIVE":
+            return self.api.get_trade_book() if hasattr(self.api, "get_trade_book") else []
+        with self._lock:
+            return [
+                dict(o)
+                for o in self._paper_orders.values()
+                if str(o.get("status") or "").upper() == "COMPLETE"
+            ]
+
+    def get_holdings(self) -> List[Dict[str, Any]]:
+        if self.settings.mode == "LIVE" and hasattr(self.api, "get_holdings"):
+            return self.api.get_holdings()
+        return []
+
+    def get_last_raw_broker_payload(self) -> Dict[str, Any]:
+        """Return thread-safe copy of raw Shoonya API payloads from the latest live snapshot."""
+        with self._lock:
+            return {
+                k: (dict(v) if isinstance(v, dict) else list(v) if isinstance(v, list) else v)
+                for k, v in self._last_raw_broker_payload.items()
+            }
+
     @staticmethod
     def _to_float(val: Any, default: float = 0.0) -> float:
         try:
@@ -854,9 +901,13 @@ class ShoonyaClient:
             "collateral": 0.0,
             "margin_used": 0.0,
             "net_available": 0.0,
+            "realized_pnl": 0.0,
+            "unrealized_pnl": 0.0,
             "request_time": "",
             "orders": [],
+            "trades": [],
             "positions": [],
+            "holdings": [],
             "error": "",
         }
         if not (getattr(self.api, "access_token", "") or getattr(self.api, "susertoken", "")):
@@ -889,8 +940,18 @@ class ShoonyaClient:
                     return cached
 
             snapshot = dict(empty_snapshot)
+            raw_payload: Dict[str, Any] = {
+                "limits": {},
+                "user_details": {},
+                "orders": [],
+                "trades": [],
+                "positions": [],
+                "holdings": [],
+            }
             try:
                 limits = self.api.get_limits()
+                if isinstance(limits, dict):
+                    raw_payload["limits"] = dict(limits)
                 if isinstance(limits, dict) and limits.get("stat") == "Ok":
                     cash = self._to_float(limits.get("cash"))
                     payin = self._to_float(limits.get("payin"))
@@ -920,13 +981,17 @@ class ShoonyaClient:
                 with self._lock:
                     self._broker_snapshot_cache = dict(snapshot)
                     self._broker_snapshot_ts = time.monotonic()
+                    self._last_raw_broker_payload = raw_payload
                 return snapshot
 
             if self._cached_user_details is not None:
                 snapshot.update(self._cached_user_details)
+                raw_payload["user_details"] = dict(self._cached_user_details)
             elif hasattr(self.api, "get_user_details"):
                 try:
                     user_info = self.api.get_user_details()
+                    if isinstance(user_info, dict):
+                        raw_payload["user_details"] = dict(user_info)
                     if isinstance(user_info, dict) and user_info.get("stat") == "Ok":
                         details_patch: Dict[str, str] = {
                             "account_name": str(
@@ -945,16 +1010,17 @@ class ShoonyaClient:
 
             try:
                 try:
-                    raw_orders = self.api.get_order_book(_retry=False, _allow_jkey_fallback=False) or []
+                    raw_orders_res = self.api.get_order_book(_retry=False, _allow_jkey_fallback=False) or []
                 except TypeError:
-                    raw_orders = self.api.get_order_book() or []
+                    raw_orders_res = self.api.get_order_book() or []
+                raw_orders = [dict(o) for o in raw_orders_res if isinstance(o, dict)] if isinstance(raw_orders_res, list) else []
+                raw_payload["orders"] = raw_orders
                 norm_orders = []
                 for o in raw_orders:
-                    if not isinstance(o, dict):
-                        continue
                     norm_orders.append(
                         {
                             "norenordno": str(o.get("norenordno") or ""),
+                            "exchordid": str(o.get("exchordid") or ""),
                             "norentm": str(o.get("norentm") or ""),
                             "exch": str(o.get("exch") or ""),
                             "tsym": str(o.get("tsym") or ""),
@@ -964,6 +1030,7 @@ class ShoonyaClient:
                             "qty": str(o.get("qty") or "0"),
                             "fillshares": str(o.get("fillshares") or "0"),
                             "prc": str(o.get("avgprc") or o.get("prc") or "0"),
+                            "trgprc": str(o.get("trgprc") or "0"),
                             "status": str(o.get("status") or ""),
                             "ordersource": str(o.get("ordersource") or ""),
                             "reason": str(o.get("rejreason") or o.get("remarks") or ""),
@@ -974,14 +1041,50 @@ class ShoonyaClient:
                 logger.debug("Live OrderBook fetch failed: %s", exc)
 
             try:
+                if hasattr(self.api, "get_trade_book"):
+                    try:
+                        raw_trades_res = self.api.get_trade_book(_retry=False, _allow_jkey_fallback=False) or []
+                    except TypeError:
+                        raw_trades_res = self.api.get_trade_book() or []
+                    raw_trades = [dict(t) for t in raw_trades_res if isinstance(t, dict)] if isinstance(raw_trades_res, list) else []
+                    raw_payload["trades"] = raw_trades
+                    norm_trades = []
+                    for t in raw_trades:
+                        norm_trades.append(
+                            {
+                                "flid": str(t.get("flid") or ""),
+                                "norenordno": str(t.get("norenordno") or ""),
+                                "exchordid": str(t.get("exchordid") or ""),
+                                "fltm": str(t.get("fltm") or t.get("norentm") or ""),
+                                "exch": str(t.get("exch") or ""),
+                                "tsym": str(t.get("tsym") or ""),
+                                "trantype": str(t.get("trantype") or ""),
+                                "prd": str(t.get("s_prdt_ali") or t.get("prd") or ""),
+                                "flqty": str(t.get("flqty") or t.get("fillshares") or "0"),
+                                "flprc": str(t.get("flprc") or t.get("prc") or "0"),
+                                "ordersource": str(t.get("ordersource") or ""),
+                                "remarks": str(t.get("remarks") or ""),
+                            }
+                        )
+                    snapshot["trades"] = norm_trades
+            except Exception as exc:
+                logger.debug("Live TradeBook fetch failed: %s", exc)
+
+            try:
                 try:
-                    raw_positions = self.api.get_positions(_retry=False, _allow_jkey_fallback=False) or []
+                    raw_positions_res = self.api.get_positions(_retry=False, _allow_jkey_fallback=False) or []
                 except TypeError:
-                    raw_positions = self.api.get_positions() or []
+                    raw_positions_res = self.api.get_positions() or []
+                raw_positions = [dict(p) for p in raw_positions_res if isinstance(p, dict)] if isinstance(raw_positions_res, list) else []
+                raw_payload["positions"] = raw_positions
                 norm_positions = []
+                total_rpnl = 0.0
+                total_urmtom = 0.0
                 for p in raw_positions:
-                    if not isinstance(p, dict):
-                        continue
+                    rp = self._to_float(p.get("rpnl"))
+                    ur = self._to_float(p.get("urmtom"))
+                    total_rpnl += rp
+                    total_urmtom += ur
                     norm_positions.append(
                         {
                             "exch": str(p.get("exch") or ""),
@@ -995,12 +1098,45 @@ class ShoonyaClient:
                         }
                     )
                 snapshot["positions"] = norm_positions
+                snapshot["realized_pnl"] = round(total_rpnl, 2)
+                snapshot["unrealized_pnl"] = round(total_urmtom, 2)
             except Exception as exc:
                 logger.debug("Live PositionBook fetch failed: %s", exc)
+
+            try:
+                if hasattr(self.api, "get_holdings"):
+                    try:
+                        raw_holdings_res = self.api.get_holdings("C", _retry=False, _allow_jkey_fallback=False) or []
+                    except TypeError:
+                        raw_holdings_res = self.api.get_holdings() or []
+                    raw_holdings = [dict(h) for h in raw_holdings_res if isinstance(h, dict)] if isinstance(raw_holdings_res, list) else []
+                    raw_payload["holdings"] = raw_holdings
+                    norm_holdings = []
+                    for h in raw_holdings:
+                        exch_tsym = h.get("exch_tsym")
+                        tsym = ""
+                        exch = str(h.get("exch") or "")
+                        if isinstance(exch_tsym, list) and exch_tsym and isinstance(exch_tsym[0], dict):
+                            tsym = str(exch_tsym[0].get("tsym") or "")
+                            exch = exch or str(exch_tsym[0].get("exch") or "")
+                        tsym = tsym or str(h.get("tsym") or "")
+                        norm_holdings.append(
+                            {
+                                "exch": exch,
+                                "tsym": tsym,
+                                "holdqty": str(h.get("holdqty") or h.get("npoadqty") or "0"),
+                                "btstqty": str(h.get("btstqty") or "0"),
+                                "upldprc": str(h.get("upldprc") or "0.00"),
+                            }
+                        )
+                    snapshot["holdings"] = norm_holdings
+            except Exception as exc:
+                logger.debug("Live Holdings fetch failed: %s", exc)
 
             with self._lock:
                 self._broker_snapshot_cache = dict(snapshot)
                 self._broker_snapshot_ts = time.monotonic()
+                self._last_raw_broker_payload = raw_payload
             return snapshot
 
     def place_live_broker_order(
@@ -1185,3 +1321,66 @@ class ShoonyaClient:
                         self._fill_paper_order(order, round(min(order["prc"], ltp + slip), 2))
                     elif order["trantype"] == "S" and ltp >= order["prc"]:
                         self._fill_paper_order(order, round(max(order["prc"], ltp - slip), 2))
+
+    def export_paper_state(self) -> Dict[str, Any]:
+        """Return thread-safe snapshot of PAPER mode simulated orders and positions."""
+        with self._lock:
+            return {
+                "orders": {str(k): dict(v) for k, v in self._paper_orders.items()},
+                "positions": {str(k): dict(v) for k, v in self._paper_positions.items()},
+            }
+
+    def restore_paper_state(self, data: Dict[str, Any]) -> None:
+        """Restore simulated PAPER mode orders and positions from persisted session state."""
+        if not isinstance(data, dict):
+            return
+        orders = data.get("orders")
+        positions = data.get("positions")
+        with self._lock:
+            if isinstance(orders, dict):
+                for k, v in orders.items():
+                    if isinstance(v, dict):
+                        self._paper_orders[str(k)] = dict(v)
+            if isinstance(positions, dict):
+                for k, v in positions.items():
+                    if isinstance(v, dict):
+                        self._paper_positions[str(k)] = dict(v)
+
+    def ensure_paper_sl_order(
+        self,
+        order_id: str,
+        exchange: str,
+        tradingsymbol: str,
+        quantity: int,
+        trigger_price: float,
+        limit_price: float,
+        remarks: str = "",
+    ) -> str:
+        """Ensure a resting PAPER SL-LMT sell order exists after session restore."""
+        oid = str(order_id or "").strip() or f"PAPER-{uuid.uuid4().hex[:10].upper()}"
+        with self._lock:
+            existing = self._paper_orders.get(oid)
+            if existing and str(existing.get("status") or "").upper() in {"OPEN", "TRIGGER_PENDING"}:
+                return oid
+            self._paper_orders[oid] = {
+                "norenordno": oid,
+                "exch": exchange,
+                "tsym": tradingsymbol,
+                "trantype": "S",
+                "qty": int(quantity),
+                "fillshares": 0,
+                "prctyp": "SL-LMT",
+                "prc": float(limit_price),
+                "trgprc": float(trigger_price),
+                "avgprc": 0.0,
+                "status": "TRIGGER_PENDING",
+                "remarks": remarks or self.settings.sebi_algo_id,
+            }
+            if tradingsymbol not in self._paper_positions and int(quantity) > 0:
+                self._paper_positions[tradingsymbol] = {
+                    "tsym": tradingsymbol,
+                    "exch": exchange,
+                    "netqty": str(int(quantity)),
+                    "netavgprc": f"{float(trigger_price):.2f}",
+                }
+        return oid

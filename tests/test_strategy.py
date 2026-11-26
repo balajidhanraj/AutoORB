@@ -1417,5 +1417,242 @@ def test_one_minute_signal_check_and_no_double_entry(tmp_path: Path) -> None:
     assert snap["schedule"]["last_signal_check_time"] == "10:07:00"
 
 
+def test_paper_position_and_completed_trades_persist_across_restart(tmp_path: Path) -> None:
+    """Active PAPER position, resting SL-LMT order, and completed trades survive restarts."""
+    s1 = _make_settings(tmp_path, mode="PAPER", shoonya_user_id="USR_PAPER")
+    orch1 = TradingSystemOrchestrator(settings=s1)
+    orch1.client.update_ltp("NSE|26000", 25300.0)
+    ok, msg, _ = orch1.trigger_auto_order("NIFTY", signal_type="CE")
+    assert ok is True, msg
+    assert "NIFTY" in orch1.risk_manager.positions
+
+    pos1 = orch1.risk_manager.positions["NIFTY"]
+    custom_sl = round(max(1.0, pos1.entry_avg_price - 15.0), 1)
+    ok_sl, msg_sl = orch1.modify_position_sl("NIFTY", custom_sl)
+    assert ok_sl is True, msg_sl
+
+    # Restart orchestrator (defaulting to LIVE) sharing the same data_dir
+    s2 = _make_settings(tmp_path, mode="LIVE", shoonya_user_id="USR_PAPER")
+    orch2 = TradingSystemOrchestrator(settings=s2)
+    assert orch2.settings.mode == "PAPER"
+    assert "NIFTY" in orch2.risk_manager.positions
+    pos2 = orch2.risk_manager.positions["NIFTY"]
+    assert pos2.trade_id == pos1.trade_id
+    assert pos2.contract.tradingsymbol == pos1.contract.tradingsymbol
+    assert pos2.entry_avg_price == pos1.entry_avg_price
+    assert pos2.sl_trigger_price == custom_sl
+    assert pos2.sl_order_id == pos1.sl_order_id
+    assert pos2.sl_order_id in orch2.client._paper_orders
+    opt_key = f"{pos2.contract.exchange}|{pos2.contract.token}"
+    assert opt_key in orch2.client.subscribed_tokens
+
+    # Simulate option drop hitting SL after restart -> SL fills & closes cleanly
+    orch2.client.update_ltp(opt_key, max(0.1, custom_sl - 2.0))
+    orch2.risk_manager.on_option_tick("NIFTY", max(0.1, custom_sl - 2.0))
+    assert "NIFTY" not in orch2.risk_manager.positions
+    assert len(orch2.risk_manager.completed_trades) == 1
+    assert orch2.risk_manager.completed_trades[0].trade_id == pos1.trade_id
+
+    # Restart a third time -> completed trade stays intact and scheduler reset does not wipe it
+    s3 = _make_settings(tmp_path, mode="PAPER", shoonya_user_id="USR_PAPER")
+    orch3 = TradingSystemOrchestrator(settings=s3)
+    assert len(orch3.risk_manager.completed_trades) == 1
+    today_dt = IST.localize(datetime.combine(datetime.now(IST).date(), time(10, 15, 0)))
+    orch3.step_scheduler(now_ist=today_dt)
+    assert len(orch3.risk_manager.completed_trades) == 1
+
+
+def test_cold_start_remote_load_failure_does_not_clobber_state(tmp_path: Path) -> None:
+    """Failed Neon cold-start load must block background overwrites until explicit/synced save."""
+    from unittest.mock import patch
+    from services.runtime_state_store import RuntimeStateStore
+
+    store = RuntimeStateStore(tmp_path / "data", enable_remote_db=False)
+    store._write_local(json.dumps({"mode": "PAPER", "capital": 500000.0}))
+
+    store._remote_enabled = True
+    store._loop = MagicMock()
+    store._retry_delay_sec = 0.0
+    store._load_remote_async = MagicMock(return_value="CORO")  # type: ignore[method-assign]
+    store._save_remote_async = MagicMock(return_value="CORO")  # type: ignore[method-assign]
+
+    failing_fut = MagicMock()
+    failing_fut.result.side_effect = TimeoutError()
+    ok_fut = MagicMock()
+    ok_fut.result.return_value = None
+
+    with patch("services.runtime_state_store.asyncio.run_coroutine_threadsafe", return_value=failing_fut) as mock_rcts:
+        loaded = store.load()
+        assert loaded["mode"] == "PAPER"
+        assert store.remote_load_ok is False
+        assert store._remote_writes_blocked is True
+        assert mock_rcts.call_count == 2  # Retried twice before falling back
+
+    with patch("services.runtime_state_store.asyncio.run_coroutine_threadsafe", return_value=ok_fut) as mock_rcts_save:
+        # Automatic non-forced saves must NOT overwrite remote DB while blocked
+        store.save({"mode": "LIVE", "capital": 100000.0}, force_remote=False)
+        assert store.save_sync({"mode": "LIVE", "capital": 100000.0}, force_remote=False) is False
+        assert mock_rcts_save.call_count == 0
+
+        # Explicit user action (force_remote=True) unblocks & commits remotely
+        assert store.save_sync({"mode": "PAPER", "capital": 600000.0}, force_remote=True) is True
+        assert mock_rcts_save.call_count == 1
+        assert store._remote_writes_blocked is False
+
+
+def test_0840_auth_milestone_sends_telegram_on_cached_token(tmp_path: Path) -> None:
+    """08:40 IST scheduler emits Telegram alert even when reusing a cached daily token."""
+    from unittest.mock import patch
+
+    sent_msgs: List[str] = []
+    settings = _make_settings(
+        tmp_path,
+        mode="LIVE",
+        shoonya_user_id="FA_TEST",
+        telegram_bot_token="123456:TESTTOKEN",
+        telegram_chat_id="999888777",
+    )
+    # Prevent Telegram worker from making real HTTP calls
+    with patch("utils.notifier.requests.post") as mock_post:
+        mock_post.return_value = MagicMock(status_code=200, text="ok")
+        orch = TradingSystemOrchestrator(settings=settings)
+        orch.notifier.send_async = lambda m, prefix="": sent_msgs.append(f"{prefix}{m}")  # type: ignore[method-assign]
+
+        trading_day = date(2026, 11, 26)
+        assert is_nse_trading_day(trading_day) is True
+        orch.auth.last_token_date = trading_day.strftime("%Y-%m-%d")
+        orch.auth.last_login_status = "CACHED_TOKEN_ACTIVE"
+        orch.auth.load_cached_token = MagicMock(return_value="CACHED_TOK_OK")  # type: ignore[method-assign]
+        orch.client.get_live_broker_snapshot = MagicMock(return_value={"connected": True})  # type: ignore[method-assign]
+        orch._milestone_done["reset"] = trading_day
+
+        orch.step_scheduler(now_ist=_ist_dt(2026, 11, 26, 8, 40, 5))
+        assert orch._milestone_done.get("auth") == trading_day
+        assert any("08:40 IST Auto OAuth Ready" in m for m in sent_msgs)
+        assert orch.get_status_snapshot()["telegram_enabled"] is True
+
+
+def test_live_broker_data_archived_to_db_for_analysis(tmp_path: Path) -> None:
+    """LIVE mode captures limits, orders, trades, positions, and holdings into DB without duplicates."""
+    settings = _make_settings(tmp_path, mode="LIVE", shoonya_user_id="FA53975", shoonya_account_id="FA53975")
+    orch = TradingSystemOrchestrator(settings=settings)
+    app = create_app(orch)
+
+    orch.client.api.access_token = "LIVE_TOK"
+    orch.client.api.get_limits = MagicMock(  # type: ignore[method-assign]
+        return_value={
+            "stat": "Ok",
+            "prfname": "SHOONYA",
+            "cash": "125000.00",
+            "payin": "0.00",
+            "payout": "0.00",
+            "brkcollamt": "25000.00",
+            "marginused": "30000.00",
+            "request_time": "10:30:00 26-11-2026",
+        }
+    )
+    orch.client.api.get_user_details = MagicMock(  # type: ignore[method-assign]
+        return_value={"stat": "Ok", "uid": "FA53975", "actid": "FA53975", "uname": "BALAJI TEST"}
+    )
+    orch.client.api.get_order_book = MagicMock(  # type: ignore[method-assign]
+        return_value=[
+            {
+                "norenordno": "ORD1001",
+                "exchordid": "EX9001",
+                "norentm": "10:15:02",
+                "exch": "NFO",
+                "tsym": "NIFTY01DEC26C25750",
+                "trantype": "B",
+                "s_prdt_ali": "NRML",
+                "prctyp": "LMT",
+                "qty": "65",
+                "fillshares": "0",
+                "prc": "210.50",
+                "trgprc": "0",
+                "status": "OPEN",
+                "ordersource": "API",
+                "remarks": "ALGO_TEST_2026",
+            }
+        ]
+    )
+    orch.client.api.get_trade_book = MagicMock(  # type: ignore[method-assign]
+        return_value=[
+            {
+                "flid": "FL5001",
+                "norenordno": "ORD1001",
+                "exchordid": "EX9001",
+                "fltm": "10:15:03",
+                "exch": "NFO",
+                "tsym": "NIFTY01DEC26C25750",
+                "trantype": "B",
+                "s_prdt_ali": "NRML",
+                "flqty": "65",
+                "flprc": "210.00",
+                "ordersource": "API",
+                "remarks": "ALGO_TEST_2026",
+            }
+        ]
+    )
+    orch.client.api.get_positions = MagicMock(  # type: ignore[method-assign]
+        return_value=[
+            {
+                "exch": "NFO",
+                "tsym": "NIFTY01DEC26C25750",
+                "s_prdt_ali": "NRML",
+                "netqty": "65",
+                "daybuyqty": "65",
+                "daysellqty": "0",
+                "netavgprc": "210.00",
+                "daybuyavgprc": "210.00",
+                "daysellavgprc": "0.00",
+                "lp": "225.00",
+                "rpnl": "0.00",
+                "urmtom": "975.00",
+            }
+        ]
+    )
+    orch.client.api.get_holdings = MagicMock(  # type: ignore[method-assign]
+        return_value=[{"exch_tsym": [{"exch": "NSE", "tsym": "INFY-EQ"}], "holdqty": "10", "upldprc": "1500.00"}]
+    )
+
+    res1 = orch.sync_live_broker_archive(trigger_event="TEST_SYNC_1", force_refresh=True, sync=True)
+    assert res1["stored"] is True
+    assert res1["orders"] == 1
+    assert res1["trades"] == 1
+    assert res1["positions"] == 1
+    assert res1["holdings"] == 1
+
+    # Second sync with updated order status -> upserts without creating duplicate order row
+    orch.client.api.get_order_book.return_value[0]["status"] = "COMPLETE"
+    orch.client.api.get_order_book.return_value[0]["fillshares"] = "65"
+    res2 = orch.sync_live_broker_archive(trigger_event="TEST_SYNC_2", force_refresh=True, sync=True)
+    assert res2["stored"] is True
+
+    archive = orch.broker_archive.query_archive()
+    assert archive["ok"] is True
+    assert archive["summary"]["total_snapshots"] == 2
+    assert archive["summary"]["total_orders"] == 1
+    assert archive["summary"]["total_trades"] == 1
+    assert archive["summary"]["total_positions"] == 1
+    assert archive["summary"]["total_unrealized_pnl"] == 975.0
+    assert archive["orders"][0]["status"] == "COMPLETE"
+    assert archive["orders"][0]["fillshares"] == 65
+    assert "NIFTY01DEC26C25750" in archive["summary"]["distinct_symbols"]
+    assert "125000.00" in archive["snapshots"][0]["raw_limits_json"]
+
+    # Query via HTTP route handler
+    api_archive_resp = app.state.handlers["api_broker_archive"]()
+    assert api_archive_resp.status_code == 200
+    api_data = json.loads(api_archive_resp.body.decode("utf-8"))
+    assert api_data["summary"]["total_orders"] == 1
+
+    # Verify PAPER mode does NOT trigger LIVE broker archival
+    assert orch.toggle_mode(force_clear_paper=True)[0] is True
+    res_paper = orch.sync_live_broker_archive(trigger_event="SHOULD_SKIP", force_refresh=False, sync=True)
+    assert res_paper["stored"] is False
+    assert res_paper["reason"] == "not_live_mode"
+
+
+
 
 

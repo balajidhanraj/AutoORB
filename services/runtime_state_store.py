@@ -6,6 +6,7 @@ import asyncio
 import json
 import os
 import threading
+import time
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -47,6 +48,9 @@ class RuntimeStateStore:
             self._remote_enabled = bool(is_pg and not is_pytest)
 
         self._db_url = raw_db_url
+        self.remote_load_ok: bool = not self._remote_enabled
+        self._remote_writes_blocked: bool = False
+        self._retry_delay_sec: float = 2.0
         if self._remote_enabled:
             self._start_bg_loop()
 
@@ -78,6 +82,9 @@ class RuntimeStateStore:
             if "pool_size" in kwargs:
                 kwargs["pool_size"] = 2
                 kwargs["max_overflow"] = 2
+            conn_args = dict(kwargs.get("connect_args") or {})
+            conn_args.setdefault("timeout", 15)
+            kwargs["connect_args"] = conn_args
             self._pg_engine = create_async_engine(norm_url, **kwargs)
         return self._pg_engine
 
@@ -99,12 +106,23 @@ class RuntimeStateStore:
         self._table_ready = True
 
     async def _load_remote_async(self) -> Dict[str, Any]:
-        await self._ensure_table_async()
         eng = self._ensure_engine()
         stmt = text("SELECT state_json FROM system_runtime_state WHERE key = :k")
-        async with eng.connect() as conn:
-            res = await conn.execute(stmt, {"k": self.state_key})
-            row = res.first()
+        try:
+            async with eng.connect() as conn:
+                res = await conn.execute(stmt, {"k": self.state_key})
+                row = res.first()
+            self._table_ready = True
+        except Exception as exc:
+            err_lower = str(exc).lower()
+            if (
+                "system_runtime_state" in err_lower
+                or "does not exist" in err_lower
+                or "undefinedtable" in type(exc).__name__.lower()
+            ):
+                await self._ensure_table_async()
+                return {}
+            raise
         if not row or not row[0]:
             return {}
         parsed = json.loads(str(row[0]))
@@ -147,39 +165,72 @@ class RuntimeStateStore:
     def load(self) -> Dict[str, Any]:
         """Load persisted runtime state from Neon Postgres first, falling back to local JSON."""
         if self._remote_enabled and self._loop is not None:
-            try:
-                fut = asyncio.run_coroutine_threadsafe(self._load_remote_async(), self._loop)
-                remote_data = fut.result(timeout=6.0)
-                if remote_data:
-                    try:
-                        self._write_local(json.dumps(remote_data, indent=2, sort_keys=True))
-                    except Exception:
-                        pass
-                    return remote_data
-            except Exception as exc:
-                logger.warning("Remote Postgres runtime state load failed (using local fallback): %s", exc)
+            last_exc: Optional[Exception] = None
+            for attempt in range(1, 3):
+                try:
+                    fut = asyncio.run_coroutine_threadsafe(self._load_remote_async(), self._loop)
+                    remote_data = fut.result(timeout=15.0)
+                    self.remote_load_ok = True
+                    self._remote_writes_blocked = False
+                    if remote_data:
+                        try:
+                            self._write_local(json.dumps(remote_data, indent=2, sort_keys=True))
+                        except Exception:
+                            pass
+                        return remote_data
+                    return self._read_local()
+                except Exception as exc:
+                    last_exc = exc
+                    err_detail = f"{type(exc).__name__}: {exc}".strip().rstrip(":")
+                    logger.warning(
+                        "Remote Postgres runtime state load attempt %d/2 failed: %s",
+                        attempt,
+                        err_detail,
+                    )
+                    if attempt < 2 and self._retry_delay_sec > 0:
+                        time.sleep(self._retry_delay_sec)
+            self.remote_load_ok = False
+            self._remote_writes_blocked = True
+            logger.warning(
+                "Remote Postgres unavailable at startup (blocking background overwrites until synced; using local fallback): %s",
+                f"{type(last_exc).__name__}: {last_exc}" if last_exc else "unknown error",
+            )
         return self._read_local()
 
-    def save(self, payload: Dict[str, Any]) -> None:
+    def save(self, payload: Dict[str, Any], force_remote: bool = False) -> None:
         """Persist runtime state locally now and dispatch async Neon Postgres upsert."""
         serialized = json.dumps(payload, indent=2, sort_keys=True)
         self._write_local(serialized)
         if self._remote_enabled and self._loop is not None:
+            if self._remote_writes_blocked and not force_remote:
+                logger.debug("Skipping remote Postgres overwrite until initial cold-start restore succeeds")
+                return
+            if force_remote:
+                self._remote_writes_blocked = False
             try:
                 asyncio.run_coroutine_threadsafe(self._save_remote_async(serialized), self._loop)
             except Exception as exc:
                 logger.warning("Failed scheduling remote Postgres state upsert: %s", exc)
 
-    def save_sync(self, payload: Dict[str, Any], timeout: float = 5.0) -> bool:
+    def save_sync(self, payload: Dict[str, Any], timeout: float = 10.0, force_remote: bool = False) -> bool:
         """Persist runtime state locally and wait up to `timeout` seconds for Postgres commit."""
         serialized = json.dumps(payload, indent=2, sort_keys=True)
         self._write_local(serialized)
         if not self._remote_enabled or self._loop is None:
             return True
+        if self._remote_writes_blocked and not force_remote:
+            logger.debug("Skipping remote Postgres sync overwrite until initial cold-start restore succeeds")
+            return False
+        if force_remote:
+            self._remote_writes_blocked = False
         try:
             fut = asyncio.run_coroutine_threadsafe(self._save_remote_async(serialized), self._loop)
             fut.result(timeout=timeout)
+            self.remote_load_ok = True
             return True
         except Exception as exc:
-            logger.warning("Remote Postgres state sync timed out/failed (local JSON saved): %s", exc)
+            logger.warning(
+                "Remote Postgres state sync timed out/failed (local JSON saved): %s",
+                f"{type(exc).__name__}: {exc}",
+            )
             return False

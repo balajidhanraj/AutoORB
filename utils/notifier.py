@@ -25,12 +25,16 @@ class TelegramNotifier:
         self._worker: Optional[threading.Thread] = None
 
         if self.enabled:
+            masked_chat = f"...{self.chat_id[-4:]}" if len(self.chat_id) > 4 else self.chat_id
+            logger.info("Telegram notifications ENABLED (chat_id=%s)", masked_chat)
             self._worker = threading.Thread(
                 target=self._run_worker,
                 name="telegram-notifier",
                 daemon=True,
             )
             self._worker.start()
+        else:
+            logger.info("Telegram notifications DISABLED (TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID not set)")
 
     @property
     def enabled(self) -> bool:
@@ -63,6 +67,8 @@ class TelegramNotifier:
         try:
             resp = requests.post(url, json=payload, timeout=self.timeout_sec)
             if resp.status_code == 200:
+                preview = " ".join(message.split())[:60]
+                logger.info("Telegram alert delivered (%s)", preview)
                 return True
             logger.warning("Telegram API returned %s: %s", resp.status_code, resp.text)
             return False

@@ -331,6 +331,36 @@ def create_app(orchestrator: Any) -> FastAPI:
             }
         )
 
+    @app.get("/api/broker/archive")
+    def api_broker_archive(
+        session_date: Optional[str] = None,
+        user_id: Optional[str] = None,
+        limit: int = 100,
+    ) -> JSONResponse:
+        return JSONResponse(
+            content=orchestrator.broker_archive.query_archive(
+                session_date=session_date,
+                user_id=user_id,
+                limit=limit,
+            )
+        )
+
+    @app.post("/api/broker/archive/sync")
+    def api_broker_archive_sync() -> JSONResponse:
+        sync_res = orchestrator.sync_live_broker_archive(
+            trigger_event="MANUAL_API_SYNC",
+            force_refresh=True,
+            sync=True,
+        )
+        archive = orchestrator.broker_archive.query_archive(limit=50)
+        return JSONResponse(
+            content={
+                "ok": bool(sync_res.get("stored")),
+                "sync": sync_res,
+                "summary": archive.get("summary", {}),
+            }
+        )
+
     @app.post("/api/broker/sync-backup-ip")
     def api_sync_backup_ip(payload: Optional[SyncBackupIpRequest] = None) -> JSONResponse:
         target_ip = payload.ip.strip() if payload and payload.ip else ""
@@ -596,6 +626,8 @@ def create_app(orchestrator: Any) -> FastAPI:
         "api_trades_csv": api_trades_csv,
         "api_broker_connect": api_broker_connect,
         "api_broker_refresh": api_broker_refresh,
+        "api_broker_archive": api_broker_archive,
+        "api_broker_archive_sync": api_broker_archive_sync,
         "api_broker_funds": api_broker_funds,
         "api_broker_order": api_broker_order,
         "api_set_orb_window": api_set_orb_window,

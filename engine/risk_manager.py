@@ -10,10 +10,10 @@ import threading
 import time
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import date, datetime
 from enum import Enum
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from broker.instrument_mapper import InstrumentContract, InstrumentMapper
 from broker.shoonya_client import ShoonyaClient
@@ -123,6 +123,20 @@ class RiskManager:
         self.custom_max_daily_loss: Optional[float] = None
         self._default_max_daily_loss: float = float(settings.max_daily_loss or 10000.0)
         self.weekly_losses: Dict[Tuple[int, int], int] = {}
+        self._state_change_callback: Optional[Callable[[], None]] = None
+
+    def register_state_change_callback(self, callback: Callable[[], None]) -> None:
+        """Register callback invoked whenever open positions or daily risk state changes."""
+        self._state_change_callback = callback
+
+    def _notify_state_changed(self) -> None:
+        cb = self._state_change_callback
+        if cb is None:
+            return
+        try:
+            cb()
+        except Exception as exc:
+            logger.warning("RiskManager state change callback failed: %s", exc)
 
     def load_backtest_trades(self, limit: int = 50) -> None:
         """Load recent Master Alpha 15% backtest trades into completed trades ledger."""
@@ -244,6 +258,7 @@ class RiskManager:
                 return False, f"Unknown reset_type '{reset_type}'. Use all, daily_orders, weekly_loss, daily_mtm, or halt."
 
         logger.warning("Risk guardrail reset (%s): %s", norm, msg)
+        self._notify_state_changed()
         return True, msg
 
     def get_available_fund(self) -> float:
@@ -558,7 +573,10 @@ class RiskManager:
 
             # Check immediate fill (standard in PAPER mode when limit >= LTP)
             self._check_entry_fill_locked(pos)
-            return self.positions.get(pos.position_key)
+            entered = self.positions.get(pos.position_key)
+        if entered is not None:
+            self._notify_state_changed()
+        return entered
 
     def _check_entry_fill_locked(self, pos: ActivePosition) -> None:
         if pos.state != PositionState.ENTERING:
@@ -639,12 +657,14 @@ class RiskManager:
     def check_pending_entries(self, now_monotonic: Optional[float] = None) -> None:
         """Modify unfilled entry once after 10s; cancel if still unfilled after 20s."""
         now_m = now_monotonic if now_monotonic is not None else time.monotonic()
+        changed = False
         with self._lock:
             for index_name, pos in list(self.positions.items()):
                 if pos.state != PositionState.ENTERING:
                     continue
                 self._check_entry_fill_locked(pos)
                 if index_name not in self.positions or pos.state != PositionState.ENTERING:
+                    changed = True
                     continue
 
                 elapsed = now_m - pos.entry_submitted_monotonic
@@ -652,6 +672,7 @@ class RiskManager:
                     logger.warning("Entry order %s unfilled after %.1fs; canceling", pos.entry_order_id, elapsed)
                     self.client.cancel_order(pos.entry_order_id)
                     self.positions.pop(index_name, None)
+                    changed = True
                 elif elapsed >= self.settings.entry_modify_timeout_sec and not pos.entry_modified_once:
                     token_key = f"{pos.contract.exchange}|{pos.contract.token}"
                     latest_ltp = self.client.get_ltp(token_key) or pos.last_ltp
@@ -665,12 +686,16 @@ class RiskManager:
                         newprice=new_limit,
                     )
                     pos.entry_modified_once = True
+                    changed = True
                     if isinstance(resp, dict) and resp.get("stat") == "Ok":
                         pos.entry_limit_price = new_limit
                         logger.info("Modified unfilled entry order %s once to LMT=%.2f", pos.entry_order_id, new_limit)
+        if changed:
+            self._notify_state_changed()
 
     def on_option_tick(self, index_name: str, ltp: float) -> None:
         """Update live MTM, detect SL fills, and drive Breakeven -> Target 1 -> Step Trailing."""
+        changed = False
         with self._lock:
             matching = [
                 p for k, p in list(self.positions.items())
@@ -679,16 +704,19 @@ class RiskManager:
             if not matching:
                 return
             for pos in matching:
-                self._process_position_tick_locked(pos, float(ltp))
+                if self._process_position_tick_locked(pos, float(ltp)):
+                    changed = True
+        if changed:
+            self._notify_state_changed()
 
-    def _process_position_tick_locked(self, pos: ActivePosition, ltp: float) -> None:
+    def _process_position_tick_locked(self, pos: ActivePosition, ltp: float) -> bool:
         index_name = pos.index_name
         pos.last_ltp = float(ltp)
         pos.highest_ltp = max(pos.highest_ltp, float(ltp))
 
         if pos.state == PositionState.ENTERING:
             self._check_entry_fill_locked(pos)
-            return
+            return (pos.state != PositionState.ENTERING) or ((pos.position_key or index_name) not in self.positions)
 
         # Check if SL-LMT order executed
         if pos.sl_order_id:
@@ -699,22 +727,23 @@ class RiskManager:
                     "BREAKEVEN_SL" if pos.state == PositionState.OPEN_FULL_BREAKEVEN else "INITIAL_SL"
                 )
                 self._close_position_record_locked(pos, exit_px, reason)
-                return
+                return True
 
         if pos.state not in {
             PositionState.OPEN_FULL,
             PositionState.OPEN_FULL_BREAKEVEN,
             PositionState.OPEN_PARTIAL_TRAILING,
         }:
-            return
+            return False
 
         pos.unrealized_pnl = round((ltp - pos.entry_avg_price) * pos.remaining_qty, 2)
         if getattr(pos, "pure_supertrend_trail", False):
             # H1 Hybrid rides full quantity strictly with Spot ATR SL + 35pt Cap + Supertrend(10,3) trail
-            return
+            return False
 
         spec = INDEX_SPECS[index_name]
         gain = ltp - pos.entry_avg_price
+        state_changed = False
 
         # 1. Target 1 (+40 Nifty / +80 BNF): reduce SL-LMT qty to 50%, exit 50% via LMT
         if gain >= spec.target1_pts and pos.state in {
@@ -722,14 +751,21 @@ class RiskManager:
             PositionState.OPEN_FULL_BREAKEVEN,
         }:
             self._execute_partial_target1_locked(pos, ltp, spec)
+            state_changed = True
 
         # 2. Breakeven (+20 Nifty / +45 BNF): move SL to cost (Entry_Avg_Price)
         elif gain >= spec.breakeven_trigger_pts and pos.state == PositionState.OPEN_FULL:
             self._move_sl_to_breakeven_locked(pos, spec)
+            state_changed = True
 
         # 3. Step Trailing on remaining 50% after Target 1
         if pos.state == PositionState.OPEN_PARTIAL_TRAILING:
+            prev_steps = pos.trail_steps_applied
             self._apply_step_trailing_locked(pos, ltp, spec)
+            if pos.trail_steps_applied != prev_steps:
+                state_changed = True
+
+        return state_changed
 
     def _move_sl_to_breakeven_locked(self, pos: ActivePosition, spec: IndexSpec) -> None:
         new_trig = round(pos.entry_avg_price, 1)
@@ -926,7 +962,8 @@ class RiskManager:
             self.halt_reason = reason
             if self.notifier:
                 self.notifier.send_async(f"🚨 CRITICAL KILL SWITCH: {reason}")
-            return True
+        self._notify_state_changed()
+        return True
 
     def _exit_position_locked(self, pos: ActivePosition, reason: str) -> None:
         """Cancel working SL order and execute market exit for remaining quantity."""
@@ -979,7 +1016,8 @@ class RiskManager:
             for pos in matching:
                 self._exit_position_locked(pos, reason)
             logger.info("Manually exited %d position(s) for %s (%s)", len(matching), index_name, reason)
-            return True
+        self._notify_state_changed()
+        return True
 
     def check_spot_atr_stop_exit(
         self,
@@ -988,6 +1026,7 @@ class RiskManager:
         spot_high: float,
     ) -> bool:
         """Exit active Hybrid position if closed 5m spot bar breaches its HTF ATR stop level."""
+        exited_any = False
         with self._lock:
             matching = [
                 p for k, p in list(self.positions.items())
@@ -1001,7 +1040,6 @@ class RiskManager:
             ]
             if not matching:
                 return False
-            exited_any = False
             for pos in matching:
                 sl_lv = float(pos.spot_sl_price)
                 hit = (
@@ -1019,7 +1057,9 @@ class RiskManager:
                     )
                     self._exit_position_locked(pos, "SPOT_ATR_SL")
                     exited_any = True
-            return exited_any
+        if exited_any:
+            self._notify_state_changed()
+        return exited_any
 
     def check_supertrend_trailing_exit(
         self,
@@ -1032,6 +1072,7 @@ class RiskManager:
         if supertrend_line is None or supertrend_dir == 0:
             return False
         global_st = bool(getattr(self.settings, "use_supertrend_filter", False))
+        exited_any = False
         with self._lock:
             matching = [
                 p for k, p in list(self.positions.items())
@@ -1045,7 +1086,6 @@ class RiskManager:
             ]
             if not matching:
                 return False
-            exited_any = False
             for pos in matching:
                 should_exit = (
                     (pos.signal_type == "CE" and (spot_close < supertrend_line or supertrend_dir == -1))
@@ -1062,7 +1102,9 @@ class RiskManager:
                     )
                     self._exit_position_locked(pos, "SUPERTREND_TRAIL")
                     exited_any = True
-            return exited_any
+        if exited_any:
+            self._notify_state_changed()
+        return exited_any
 
     def modify_position_sl(self, index_name: str, new_sl_price: float) -> Tuple[bool, str]:
         """Manually adjust the active SL-LMT trigger price for an open position."""
@@ -1099,7 +1141,8 @@ class RiskManager:
             pos.sl_limit_price = new_lim
             msg = f"Updated SL for {pos.contract.tradingsymbol} to ₹{new_trig:.2f}"
             logger.info(msg)
-            return True, msg
+        self._notify_state_changed()
+        return True, msg
 
     def emergency_kill_switch(self, reason: str = "MANUAL_UI_KILL_SWITCH") -> None:
         """Immediately cancel pending orders, exit all positions, and halt trading."""
@@ -1110,6 +1153,7 @@ class RiskManager:
             logger.critical("MANUAL KILL SWITCH EXECUTED: %s", reason)
             if self.notifier:
                 self.notifier.send_async(f"🛑 EMERGENCY KILL SWITCH: {reason}")
+        self._notify_state_changed()
 
     def auto_square_off_all(self, reason: str = "EOD_1515_SQUAREOFF") -> None:
         """Mandatory square-off of open positions and pending orders at 15:15 IST."""
@@ -1120,6 +1164,7 @@ class RiskManager:
             self.halted = True
             self.halt_reason = PositionState.COMPLETED_FOR_DAY.value
             logger.info("Auto square-off completed (%s)", reason)
+        self._notify_state_changed()
 
     def _liquidate_all_locked(self, exit_reason: str) -> None:
         for index_name, pos in list(self.positions.items()):
@@ -1213,6 +1258,7 @@ class RiskManager:
             self.halted = False
             self.halt_reason = None
             logger.info("Risk manager trades counter reset to 0; halt cleared.")
+        self._notify_state_changed()
 
     def reset_daily(self) -> None:
         with self._lock:
@@ -1224,3 +1270,217 @@ class RiskManager:
             self.realized_pnl_today = 0.0
             self.halted = False
             self.halt_reason = None
+
+    def export_session_state(self) -> Dict[str, Any]:
+        """Serialize open positions, today's completed trades, and weekly losses."""
+        with self._lock:
+            positions_out: Dict[str, Dict[str, Any]] = {}
+            for pos_key, pos in self.positions.items():
+                c = pos.contract
+                positions_out[str(pos_key)] = {
+                    "trade_id": pos.trade_id,
+                    "index_name": pos.index_name,
+                    "position_key": pos.position_key or str(pos_key),
+                    "signal_type": pos.signal_type,
+                    "state": pos.state.value,
+                    "initial_qty": int(pos.initial_qty),
+                    "remaining_qty": int(pos.remaining_qty),
+                    "entry_order_id": pos.entry_order_id,
+                    "entry_limit_price": float(pos.entry_limit_price),
+                    "entry_modified_once": bool(pos.entry_modified_once),
+                    "entry_avg_price": float(pos.entry_avg_price),
+                    "entry_time": pos.entry_time.isoformat() if pos.entry_time else None,
+                    "sl_order_id": pos.sl_order_id,
+                    "sl_trigger_price": float(pos.sl_trigger_price),
+                    "sl_limit_price": float(pos.sl_limit_price),
+                    "target1_order_id": pos.target1_order_id,
+                    "last_ltp": float(pos.last_ltp),
+                    "highest_ltp": float(pos.highest_ltp),
+                    "realized_pnl": float(pos.realized_pnl),
+                    "unrealized_pnl": float(pos.unrealized_pnl),
+                    "trail_steps_applied": int(pos.trail_steps_applied),
+                    "product_type": str(pos.product_type),
+                    "strategy_mode": str(pos.strategy_mode),
+                    "spot_sl_price": pos.spot_sl_price,
+                    "opt_sl_cap_pts": pos.opt_sl_cap_pts,
+                    "pure_supertrend_trail": bool(pos.pure_supertrend_trail),
+                    "contract": {
+                        "index_name": c.index_name,
+                        "tradingsymbol": c.tradingsymbol,
+                        "token": str(c.token),
+                        "exchange": str(c.exchange),
+                        "lot_size": int(c.lot_size),
+                        "strike": int(c.strike),
+                        "option_type": str(c.option_type),
+                        "expiry": c.expiry.isoformat() if hasattr(c.expiry, "isoformat") else str(c.expiry),
+                    },
+                }
+
+            trades_out = [
+                dict(t.__dict__)
+                for t in self.completed_trades
+                if str(t.mode or "").upper() != "BACKTEST"
+            ]
+            weekly_out = {
+                f"{int(yr)}-{int(wk)}": int(cnt)
+                for (yr, wk), cnt in self.weekly_losses.items()
+            }
+            return {
+                "positions": positions_out,
+                "completed_trades": trades_out,
+                "weekly_losses": weekly_out,
+            }
+
+    def restore_session_state(
+        self,
+        data: Dict[str, Any],
+        session_date: Optional[str] = None,
+    ) -> int:
+        """Restore active positions, completed trades, and weekly losses after restart."""
+        if not isinstance(data, dict):
+            return 0
+
+        restored_positions = 0
+        subscribe_keys: List[str] = []
+        ltp_seeds: List[Tuple[str, float]] = []
+        symbol_regs: List[Tuple[str, str, str]] = []
+        paper_sl_specs: List[Tuple[str, str, str, int, float, float]] = []
+
+        with self._lock:
+            wl = data.get("weekly_losses")
+            if isinstance(wl, dict):
+                for wk_key, cnt in wl.items():
+                    try:
+                        yr_s, wk_s = str(wk_key).split("-", 1)
+                        self.weekly_losses[(int(yr_s), int(wk_s))] = int(cnt)
+                    except Exception:
+                        continue
+
+            raw_trades = data.get("completed_trades")
+            if isinstance(raw_trades, list):
+                existing_ids = {t.trade_id for t in self.completed_trades}
+                for row in raw_trades:
+                    if not isinstance(row, dict):
+                        continue
+                    tr_date = str(row.get("date") or "")
+                    if session_date and tr_date and tr_date != session_date:
+                        continue
+                    tid = str(row.get("trade_id") or "")
+                    if not tid or tid in existing_ids:
+                        continue
+                    try:
+                        rec = TradeRecord(
+                            trade_id=tid,
+                            date=tr_date or (session_date or datetime.now(IST).strftime("%Y-%m-%d")),
+                            index_name=str(row.get("index_name") or ""),
+                            tradingsymbol=str(row.get("tradingsymbol") or ""),
+                            signal_type=str(row.get("signal_type") or ""),
+                            quantity=int(row.get("quantity") or 0),
+                            entry_time=str(row.get("entry_time") or ""),
+                            entry_price=float(row.get("entry_price") or 0.0),
+                            exit_time=str(row.get("exit_time") or ""),
+                            exit_price=float(row.get("exit_price") or 0.0),
+                            gross_pnl=float(row.get("gross_pnl") or 0.0),
+                            charges_est=float(row.get("charges_est") or 0.0),
+                            net_pnl=float(row.get("net_pnl") or 0.0),
+                            exit_reason=str(row.get("exit_reason") or ""),
+                            mode=str(row.get("mode") or self.settings.mode),
+                        )
+                        self.completed_trades.append(rec)
+                        existing_ids.add(tid)
+                    except Exception as exc:
+                        logger.warning("Skipping malformed restored trade %s: %s", tid, exc)
+
+            raw_positions = data.get("positions")
+            if isinstance(raw_positions, dict):
+                for pos_key, p in raw_positions.items():
+                    if not isinstance(p, dict):
+                        continue
+                    c_raw = p.get("contract")
+                    if not isinstance(c_raw, dict):
+                        continue
+                    try:
+                        exp_str = str(c_raw.get("expiry") or "")
+                        exp_dt = date.fromisoformat(exp_str) if exp_str else datetime.now(IST).date()
+                        contract = InstrumentContract(
+                            index_name=str(c_raw.get("index_name") or p.get("index_name") or ""),
+                            tradingsymbol=str(c_raw.get("tradingsymbol") or ""),
+                            token=str(c_raw.get("token") or ""),
+                            exchange=str(c_raw.get("exchange") or "NFO"),
+                            lot_size=int(c_raw.get("lot_size") or 1),
+                            strike=int(c_raw.get("strike") or 0),
+                            option_type=str(c_raw.get("option_type") or p.get("signal_type") or "CE"),
+                            expiry=exp_dt,
+                        )
+                        state_raw = str(p.get("state") or PositionState.OPEN_FULL.value)
+                        pos_state = PositionState(state_raw)
+                        entry_dt_raw = p.get("entry_time")
+                        entry_dt = datetime.fromisoformat(str(entry_dt_raw)) if entry_dt_raw else None
+                        key_name = str(p.get("position_key") or pos_key)
+                        pos = ActivePosition(
+                            trade_id=str(p.get("trade_id") or f"TRD-{uuid.uuid4().hex[:8].upper()}"),
+                            index_name=str(p.get("index_name") or contract.index_name),
+                            contract=contract,
+                            signal_type=str(p.get("signal_type") or contract.option_type),
+                            state=pos_state,
+                            initial_qty=int(p.get("initial_qty") or contract.lot_size),
+                            remaining_qty=int(p.get("remaining_qty") or contract.lot_size),
+                            entry_order_id=str(p.get("entry_order_id") or ""),
+                            entry_limit_price=float(p.get("entry_limit_price") or 0.0),
+                            entry_submitted_monotonic=time.monotonic(),
+                            entry_modified_once=bool(p.get("entry_modified_once", False)),
+                            entry_avg_price=float(p.get("entry_avg_price") or 0.0),
+                            entry_time=entry_dt,
+                            sl_order_id=str(p.get("sl_order_id")) if p.get("sl_order_id") else None,
+                            sl_trigger_price=float(p.get("sl_trigger_price") or 0.0),
+                            sl_limit_price=float(p.get("sl_limit_price") or 0.0),
+                            target1_order_id=str(p.get("target1_order_id")) if p.get("target1_order_id") else None,
+                            last_ltp=float(p.get("last_ltp") or 0.0),
+                            highest_ltp=float(p.get("highest_ltp") or 0.0),
+                            realized_pnl=float(p.get("realized_pnl") or 0.0),
+                            unrealized_pnl=float(p.get("unrealized_pnl") or 0.0),
+                            trail_steps_applied=int(p.get("trail_steps_applied") or 0),
+                            product_type=str(p.get("product_type") or "M"),
+                            position_key=key_name,
+                            strategy_mode=str(p.get("strategy_mode") or "ORB_5GATE"),
+                            spot_sl_price=float(p["spot_sl_price"]) if p.get("spot_sl_price") is not None else None,
+                            opt_sl_cap_pts=float(p["opt_sl_cap_pts"]) if p.get("opt_sl_cap_pts") is not None else None,
+                            pure_supertrend_trail=bool(p.get("pure_supertrend_trail", False)),
+                        )
+                        self.positions[key_name] = pos
+                        restored_positions += 1
+                        if contract.tradingsymbol and contract.token:
+                            symbol_regs.append((contract.tradingsymbol, contract.exchange, contract.token))
+                            tok_key = f"{contract.exchange}|{contract.token}"
+                            subscribe_keys.append(tok_key)
+                            if pos.last_ltp > 0:
+                                ltp_seeds.append((tok_key, pos.last_ltp))
+                        if (
+                            self.settings.mode == "PAPER"
+                            and pos.sl_order_id
+                            and pos.sl_trigger_price > 0
+                            and pos.state != PositionState.ENTERING
+                            and hasattr(self.client, "ensure_paper_sl_order")
+                        ):
+                            paper_sl_specs.append((
+                                pos.sl_order_id,
+                                contract.exchange,
+                                contract.tradingsymbol,
+                                pos.remaining_qty,
+                                pos.sl_trigger_price,
+                                pos.sl_limit_price,
+                            ))
+                    except Exception as exc:
+                        logger.warning("Skipping malformed restored position %s: %s", pos_key, exc)
+
+        for tsym, exch, tok in symbol_regs:
+            self.client.register_symbol_token(tsym, exch, tok)
+        for tok_key, ltp_val in ltp_seeds:
+            if (self.client.get_ltp(tok_key) or 0.0) <= 0.0:
+                self.client.update_ltp(tok_key, ltp_val)
+        for sl_args in paper_sl_specs:
+            self.client.ensure_paper_sl_order(*sl_args)
+        if subscribe_keys:
+            self.client.subscribe(subscribe_keys)
+
+        return restored_positions
