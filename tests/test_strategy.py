@@ -1839,3 +1839,207 @@ def test_backtest_0930_to_1500_runner_and_api(tmp_path: Path, monkeypatch: Any) 
     assert "sheet-backtest" in mob_html
     assert "m-pill-backtest" in mob_html
     assert "ms-rsi-bull" in mob_html
+
+
+def test_gann_box_5m_strategy_atm_protection_and_persist(tmp_path: Path) -> None:
+    import json as _json
+    from engine.candle_builder import Candle
+    from ui.dashboard import StrategyConfigRequest
+
+    s1 = _make_settings(
+        tmp_path,
+        strategy_profile="GANN_BOX_5M",
+        gann_box_mode="BREAKOUT",
+        gann_confirm_candles=1,
+        gann_warmup_minutes=15,
+        gann_use_htf_view_protection=True,
+        use_supertrend_filter=False,
+        entry_start_time=time(9, 30, 0),
+        entry_cutoff_time=time(15, 0, 0),
+    )
+    orch1 = TradingSystemOrchestrator(settings=s1)
+    app = create_app(orch1)
+    handlers = app.state.handlers
+
+    # Build Day 1 bars forming a 15m swing high near 25080 and swing low near 24920
+    d1 = date(2026, 6, 15)
+    d2 = date(2026, 6, 16)
+    history: list[Candle] = []
+    # 21 bars (5 x 15m bars -> clearly establishes a 15m pivot high > 25080 and pivot low ~24920)
+    pattern = [
+        25000, 25010, 25020,   # 09:15 15m: C=25020
+        24990, 24950, 24930,   # 09:30 15m: low 24920
+        25010, 25050, 25080,   # 09:45 15m: high 25090 (swing high)
+        25040, 25010, 24990,   # 10:00 15m
+        24980, 24960, 24940,   # 10:15 15m: C=24940 (< 24990, keeps bearish/neutral bias)
+        24970, 24965, 24950,   # 10:30 15m
+        24990, 25000, 25005,   # 10:45 15m: inside range [24920, 25090]
+    ]
+    t_cur = _ist_dt(d1.year, d1.month, d1.day, 9, 15)
+    for px in pattern:
+        history.append(
+            Candle(
+                timestamp=t_cur,
+                open=px - 5.0,
+                high=px + 10.0,
+                low=px - 10.0,
+                close=float(px),
+                volume=100000,
+                is_closed=True,
+            )
+        )
+        t_cur += timedelta(minutes=5)
+
+    # Day 2 1st 5-minute candle (09:15): VAH=25020, VAL=24980, MID=25000
+    c_open = Candle(timestamp=_ist_dt(2026, 6, 16, 9, 15), open=24995.0, high=25020.0, low=24980.0, close=25005.0, volume=120000, is_closed=True)
+    sig0 = orch1.strategy.evaluate_candle_close("NIFTY", c_open, history, india_vix=15.0)
+    assert sig0 is None
+    st_nf = orch1.strategy.get_state("NIFTY")
+    assert st_nf.gann_vah == 25020.0
+    assert st_nf.gann_val == 24980.0
+    assert st_nf.gann_mid == 25000.0
+    history.append(c_open)
+
+    # Warmup (< 09:30): 09:20 and 09:25 closes above VAH are still skipped during warm-up (< 09:30)
+    c_920 = Candle(timestamp=_ist_dt(2026, 6, 16, 9, 20), open=25005.0, high=25030.0, low=25000.0, close=25025.0, volume=100000, is_closed=True)
+    assert orch1.strategy.evaluate_candle_close("NIFTY", c_920, history, india_vix=15.0) is None
+    history.append(c_920)
+
+    # Pull back inside box at 09:25 so run resets
+    c_925 = Candle(timestamp=_ist_dt(2026, 6, 16, 9, 25), open=25015.0, high=25020.0, low=25000.0, close=25010.0, volume=100000, is_closed=True)
+    assert orch1.strategy.evaluate_candle_close("NIFTY", c_925, history, india_vix=15.0) is None
+    history.append(c_925)
+
+    # 09:30 bar closes above VAH (25035) AND below HTF red (25090), so 1st close does not fire (confirmN=1)
+    c_930 = Candle(timestamp=_ist_dt(2026, 6, 16, 9, 30), open=25010.0, high=25040.0, low=25010.0, close=25035.0, volume=100000, is_closed=True)
+    assert orch1.strategy.evaluate_candle_close("NIFTY", c_930, history, india_vix=15.0) is None
+    assert orch1.strategy.get_state("NIFTY").gann_up_run == 1
+    history.append(c_930)
+
+    # 09:35 bar closes at 25045 (> VAH 25020 -> up_run == 2, EXCEPT still < HTF red 25090) -> BLOCKED by ATM HTF View Protection!
+    c_935 = Candle(timestamp=_ist_dt(2026, 6, 16, 9, 35), open=25035.0, high=25050.0, low=25030.0, close=25045.0, volume=100000, is_closed=True)
+    sig_blocked = orch1.strategy.evaluate_candle_close("NIFTY", c_935, history, india_vix=15.0)
+    assert sig_blocked is None
+    history.append(c_935)
+
+    # Pull back inside box at 09:40, then break cleanly above BOTH VAH (25020) and HTF Red (25090) on 2 consecutive bars (09:45 & 09:50)
+    c_940 = Candle(timestamp=_ist_dt(2026, 6, 16, 9, 40), open=25020.0, high=25022.0, low=25005.0, close=25012.0, volume=100000, is_closed=True)
+    orch1.strategy.evaluate_candle_close("NIFTY", c_940, history, india_vix=15.0)
+    history.append(c_940)
+
+    c_945 = Candle(timestamp=_ist_dt(2026, 6, 16, 9, 45), open=25015.0, high=25105.0, low=25015.0, close=25100.0, volume=120000, is_closed=True)
+    assert orch1.strategy.evaluate_candle_close("NIFTY", c_945, history, india_vix=15.0) is None  # 1st close (confirmN=1 awaits 2nd)
+    history.append(c_945)
+
+    c_950 = Candle(timestamp=_ist_dt(2026, 6, 16, 9, 50), open=25100.0, high=25120.0, low=25095.0, close=25115.0, volume=130000, is_closed=True)
+    sig_ok = orch1.strategy.evaluate_candle_close("NIFTY", c_950, history, india_vix=15.0)
+    assert sig_ok is not None
+    assert sig_ok.strategy_mode == "GANN_BOX_5M"
+    assert sig_ok.signal_type == "CE"
+    assert sig_ok.spot_sl_price is not None and sig_ok.spot_sl_price <= 25000.0
+
+    # Verify ATM Protection Panel in snapshot
+    orch1.client.update_ltp("NSE|26000", 25115.0)
+    orch1.client.update_ltp("NSE|26009", 60120.0)
+    snap = _json.loads(handlers["api_status"]().body.decode("utf-8"))
+    assert snap["strategy_profile"] == "GANN_BOX_5M"
+    ap = snap["atm_protection_panel"]
+    assert ap["protection_enabled"] is True
+    assert ap["indices"]["NIFTY"]["atm_strike"] == 25100
+    assert ap["indices"]["NIFTY"]["htf_view"] == 1
+    assert "ATM 25100 CE" in ap["indices"]["NIFTY"]["recommended_label"]
+    assert ap["indices"]["BANKNIFTY"]["atm_strike"] == 60100
+
+    # Switch profile & persist across restart
+    set_res = handlers["api_set_strategy_config"](
+        StrategyConfigRequest(
+            strategy_profile="GANN_BOX_5M",
+            gann_box_mode="BOUNCE",
+            gann_confirm_candles=2,
+            gann_hold_candles=3,
+            gann_warmup_minutes=20,
+            gann_use_htf_view_protection=False,
+            gann_stop_atr_mult=0.75,
+        )
+    )
+    set_body = _json.loads(set_res.body.decode("utf-8"))
+    assert set_body["ok"] is True
+    assert set_body["strategy_config"]["gann_box_mode"] == "BOUNCE"
+    assert set_body["strategy_config"]["gann_use_htf_view_protection"] is False
+
+    orch2 = TradingSystemOrchestrator(settings=_make_settings(tmp_path))
+    restored = orch2.get_strategy_config()
+    assert restored["strategy_profile"] == "GANN_BOX_5M"
+    assert restored["gann_box_mode"] == "BOUNCE"
+    assert restored["gann_confirm_candles"] == 2
+    assert restored["gann_hold_candles"] == 3
+    assert restored["gann_warmup_minutes"] == 20
+    assert restored["gann_use_htf_view_protection"] is False
+    assert restored["gann_stop_atr_mult"] == 0.75
+
+
+def test_gann_box_5m_backtest_runner_and_pine_script(tmp_path: Path, monkeypatch: Any) -> None:
+    import json as _json
+    from engine.candle_builder import Candle
+    from scripts.update_backtest_data import run_nf_bnf_sequential_backtest
+    from ui.dashboard import BacktestRunRequest
+
+    nf_candles: list[Candle] = []
+    bnf_candles: list[Candle] = []
+    for day_idx, d in enumerate((date(2026, 6, 15), date(2026, 6, 16))):
+        t_cur = _ist_dt(d.year, d.month, d.day, 9, 15)
+        t_end = _ist_dt(d.year, d.month, d.day, 15, 25)
+        bar_n = 0
+        while t_cur <= t_end:
+            nf_px = 25000.0 + bar_n * (0.2 if day_idx == 0 else (3.0 if bar_n >= 3 else 0.2))
+            bnf_px = 60000.0 + bar_n * (0.5 if day_idx == 0 else (12.0 if bar_n >= 3 else 0.5))
+            nf_candles.append(Candle(timestamp=t_cur, open=nf_px - 3.0, high=nf_px + 12.0, low=nf_px - 12.0, close=nf_px + 4.0, volume=100000, is_closed=True))
+            bnf_candles.append(Candle(timestamp=t_cur, open=bnf_px - 6.0, high=bnf_px + 30.0, low=bnf_px - 30.0, close=bnf_px + 10.0, volume=100000, is_closed=True))
+            t_cur += timedelta(minutes=5)
+            bar_n += 1
+
+    trades = run_nf_bnf_sequential_backtest(
+        {"NIFTY": nf_candles, "BANKNIFTY": bnf_candles},
+        entry_start_time="09:30",
+        entry_cutoff_time="15:00",
+        strategy_profile="GANN_BOX_5M",
+        gann_box_mode="BREAKOUT",
+        gann_confirm_candles=1,
+        gann_warmup_minutes=15,
+        gann_use_htf_view_protection=True,
+        use_supertrend_filter=False,
+    )
+    assert isinstance(trades, list)
+    for t in trades:
+        assert "09:30" <= t["in_t"] <= "15:00"
+
+    orch = TradingSystemOrchestrator(settings=_make_settings(tmp_path))
+    app = create_app(orch)
+    import scripts.update_backtest_data as ubd
+    monkeypatch.setattr(ubd, "load_candles_from_cache", lambda idx: nf_candles if idx == "NIFTY" else bnf_candles)
+    monkeypatch.setattr(ubd, "load_vix_map", lambda: {})
+
+    resp = app.state.handlers["api_run_backtest"](
+        BacktestRunRequest(
+            strategy_profile="GANN_BOX_5M",
+            entry_start_time="09:30",
+            entry_cutoff_time="15:00",
+            orb_window_minutes=5,
+            use_live_gates=False,
+            save=False,
+        )
+    )
+    body = _json.loads(resp.body.decode("utf-8"))
+    assert body["ok"] is True
+    assert body["meta"]["strategy_profile"] == "GANN_BOX_5M"
+
+    root = Path(__file__).resolve().parent.parent
+    pine_src = (root / "scripts" / "nifty_banknifty_gann_box_v6.pine").read_text(encoding="utf-8")
+    assert "//@version=6" in pine_src
+    assert "NSE:NIFTY" in pine_src and "NSE:BANKNIFTY" in pine_src
+    assert "idxAgree" in pine_src and "useViewProtect" in pine_src and "ATM PROTECTION" in pine_src
+
+    mob_html = (root / "mobile" / "www" / "index.html").read_text(encoding="utf-8")
+    assert "m-atm-panel" in mob_html
+    assert "ms-strat-profile" in mob_html
+    assert "m-bt-strategy" in mob_html

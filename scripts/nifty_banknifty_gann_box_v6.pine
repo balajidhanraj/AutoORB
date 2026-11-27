@@ -1,0 +1,716 @@
+//@version=6
+indicator("NIFTY & BANKNIFTY: 1st 5m Gann Box + ATM Option Protection v6", shorttitle = "NF/BNF Gann+ATM", overlay = true,
+     max_labels_count = 500, max_lines_count = 200, max_boxes_count = 100)
+
+// ══════════════════════════════════════════════════════════════════════════════════════
+// NIFTY & BANKNIFTY: 1st 5-Minute Gann Box + ATM Option Protection + On-Chart Panel (v6)
+//
+// Put on NSE:NIFTY (5m), NSE:BANKNIFTY (5m), or any NIFTY/BANKNIFTY CE/PE Option Chart.
+//
+// 1ST 5-MIN GANN BOX:
+//   * VAH = High, VAL = Low of the first 5-minute candle of the NSE session (09:15-09:20 IST).
+//   * Gann levels (1/8, 1/4, 1/3, 1/2, 2/3, 3/4, 7/8) divide the box cleanly.
+//   * BREAKOUT (default):
+//       BUY (ATM CE) : Candle CLOSES above 1st 5m VAH and next `confirmN` candle(s) also close above.
+//       SELL (ATM PE): Candle CLOSES below 1st 5m VAL and next `confirmN` candle(s) also close below.
+//       Stop = 1/2 box midpoint minus/plus `stopAtr * 15m ATR`. Targets = every half box beyond line.
+//   * BOUNCE:
+//       BUY at VAL / SELL at VAH when touched and held away for `holdN` candles before mid-box.
+//
+// ATM OPTION CHART PROTECTION & ON-CHART PANEL:
+//   * Computes live 15m HTF Swing High (Red) & Low (Green) views for BOTH NIFTY & BANKNIFTY.
+//   * Computes live ATM Strike for NIFTY (50-pt step) and BANKNIFTY (100-pt step).
+//   * OPTION CHART PROTECTION:
+//       - On a CALL (CE) chart: ONLY `BUY CE` signals fire, ONLY while index HTF View = BULLISH.
+//       - On a PUT  (PE) chart: ONLY `BUY PE` signals fire, ONLY while index HTF View = BEARISH.
+//       - On Index charts (with Protection ON): 1st 5m Box BUY ATM CE requires BULLISH HTF View,
+//         and 1st 5m Box BUY ATM PE requires BEARISH HTF View. Neutral/Opposite view = WAIT.
+//
+// ONE SIGNAL AT A TIME UNTIL STOP IS HIT OR DAY ENDS (non-repainting, confirmed bar close only).
+// ══════════════════════════════════════════════════════════════════════════════════════
+
+const string gLvl = "Levels (HTF Break & View)"
+const string gGn  = "Gann Box (1st 5m Opening Range)"
+const string gSig = "Signals & ATM Protection"
+const string gMk  = "NIFTY & BANKNIFTY (ATM Panel)"
+const string gDis = "Display"
+const string gWh  = "Webhook (AutoORB / Broker Bridge)"
+
+// ── Inputs ───────────────────────────────────────────────────────────────────────────
+string htfMode   = input.string("Auto", "Higher Timeframe Mode", options = ["Auto", "Manual"], group = gLvl,
+     tooltip = "Auto: 1m->5m, 2m/3m/5m->15m, 10m/15m->60m. Manual: uses timeframe below.")
+string tfManual  = input.timeframe("15", "Manual Higher Timeframe", group = gLvl)
+int    swingLen  = input.int(2, "Swing Lookback (HTF bars)", minval = 1, maxval = 10, group = gLvl)
+
+string levelMode = input.string("Opening range (1st 5-min candle)", "VAH / VAL Source",
+     options = ["Opening range (1st 5-min candle)", "Volume profile"], group = gGn)
+string anchorMode = input.string("Auto: session open", "Gann Box Starts At",
+     options = ["Auto: session open", "Custom time"], group = gGn)
+string anchorSess = input.session("0915-1530", "Custom Start Window (IST)", group = gGn)
+bool   extendOnBreak = input.bool(false, "Opening Range: Move Levels On Breakout", group = gGn)
+float  vaPct     = input.float(70.0, "Value Area % (volume profile only)", minval = 1.0, maxval = 100.0, step = 1.0, group = gGn)
+float  binAtrMult = input.float(0.15, "Profile Bin Size (x ATR)", minval = 0.02, maxval = 1.0, step = 0.01, group = gGn)
+int    minBars   = input.int(12, "Min Bars Before Signals (volume profile only)", minval = 3, maxval = 100, group = gGn)
+bool   showGann  = input.bool(true, "Show Gann Box", group = gGn)
+bool   gannThirds = input.bool(true, "Include 1/3 and 2/3 Levels", group = gGn)
+int    extendBars = input.int(20, "Projection (bars)", minval = 5, maxval = 100, group = gGn)
+color  gannColor = input.color(#00BCD4, "Gann Color", group = gGn)
+
+string chartType = input.string("Auto", "Chart Type",
+     options = ["Auto", "Index / futures", "Call option (CE)", "Put option (PE)"], group = gSig)
+bool   idxAgree  = input.bool(true, "Option Chart: Only Trade When Index View Agrees (Protection)", group = gSig,
+     tooltip = "CE option chart triggers BUY CE only when Index HTF View is BULLISH; PE option chart triggers BUY PE only when BEARISH.")
+bool   useViewProtect = input.bool(true, "Index Chart: Require Matching HTF View For ATM Signals", group = gSig,
+     tooltip = "ON: 1st 5m box BUY ATM CE requires HTF View = BULLISH, BUY ATM PE requires HTF View = BEARISH.")
+string sigSource = input.string("1st 5m box only", "Signal Source",
+     options = ["1st 5m box only", "Both", "HTF break only"], group = gSig)
+string boxMode   = input.string("Breakout: close beyond high / low", "1st 5m Box Signal Type",
+     options = ["Breakout: close beyond high / low", "Bounce: touch and hold"], group = gSig)
+int    confirmN  = input.int(1, "Breakout: Extra Candles Closing Beyond Box", minval = 0, maxval = 5, group = gSig)
+int    warmMin   = input.int(15, "Warm-up Minutes From 09:15 IST", minval = 0, maxval = 240, group = gSig,
+     tooltip = "15 = signals start from 09:30 IST after the 1st 5-min box settles.")
+float  tol       = input.float(0.0, "Gann Touch Tolerance (points)", minval = 0.0, step = 0.5, group = gSig)
+int    holdN     = input.int(2, "Bounce: Candles Price Must Stay Away", minval = 1, maxval = 10, group = gSig)
+bool   trendFilter = input.bool(false, "Gann Touch: Do Not Fight Immediate HTF Line", group = gSig)
+float  bufMult   = input.float(0.1, "HTF Break Buffer (x HTF ATR)", minval = 0.0, step = 0.05, group = gSig)
+float  stopAtr   = input.float(0.5, "Stop Distance (x HTF ATR)", minval = 0.05, step = 0.05, group = gSig)
+float  r1        = input.float(1.0, "HTF Break: Target 1 (R)", minval = 0.5, step = 0.5, group = gSig)
+float  r2        = input.float(2.0, "HTF Break: Target 2 (R)", minval = 1.0, step = 0.5, group = gSig)
+int    cooldown  = input.int(5, "Cooldown (bars)", minval = 1, maxval = 100, group = gSig)
+string limitMode = input.string("Trades that hit T1", "Daily Limit Counts", options = ["Trades that hit T1", "All signals"], group = gSig)
+int    dailyLimit = input.int(2, "Daily Limit", minval = 1, maxval = 20, group = gSig)
+int    hardCap   = input.int(6, "Hard Cap: Max Signals Per Day", minval = 1, maxval = 50, group = gSig)
+string winSel    = input.string("Custom", "Trading Window", options = ["Auto (symbol's own session)", "Custom", "All day"], group = gSig)
+string sessIn    = input.session("0930-1500", "Custom Window (IST)", group = gSig)
+
+bool   showMkts  = input.bool(true, "Show NIFTY & BANKNIFTY ATM Panel Rows", group = gMk)
+string symNifty  = input.symbol("NSE:NIFTY", "NIFTY Spot Symbol", group = gMk)
+string symBnf    = input.symbol("NSE:BANKNIFTY", "BANKNIFTY Spot Symbol", group = gMk)
+int    nfStep    = input.int(50, "NIFTY Strike Step", minval = 25, step = 25, group = gMk)
+int    bnfStep   = input.int(100, "BANKNIFTY Strike Step", minval = 50, step = 50, group = gMk)
+
+bool   whOn      = input.bool(false, "Send Webhook Alerts", group = gWh)
+string whSecret  = input.string("CHANGE_ME", "Webhook Secret", group = gWh)
+
+string winMode   = input.string("Reached T1", "Win Means (stats)", options = ["Reached T1", "Reached T2"], group = gDis)
+bool   statsToday = input.bool(false, "Win / Loss Stats: Today Only", group = gDis)
+bool   todayOnly = input.bool(true, "Show Only Latest Trading Day", group = gDis)
+bool   showTrade = input.bool(true, "Show Trade Box + Target Ladder", group = gDis)
+bool   showLv    = input.bool(true, "Show HTF Red / Green Lines", group = gDis)
+bool   showVA    = input.bool(true, "Show 1st 5m VAH / VAL Lines", group = gDis)
+bool   showOut   = input.bool(true, "Show Target / Stop Markers", group = gDis)
+bool   showPanel = input.bool(true, "Show On-Chart Panel", group = gDis)
+string panelPos  = input.string("Top Right", "Panel Position", options = ["Top Right", "Middle Right", "Bottom Right", "Top Left", "Bottom Left"], group = gDis)
+string lblSizeIn = input.string("Small", "Label Size", options = ["Tiny", "Small", "Normal", "Large"], group = gDis)
+color  buyCol    = input.color(#009688, "BUY / Green", inline = "c", group = gDis)
+color  sellCol   = input.color(#E53935, "SELL / Red", inline = "c", group = gDis)
+color  vahCol    = input.color(#2979FF, "VAH", inline = "c2", group = gDis)
+color  valCol    = input.color(#FF9100, "VAL", inline = "c2", group = gDis)
+color  pocCol    = input.color(#FF1744, "POC", inline = "c2", group = gDis)
+
+// ── Helpers ──────────────────────────────────────────────────────────────────────────
+f_px(float v) =>
+    na(v) ? "—" : str.tostring(v, format.mintick)
+
+f_size(string v) =>
+    v == "Tiny" ? size.tiny : v == "Normal" ? size.normal : v == "Large" ? size.large : size.small
+
+f_pos(string v) =>
+    v == "Middle Right" ? position.middle_right :
+         v == "Bottom Right" ? position.bottom_right :
+         v == "Top Left" ? position.top_left :
+         v == "Bottom Left" ? position.bottom_left : position.top_right
+
+f_autoTf() =>
+    int s = timeframe.in_seconds()
+    s <= 60 ? "5" : s <= 300 ? "15" : s <= 900 ? "60" : s <= 1800 ? "120" : s <= 3600 ? "240" : "D"
+
+f_lv(float lv, float ent, float rk) =>
+    na(lv) ? "—" : f_px(lv) + " (" + str.tostring(math.abs(lv - ent) / rk, "0.0") + "R)"
+
+f_gname(float lv) =>
+    int k = int(math.round(lv * 1000))
+    k == 0 ? "0 VAL" : k == 125 ? "1/8" : k == 250 ? "1/4" : k == 333 ? "1/3" : k == 375 ? "3/8" : k == 500 ? "1/2" : k == 625 ? "5/8" : k == 667 ? "2/3" : k == 750 ? "3/4" : k == 875 ? "7/8" : "1 VAH"
+
+f_nextTgt(int kind, bool isB, float ent, float rk, float stepR, float gBase, float bh, int n, float prev) =>
+    float raw = kind == 0 ? (isB ? ent + (r1 + (n - 1) * stepR) * rk : ent - (r1 + (n - 1) * stepR) * rk) :
+         (isB ? gBase + bh * 0.5 * n : gBase - bh * 0.5 * n)
+    isB ? math.max(raw, prev + syminfo.mintick) : math.min(raw, prev - syminfo.mintick)
+
+f_num(float v) =>
+    na(v) ? "null" : str.tostring(v, "#.##")
+
+f_json(string ev, string idxNm, string side, string optTyp, int atmStk, string why, int tid, float px, float sl, float t1, float t2, int tg) =>
+    '{"secret":"' + whSecret + '","event":"' + ev + '","index":"' + idxNm + '","side":"' + side + '","option_type":"' + optTyp + '","atm_strike":' + (na(atmStk) ? "null" : str.tostring(atmStk)) + ',"reason":"' + why + '","id":' + str.tostring(tid) + ',"symbol":"' + syminfo.ticker + '","price":' + f_num(px) + ',"sl":' + f_num(sl) + ',"t1":' + f_num(t1) + ',"t2":' + f_num(t2) + ',"target":' + str.tostring(tg) + '}'
+
+string lblSize = f_size(lblSizeIn)
+string tfUse   = htfMode == "Auto" ? f_autoTf() : tfManual
+bool   rangeMode = str.startswith(levelMode, "Opening")
+bool   useHtf  = sigSource != "1st 5m box only"
+bool   useGann = sigSource != "HTF break only"
+
+string tkUp     = str.upper(syminfo.ticker)
+string tkAll    = str.upper(syminfo.ticker + " " + syminfo.description)
+bool   isBnfChart   = str.contains(tkUp, "BANKNIFTY") or str.contains(tkAll, "BANKNIFTY") or str.contains(tkAll, "NIFTY BANK")
+string chartIdxName = isBnfChart ? "BANKNIFTY" : "NIFTY"
+bool   autoCall = str.contains(tkAll, "CALL") or str.endswith(tkUp, "CE")
+bool   autoPut  = str.contains(tkAll, "PUT") or str.endswith(tkUp, "PE")
+bool   isCallChart = chartType == "Call option (CE)" or (chartType == "Auto" and autoCall)
+bool   isPutChart  = chartType == "Put option (PE)" or (chartType == "Auto" and autoPut and not autoCall)
+bool   isOptChart  = isCallChart or isPutChart
+bool   whActive    = whOn and not isOptChart
+
+// ── Higher-timeframe levels (non-repainting) ─────────────────────────────────────────
+f_htf() =>
+    float ph = ta.pivothigh(high, swingLen, swingLen)
+    float pl = ta.pivotlow(low, swingLen, swingLen)
+    float a  = ta.atr(14)
+    var float ceil  = na
+    var float floor = na
+    if not na(ph)
+        ceil := ph
+    if not na(pl)
+        floor := pl
+    var int b = 0
+    if not na(ceil[1]) and close > ceil[1]
+        b := 1
+    else if not na(floor[1]) and close < floor[1]
+        b := -1
+    [ceil[1], floor[1], a[1], nz(b[1], 0)]
+
+[htfC, htfF, htfA, htfB] = request.security(syminfo.tickerid, tfUse, f_htf(), lookahead = barmerge.lookahead_on)
+[nfC, nfF, nfA, nfB]     = request.security(symNifty, tfUse, f_htf(), lookahead = barmerge.lookahead_on)
+[bnfC, bnfF, bnfA, bnfB] = request.security(symBnf,   tfUse, f_htf(), lookahead = barmerge.lookahead_on)
+float nfPx  = request.security(symNifty, timeframe.period, close)
+float bnfPx = request.security(symBnf,   timeframe.period, close)
+
+f_zone(float px, float c, float f) =>
+    na(px) or na(c) or na(f) ? 0 : px > c ? 1 : px < f ? -1 : 0
+
+int zNf  = f_zone(nfPx, nfC, nfF)
+int zBnf = f_zone(bnfPx, bnfC, bnfF)
+int eNf  = zNf != 0 ? zNf : nz(nfB, 0)
+int eBnf = zBnf != 0 ? zBnf : nz(bnfB, 0)
+int chartView = isBnfChart ? eBnf : eNf
+
+int nfAtm    = na(nfPx) ? int(na) : int(math.round(nfPx / nfStep) * nfStep)
+int bnfAtm   = na(bnfPx) ? int(na) : int(math.round(bnfPx / bnfStep) * bnfStep)
+float spotUse = isOptChart ? (isBnfChart ? bnfPx : nfPx) : close
+int stepUse   = isBnfChart ? bnfStep : nfStep
+int chartAtm  = na(spotUse) ? int(na) : int(math.round(spotUse / stepUse) * stepUse)
+string atmTxt = na(chartAtm) ? "—" : str.tostring(chartAtm)
+
+string sideBuy  = isCallChart ? "BUY CE" : isPutChart ? "BUY PE" : ("BUY " + chartIdxName + " " + atmTxt + " CE")
+string sideSell = isOptChart ? "SELL" : ("BUY " + chartIdxName + " " + atmTxt + " PE")
+
+float bufPts = nz(bufMult * htfA, 0.0)
+bool  tfOk   = timeframe.isintraday and timeframe.in_seconds(tfUse) >= timeframe.in_seconds()
+float atr    = ta.atr(14)
+
+// ── Day, session and window ──────────────────────────────────────────────────────────
+bool newDay   = timeframe.change("D")
+bool inAnch   = not na(time(timeframe.period, anchorSess, "Asia/Kolkata"))
+bool newSess  = anchorMode == "Auto: session open" ? session.isfirstbar : (inAnch and not inAnch[1])
+int  lastDayStart = timestamp("Asia/Kolkata", year(last_bar_time, "Asia/Kolkata"), month(last_bar_time, "Asia/Kolkata"), dayofmonth(last_bar_time, "Asia/Kolkata"), 0, 0, 0)
+bool isToday  = not todayOnly or time >= lastDayStart
+bool inWin    = winSel == "All day" ? true : winSel == "Custom" ? not na(time(timeframe.period, sessIn, "Asia/Kolkata")) : session.ismarket
+
+// ── 1st 5-Minute Gann Box state (restarts at session open) ───────────────────────────
+var int    boxStartBar  = 0
+var int    boxStartTime = 0
+var float  binSz        = na
+var int    pocKey       = na
+var float  pocKeyVol    = 0.0
+var int    minKey       = na
+var int    maxKey       = na
+var float  totalVol     = 0.0
+var int    sessBars     = 0
+var int    openEndBar   = na
+var float  openHi       = na
+var float  openLo       = na
+var float  runHi        = na
+var float  runLo        = na
+var float  vaH          = na
+var float  vaL          = na
+var float  pocPx        = na
+var map<int, float> volMap = map.new<int, float>()
+var int    sinceL    = na
+var int    sinceH    = na
+var float  lowAtL    = na
+var float  highAtH   = na
+var int    upRun     = 0
+var int    dnRun     = 0
+
+if newSess or na(binSz)
+    boxStartBar := bar_index
+    boxStartTime := time
+    binSz := math.max(syminfo.mintick, nz(atr[1], nz(atr, syminfo.mintick)) * binAtrMult)
+    pocKey := na
+    pocKeyVol := 0.0
+    minKey := na
+    maxKey := na
+    totalVol := 0.0
+    sessBars := 0
+    openEndBar := na
+    openHi := na
+    openLo := na
+    runHi := na
+    runLo := na
+    vaH := na
+    vaL := na
+    pocPx := na
+    sinceL := na
+    sinceH := na
+    lowAtL := na
+    highAtH := na
+    upRun := 0
+    dnRun := 0
+    volMap.clear()
+sessBars := sessBars + 1
+
+// ── Trade state ──────────────────────────────────────────────────────────────────────
+var int    dir       = 0
+var float  entry     = na
+var float  stopLv    = na
+var float  t1Lv      = na
+var float  t2Lv      = na
+var float  t1R       = na
+var float  t2R       = na
+var float  riskPts   = na
+var int    entryBar  = na
+var int    exitBar   = na
+var int    tradeId   = na
+var int    tradeAtm  = na
+var int    hits      = 0
+var bool   live      = false
+var int    lastSig   = na
+var int    bias      = 0
+var string state     = "NO SIGNAL YET"
+var string src       = "—"
+var int    nClosed   = 0
+var int    nWins     = 0
+var int    nLoss     = 0
+var int    nT1       = 0
+var float  netR      = 0.0
+var int    sigsToday = 0
+var int    t1Today   = 0
+var array<float> tgts = array.new_float(0)
+var int    tKind     = 0
+var float  tStepR    = na
+var float  tBase     = na
+var float  tBoxH     = na
+
+f_res(int kind, int h, float exitR, float a1, float a2) =>
+    bool t1m = winMode == "Reached T1"
+    bool w = false
+    float rr = 0.0
+    if kind == 0
+        w := t1m ? h >= 1 : h >= 2
+        rr := w ? (t1m ? a1 : a2) : -1.0
+    else if kind == 1
+        w := true
+        rr := t1m ? a1 : a2
+    else
+        if t1m and h >= 1
+            w := true
+            rr := a1
+        else if not t1m and h >= 2
+            w := true
+            rr := a2
+        else
+            w := exitR > 0
+            rr := exitR
+    [w, rr]
+
+if newDay
+    sigsToday := 0
+    t1Today := 0
+
+float eodPts = na
+float eodR   = na
+int   eodDir = 0
+if newDay and live and barstate.isconfirmed
+    eodDir := dir
+    eodPts := dir * (close[1] - entry)
+    eodR := eodPts / riskPts
+    [wE, rE] = f_res(2, hits, eodR, t1R, t2R)
+    nClosed += 1
+    netR += rE
+    if wE
+        nWins += 1
+    else
+        nLoss += 1
+    if hits > 0
+        nT1 += 1
+    if whActive
+        string eodOpt = dir == 1 ? "CE" : "PE"
+        alert(f_json("EXIT", chartIdxName, dir == 1 ? "BUY" : "SELL", eodOpt, nz(tradeAtm, chartAtm), "DAY END", tradeId, close[1], stopLv, t1Lv, t2Lv, hits), alert.freq_all)
+    live := false
+    exitBar := bar_index - 1
+    state := "DAY END"
+
+if statsToday and newDay
+    nClosed := 0
+    nWins := 0
+    nLoss := 0
+    nT1 := 0
+    netR := 0.0
+
+// 1) Track open trade
+bool stopEvt = false
+int  tgtEvt  = 0
+if barstate.isconfirmed and live and bar_index > entryBar
+    bool sHit = dir == 1 ? low <= stopLv : high >= stopLv
+    if sHit
+        state := hits > 0 ? "STOPPED AFTER T" + str.tostring(hits) : "STOPPED"
+        stopEvt := true
+        live := false
+        exitBar := bar_index
+        [wS, rS] = f_res(0, hits, 0.0, t1R, t2R)
+        nClosed += 1
+        netR += rS
+        if wS
+            nWins += 1
+        else
+            nLoss += 1
+        if hits > 0
+            nT1 += 1
+        if whActive
+            string slOpt = dir == 1 ? "CE" : "PE"
+            alert(f_json("EXIT", chartIdxName, dir == 1 ? "BUY" : "SELL", slOpt, nz(tradeAtm, chartAtm), hits > 0 ? "STOP after T" + str.tostring(hits) : "STOP", tradeId, close, stopLv, t1Lv, t2Lv, hits), alert.freq_all)
+    else
+        int reached = hits
+        bool go = true
+        while go and reached < 200
+            while tgts.size() < reached + 1
+                float prevT = tgts.size() == 0 ? entry : tgts.get(tgts.size() - 1)
+                tgts.push(f_nextTgt(tKind, dir == 1, entry, riskPts, tStepR, tBase, tBoxH, tgts.size() + 1, prevT))
+            float nxt = tgts.get(reached)
+            bool hitN = dir == 1 ? high >= nxt : low <= nxt
+            if hitN
+                reached += 1
+            else
+                go := false
+        if reached > hits
+            if hits == 0
+                t1Today += 1
+            hits := reached
+            tgtEvt := reached
+            state := "T" + str.tostring(hits) + " HIT"
+            if whActive
+                string tgOpt = dir == 1 ? "CE" : "PE"
+                alert(f_json("EXIT", chartIdxName, dir == 1 ? "BUY" : "SELL", tgOpt, nz(tradeAtm, chartAtm), "TARGET", tradeId, close, stopLv, t1Lv, t2Lv, hits), alert.freq_all)
+        while tgts.size() < math.max(4, hits + 1)
+            float prevT2 = tgts.size() == 0 ? entry : tgts.get(tgts.size() - 1)
+            tgts.push(f_nextTgt(tKind, dir == 1, entry, riskPts, tStepR, tBase, tBoxH, tgts.size() + 1, prevT2))
+
+// 2) Signals & Option Chart / Index ATM Protection Gate
+bool limitHit = sigsToday >= hardCap or (limitMode == "All signals" ? sigsToday >= dailyLimit : t1Today >= dailyLimit)
+bool warmOk   = warmMin == 0 or time >= boxStartTime + warmMin * 60000
+bool ok       = tfOk and barstate.isconfirmed and inWin and warmOk and not na(htfA) and not limitHit
+
+bool brkUp = useHtf and ok and not na(htfC) and close > htfC + bufPts and close[1] <= nz(htfC[1], htfC) + nz(bufPts[1], bufPts)
+bool brkDn = useHtf and ok and not na(htfF) and close < htfF - bufPts and close[1] >= nz(htfF[1], htfF) - nz(bufPts[1], bufPts)
+
+bool vaReady  = tfOk and not na(vaH) and not na(vaL) and vaH > vaL and (rangeMode ? time >= boxStartTime + 300000 : sessBars > minBars)
+int  zoneNow  = na(htfC) or na(htfF) ? 0 : close > htfC + bufPts ? 1 : close < htfF - bufPts ? -1 : 0
+bool gOk      = useGann and ok and vaReady
+bool tchL     = tfOk and vaReady and low <= vaL + tol
+bool tchH     = tfOk and vaReady and high >= vaH - tol
+int  nxtL     = tchL ? 0 : (na(sinceL) ? int(na) : sinceL + 1)
+int  nxtH     = tchH ? 0 : (na(sinceH) ? int(na) : sinceH + 1)
+float halfBox = vaReady ? (vaH - vaL) * 0.5 : na
+bool brkMode  = str.startswith(boxMode, "Breakout")
+int  nxtUp    = vaReady and close > vaH ? upRun + 1 : 0
+int  nxtDn    = vaReady and close < vaL ? dnRun + 1 : 0
+bool gBrkUp   = gOk and brkMode and nxtUp == confirmN + 1 and (not trendFilter or zoneNow != -1)
+bool gBrkDn   = gOk and brkMode and nxtDn == confirmN + 1 and (not trendFilter or zoneNow != 1)
+bool gBncUp   = gOk and not brkMode and not na(nxtL) and nxtL == holdN and close < vaL + halfBox and (not trendFilter or zoneNow != -1)
+bool gBncDn   = gOk and not brkMode and not na(nxtH) and nxtH == holdN and close > vaH - halfBox and (not trendFilter or zoneNow != 1)
+bool gUp      = gBrkUp or gBncUp
+bool gDn      = gBrkDn or gBncDn
+
+if barstate.isconfirmed
+    upRun := nxtUp
+    dnRun := nxtDn
+    if tchL
+        lowAtL := sinceL == 0 ? math.min(nz(lowAtL, low), low) : low
+    if tchH
+        highAtH := sinceH == 0 ? math.max(nz(highAtH, high), high) : high
+    sinceL := nxtL
+    sinceH := nxtH
+
+bool cdOk       = na(lastSig) or bar_index - lastSig >= cooldown
+bool idxOptOk   = not idxAgree or (isCallChart ? chartView == 1 : chartView == -1)
+bool buyProtOk  = isOptChart ? idxOptOk : (not useViewProtect or chartView == 1)
+bool sellProtOk = not isOptChart and (not useViewProtect or chartView == -1)
+
+bool wantB   = (brkUp or gUp) and buyProtOk
+bool wantS   = (brkDn or gDn) and sellProtOk
+bool buyNow  = wantB and (not wantS or close > open) and not live and not stopEvt and (cdOk or dir == -1)
+bool sellNow = wantS and (not wantB or close < open) and not live and not stopEvt and (cdOk or dir == 1)
+
+if tfOk and barstate.isconfirmed and not na(htfC) and not na(htfF)
+    if close > htfC + bufPts
+        bias := 1
+    else if close < htfF - bufPts
+        bias := -1
+
+if buyNow or sellNow
+    bool isB = buyNow
+    bool isHtf = isB ? brkUp : brkDn
+    dir := isB ? 1 : -1
+    entry := close
+    entryBar := bar_index
+    exitBar := na
+    tradeId := time
+    tradeAtm := chartAtm
+    hits := 0
+    live := true
+    state := "OPEN"
+    lastSig := bar_index
+    sigsToday += 1
+    if isHtf
+        float keyLv = isB ? htfC : htfF
+        stopLv := isB ? math.min(low, keyLv) - stopAtr * htfA : math.max(high, keyLv) + stopAtr * htfA
+        riskPts := math.max(math.abs(entry - stopLv), syminfo.mintick)
+        tKind := 0
+        tStepR := r2 > r1 ? r2 - r1 : r1
+        tBase := na
+        tBoxH := na
+        src := "HTF break"
+    else
+        float boxH = vaH - vaL
+        bool isBrkTrade = isB ? gBrkUp : gBrkDn
+        if isBrkTrade
+            float midL = (vaH + vaL) / 2.0
+            stopLv := isB ? math.max(midL - stopAtr * htfA, 0.0) : midL + stopAtr * htfA
+            tBase := isB ? vaH : vaL
+            src := "1st 5m Break"
+        else
+            stopLv := isB ? math.max(math.min(nz(lowAtL, low), vaL) - stopAtr * htfA, 0.0) : math.max(nz(highAtH, high), vaH) + stopAtr * htfA
+            tBase := isB ? vaL : vaH
+            src := "5m Box Bounce"
+        riskPts := math.max(math.abs(entry - stopLv), syminfo.mintick)
+        tKind := 1
+        tStepR := na
+        tBoxH := boxH
+    tgts.clear()
+    for n = 1 to 4
+        float prevN = tgts.size() == 0 ? entry : tgts.get(tgts.size() - 1)
+        tgts.push(f_nextTgt(tKind, isB, entry, riskPts, tStepR, tBase, tBoxH, n, prevN))
+    t1Lv := tgts.get(0)
+    t2Lv := tgts.get(1)
+    t1R := math.abs(t1Lv - entry) / riskPts
+    t2R := math.abs(t2Lv - entry) / riskPts
+    if whActive
+        string optTyp = isB ? "CE" : "PE"
+        alert(f_json("ENTRY", chartIdxName, isB ? "BUY" : "SELL", optTyp, chartAtm, src, tradeId, entry, stopLv, t1Lv, t2Lv, 0), alert.freq_all)
+
+// 3) Update 1st 5-min Opening Range / Volume Profile Box after signals
+if barstate.isconfirmed
+    float v = nz(volume, 0.0) > 0 ? volume : 1.0
+    int loK = int(math.floor(low / binSz))
+    int hiK = int(math.floor(high / binSz))
+    int nK  = hiK - loK + 1
+    if nK >= 1 and nK <= 400
+        float share = v / nK
+        for k = loK to hiK
+            float nv = nz(volMap.get(k), 0.0) + share
+            volMap.put(k, nv)
+            if nv > pocKeyVol
+                pocKeyVol := nv
+                pocKey := k
+        minKey := na(minKey) ? loK : math.min(minKey, loK)
+        maxKey := na(maxKey) ? hiK : math.max(maxKey, hiK)
+        totalVol += v
+    if not na(pocKey)
+        float target = totalVol * vaPct / 100.0
+        float acc    = nz(volMap.get(pocKey), 0.0)
+        int   upK    = pocKey
+        int   dnK    = pocKey
+        int   guard  = 0
+        while acc < target and (upK < maxKey or dnK > minKey) and guard < 800
+            guard += 1
+            float upV = upK < maxKey ? nz(volMap.get(upK + 1), 0.0) : -1.0
+            float dnV = dnK > minKey ? nz(volMap.get(dnK - 1), 0.0) : -1.0
+            if upV >= dnV
+                upK += 1
+                acc += upV
+            else
+                dnK -= 1
+                acc += dnV
+        vaH := (upK + 1) * binSz
+        vaL := dnK * binSz
+        pocPx := (pocKey + 0.5) * binSz
+    runHi := na(runHi) ? high : math.max(runHi, high)
+    runLo := na(runLo) ? low : math.min(runLo, low)
+    if time < boxStartTime + 300000
+        openHi := runHi
+        openLo := runLo
+        openEndBar := bar_index
+    if rangeMode
+        vaH := extendOnBreak ? runHi : openHi
+        vaL := extendOnBreak ? runLo : openLo
+
+// ── Plots ────────────────────────────────────────────────────────────────────────────
+plot(showLv and isToday and tfOk and useHtf ? htfC : na, "HTF Resistance (Red)", color = color.new(sellCol, 20), linewidth = 2, style = plot.style_linebr)
+plot(showLv and isToday and tfOk and useHtf ? htfF : na, "HTF Support (Green)", color = color.new(buyCol, 20), linewidth = 2, style = plot.style_linebr)
+bool drawVA = showVA and tfOk and isToday and useGann and not na(vaH) and (rangeMode ? time >= boxStartTime + 300000 : sessBars > minBars)
+plot(drawVA ? vaH   : na, "1st 5m VAH", color = color.new(vahCol, 10), linewidth = 2, style = plot.style_linebr)
+plot(drawVA ? vaL   : na, "1st 5m VAL", color = color.new(valCol, 10), linewidth = 2, style = plot.style_linebr)
+plot(drawVA and not rangeMode ? pocPx : na, "POC", color = color.new(pocCol, 10), linewidth = 1, style = plot.style_linebr)
+
+// ── Labels ───────────────────────────────────────────────────────────────────────────
+if (buyNow or sellNow) and isToday
+    bool isB = buyNow
+    string tag = (isB ? sideBuy : sideSell) + " · " + src + " @ " + f_px(entry)
+    label.new(bar_index, isB ? low : high, tag, style = isB ? label.style_label_up : label.style_label_down,
+         color = isB ? buyCol : sellCol, textcolor = color.white, size = lblSize)
+
+if showOut and eodDir != 0 and isToday[1]
+    string et = "DAY END  " + (eodPts >= 0 ? "+" : "") + str.tostring(eodPts, "0.0") + " pts (" + (eodR >= 0 ? "+" : "") + str.tostring(eodR, "0.0") + "R)"
+    label.new(bar_index - 1, eodDir == 1 ? high[1] : low[1], et, style = eodDir == 1 ? label.style_label_down : label.style_label_up,
+         color = color.new(color.rgb(90, 90, 90), 10), textcolor = color.white, size = size.small)
+
+if showOut and stopEvt and isToday
+    label.new(bar_index, dir == 1 ? low : high, "STOP ✗", style = dir == 1 ? label.style_label_up : label.style_label_down,
+         color = color.new(color.rgb(180, 35, 77), 10), textcolor = color.white, size = size.small)
+
+if showOut and tgtEvt > 0 and isToday
+    label.new(bar_index, dir == 1 ? high : low, "T" + str.tostring(tgtEvt) + " ✓", style = dir == 1 ? label.style_label_down : label.style_label_up,
+         color = color.new(color.rgb(23, 107, 58), 10), textcolor = color.white, size = size.small)
+
+// ── Drawings ─────────────────────────────────────────────────────────────────────────
+var array<box>   dBox  = array.new<box>()
+var array<line>  dLine = array.new<line>()
+var array<label> dLbl  = array.new<label>()
+
+f_tag(int x, float y, string t, color c) =>
+    label.new(x, y, t, xloc = xloc.bar_index, style = label.style_label_left, color = c, textcolor = color.white, size = size.tiny)
+
+f_ln(int x1, int x2, float y, color c, int w, string st) =>
+    line.new(x1, y, x2, y, xloc = xloc.bar_index, color = c, width = w, style = st)
+
+if barstate.islast
+    while dBox.size() > 0
+        box.delete(dBox.pop())
+    while dLine.size() > 0
+        line.delete(dLine.pop())
+    while dLbl.size() > 0
+        label.delete(dLbl.pop())
+
+    if showGann and useGann and tfOk and not na(vaH) and not na(vaL) and vaH > vaL
+        float gH     = vaH - vaL
+        int   gLeft  = boxStartBar
+        int   gRight = bar_index + extendBars
+        dBox.push(box.new(gLeft, vaH, gRight, vaL, xloc = xloc.bar_index, bgcolor = color.new(gannColor, 95), border_color = color.new(gannColor, 55), border_width = 1))
+        array<float> gLv = array.from(0.0, 0.125, 0.25, 0.375, 0.5, 0.625, 0.75, 0.875, 1.0)
+        if gannThirds
+            gLv.push(1.0 / 3.0)
+            gLv.push(2.0 / 3.0)
+        for i = 0 to gLv.size() - 1
+            float lv = gLv.get(i)
+            float px = vaL + gH * lv
+            bool edgeLine = lv == 0.0 or lv == 1.0
+            color lc = lv == 0.0 ? valCol : lv == 1.0 ? vahCol : gannColor
+            dLine.push(line.new(gLeft, px, gRight, px, xloc = xloc.bar_index, color = color.new(lc, edgeLine or lv == 0.5 ? 25 : 65), width = edgeLine or lv == 0.5 ? 2 : 1, style = edgeLine or lv == 0.5 ? line.style_solid : line.style_dotted))
+            dLbl.push(label.new(gRight, px, f_gname(lv) + "  " + f_px(px), xloc = xloc.bar_index, style = label.style_label_left, color = color.new(lc, edgeLine ? 20 : 75), textcolor = color.white, size = size.tiny))
+        if rangeMode and not na(openHi) and not na(openEndBar)
+            dBox.push(box.new(boxStartBar, openHi, openEndBar, openLo, xloc = xloc.bar_index, bgcolor = color.new(color.yellow, 80), border_color = color.new(color.orange, 20), border_width = 2, text = "1st 5m", text_size = size.tiny, text_color = color.orange))
+        if showVA and not na(pocPx) and not rangeMode
+            dLine.push(line.new(gLeft, pocPx, gRight, pocPx, xloc = xloc.bar_index, color = color.new(pocCol, 15), width = 2))
+            dLbl.push(label.new(gRight, pocPx, "POC  " + f_px(pocPx), xloc = xloc.bar_index, style = label.style_label_left, color = color.new(pocCol, 20), textcolor = color.white, size = size.tiny))
+
+    bool tradeShown = showTrade and dir != 0 and not na(entry) and not na(stopLv) and tgts.size() > 0 and (not todayOnly or tradeId >= lastDayStart)
+    if tradeShown
+        int   xs      = entryBar
+        int   xe      = live ? bar_index + extendBars : math.max(nz(exitBar, bar_index), entryBar + 1)
+        bool  stopped = str.startswith(state, "STOPPED")
+        int   nT      = tgts.size()
+        float topT    = tgts.get(nT - 1)
+        float doneT   = hits > 0 ? tgts.get(math.min(hits, nT) - 1) : entry
+        dBox.push(box.new(xs, math.max(entry, stopLv), xe, math.min(entry, stopLv), xloc = xloc.bar_index, bgcolor = color.new(sellCol, stopped ? 60 : 82), border_color = color.new(sellCol, 40), border_width = 1))
+        if hits > 0
+            dBox.push(box.new(xs, math.max(entry, doneT), xe, math.min(entry, doneT), xloc = xloc.bar_index, bgcolor = color.new(buyCol, 60), border_color = color.new(buyCol, 40), border_width = 1))
+        dBox.push(box.new(xs, math.max(doneT, topT), xe, math.min(doneT, topT), xloc = xloc.bar_index, bgcolor = color.new(buyCol, 88), border_color = color.new(buyCol, 60), border_width = 1))
+        dLine.push(f_ln(xs, xe, entry, color.rgb(150, 150, 150), 2, line.style_solid))
+        dLine.push(f_ln(xs, xe, stopLv, sellCol, 2, line.style_solid))
+        dLbl.push(f_tag(xe, entry, "ENTRY " + f_px(entry) + " · " + (dir == 1 ? sideBuy : sideSell), color.rgb(110, 110, 110)))
+        dLbl.push(f_tag(xe, stopLv, "SL " + f_px(stopLv) + (stopped ? " ✗" : ""), sellCol))
+        for i = 1 to nT
+            float tp = tgts.get(i - 1)
+            bool got = i <= hits
+            dLine.push(f_ln(xs, xe, tp, color.new(buyCol, got ? 15 : 45), 1, got ? line.style_solid : line.style_dotted))
+            dLbl.push(f_tag(xe, tp, "T" + str.tostring(i) + " " + f_lv(tp, entry, riskPts) + (got ? " ✓" : ""), color.new(buyCol, got ? 0 : 35)))
+
+// ── Alerts ───────────────────────────────────────────────────────────────────────────
+alertcondition(buyNow,  "BUY ATM CE", "BUY: {{ticker}} 1st 5m box breakout + ATM CE protection aligned. Close={{close}}")
+alertcondition(sellNow, "BUY ATM PE", "SELL: {{ticker}} 1st 5m box breakdown + ATM PE protection aligned. Close={{close}}")
+
+// ── On-Chart Panel (NIFTY & BANKNIFTY ATM Protection + Live Telemetry) ─────────────
+string status = not timeframe.isintraday ? "USE AN INTRADAY CHART" : not tfOk ? "HIGHER TF MUST BE >= CHART TF" :
+     dir == 0 ? "SCANNING / WAIT" : (dir == 1 ? sideBuy : sideSell) + " - " + state
+color statusBg = not tfOk or dir == 0 ? color.rgb(80, 80, 80) :
+     str.startswith(state, "STOPPED") ? color.rgb(180, 100, 20) : dir == 1 ? buyCol : sellCol
+
+var table tbl = table.new(f_pos(panelPos), 2, 18, border_width = 1)
+
+f_idx_atm_row(int r, string nm, float px, int z, int e, int atmStk) =>
+    string zt  = z == 1 ? "ABOVE RED ▲" : z == -1 ? "BELOW GREEN ▼" : "INSIDE RANGE"
+    string rec = na(atmStk) ? "—" : e == 1 ? ("BULLISH → ATM " + str.tostring(atmStk) + " CE") : e == -1 ? ("BEARISH → ATM " + str.tostring(atmStk) + " PE") : ("ATM " + str.tostring(atmStk) + " (WAIT)")
+    table.cell(tbl, 0, r, nm + " (" + f_px(px) + ")", text_color = color.white, bgcolor = color.rgb(60, 60, 60), text_size = size.small)
+    table.cell(tbl, 1, r, zt + " · " + rec, text_color = color.white,
+         bgcolor = e == 0 ? color.rgb(80, 80, 80) : e > 0 ? buyCol : sellCol, text_size = size.small)
+
+f_row(int r, string a, string b, color bgB = color.rgb(60, 60, 60)) =>
+    table.cell(tbl, 0, r, a, text_color = color.white, bgcolor = color.rgb(60, 60, 60), text_size = size.small)
+    table.cell(tbl, 1, r, b, text_color = color.white, bgcolor = bgB, text_size = size.small)
+
+if barstate.islast and showPanel
+    color head = color.rgb(45, 45, 45)
+    table.cell(tbl, 0, 0, "GANN + ATM PROT", text_color = color.white, bgcolor = head, text_size = size.small)
+    table.cell(tbl, 1, 0, syminfo.ticker + " · HTF " + tfUse + (whActive ? " · webhook ON" : isOptChart ? " · OPT PROTECT ON" : " · webhook off") + (isCallChart ? " · CE ONLY" : isPutChart ? " · PE ONLY" : ""), text_color = color.white, bgcolor = head, text_size = size.small)
+    table.cell(tbl, 0, 1, "SIGNAL", text_color = color.white, bgcolor = head, text_size = size.small)
+    table.cell(tbl, 1, 1, status, text_color = color.white, bgcolor = statusBg, text_size = size.normal)
+    f_row(2, "Trade source", dir == 0 ? "—" : src)
+    string pendBrk = (upRun > 0 and upRun <= confirmN) ? " · closed > VAH, waiting " + str.tostring(confirmN + 1 - upRun) + " bar(s)" :
+         (not isOptChart and dnRun > 0 and dnRun <= confirmN) ? " · closed < VAL, waiting " + str.tostring(confirmN + 1 - dnRun) + " bar(s)" : ""
+    string pendBnc = (not na(sinceL) and sinceL < holdN) ? " · VAL touched, hold " + str.tostring(holdN - sinceL) + " bar(s)" :
+         (not isOptChart and not na(sinceH) and sinceH < holdN) ? " · VAH touched, hold " + str.tostring(holdN - sinceH) + " bar(s)" : ""
+    string pend = not useGann ? "" : brkMode ? pendBrk : pendBnc
+    float boxMid = (not na(vaH) and not na(vaL)) ? (vaH + vaL) * 0.5 : na
+    f_row(3, "1st 5m VAH/MID/VAL", na(vaH) ? "waiting for 09:15 bar" : f_px(vaH) + " / " + f_px(boxMid) + " / " + f_px(vaL) + pend)
+    f_row(4, "HTF Red / Green", f_px(htfC) + " / " + f_px(htfF))
+    f_row(5, "Entry / Stop", dir == 0 ? "—" : f_px(entry) + " / " + f_px(stopLv))
+    f_row(6, "T1 / T2", dir == 0 ? "—" : f_px(t1Lv) + (hits >= 1 ? " ✓" : "") + " / " + f_px(t2Lv) + (hits >= 2 ? " ✓" : ""))
+    string nextTxt = dir == 0 ? "—" : not live ? "ended · reached T" + str.tostring(hits) : "reached T" + str.tostring(hits) + " · next T" + str.tostring(hits + 1) + " " + f_px(tgts.size() > hits ? tgts.get(hits) : na)
+    f_row(7, "Targets (extend)", nextTxt)
+    f_row(8, "Risk (1R)", dir == 0 ? "—" : f_px(riskPts) + " pts")
+    float cc    = barstate.isconfirmed ? close : close[1]
+    int   zoneC = na(htfC) or na(htfF) ? 0 : cc > htfC + bufPts ? 1 : cc < htfF - bufPts ? -1 : 0
+    string stTxt = zoneC == 1 ? "BULLISH - closed above red" :
+         zoneC == -1 ? "BEARISH - closed below green" :
+         bias == 1 ? "PULLBACK - inside range (was bullish)" :
+         bias == -1 ? "PULLBACK - inside range (was bearish)" : "INSIDE RANGE - no break yet"
+    color stBg = zoneC == 1 ? buyCol : zoneC == -1 ? sellCol : bias != 0 ? color.rgb(180, 100, 20) : color.rgb(80, 80, 80)
+    f_row(9, "STATE (closes)", stTxt, stBg)
+    if showMkts
+        f_idx_atm_row(10, "NIFTY", nfPx, zNf, eNf, nfAtm)
+        f_idx_atm_row(11, "BANKNIFTY", bnfPx, zBnf, eBnf, bnfAtm)
+    else
+        f_row(10, "NIFTY VIEW", eNf == 1 ? "BULLISH" : eNf == -1 ? "BEARISH" : "NEUTRAL")
+        f_row(11, "BANKNIFTY VIEW", eBnf == 1 ? "BULLISH" : eBnf == -1 ? "BEARISH" : "NEUTRAL")
+    string actRec = na(chartAtm) ? "WAITING SPOT" : chartView == 1 ? (chartIdxName + " ATM " + atmTxt + " CE") : chartView == -1 ? (chartIdxName + " ATM " + atmTxt + " PE") : (chartIdxName + " ATM " + atmTxt + " — NO CLEAR VIEW")
+    f_row(12, "ACTIVE ATM OPTION", actRec, chartView == 1 ? buyCol : chartView == -1 ? sellCol : color.rgb(80, 80, 80))
+    bool protPass = isOptChart ? idxOptOk : (not useViewProtect or chartView != 0)
+    string protTxt = isOptChart ? (idxOptOk ? "PASS · Matches Index View" : "BLOCKED · View disagrees") : (not useViewProtect ? "BYPASSED (Protection OFF)" : chartView == 1 ? "ARMED · CE allowed (BULLISH)" : chartView == -1 ? "ARMED · PE allowed (BEARISH)" : "BLOCKED · HTF View neutral")
+    f_row(13, "ATM PROTECTION", protTxt, protPass ? buyCol : color.rgb(180, 100, 20))
+    float winPct = nClosed > 0 ? 100.0 * nWins / nClosed : na
+    f_row(14, "TRADES CLOSED", str.tostring(nClosed) + " · WIN " + str.tostring(nWins) + " · LOSS " + str.tostring(nLoss) + (live ? " (+1 open)" : ""))
+    f_row(15, "WIN RATE / NET R", nClosed == 0 ? "no closed trades yet" : str.tostring(winPct, "0") + "% · " + (netR >= 0 ? "+" : "") + str.tostring(netR, "0.0") + "R · T1 " + str.tostring(nT1),
+         nClosed == 0 ? color.rgb(80, 80, 80) : netR > 0 ? buyCol : netR < 0 ? sellCol : color.rgb(80, 80, 80))
+    f_row(16, "DAILY LIMIT", (limitHit ? "REACHED - stopped today" : "OK") + " · T1 " + str.tostring(t1Today) + " · sigs " + str.tostring(sigsToday) + "/" + str.tostring(hardCap),
+         limitHit ? color.rgb(180, 100, 20) : color.rgb(80, 80, 80))
+    f_row(17, "SESSION / DATA", (inWin ? "OPEN" : "CLOSED") + (warmOk ? "" : " · warm-up") + " · " + str.format_time(time, "HH:mm", "Asia/Kolkata") + " IST",
+         inWin ? color.rgb(80, 80, 80) : color.rgb(180, 100, 20))

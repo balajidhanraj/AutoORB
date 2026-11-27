@@ -353,11 +353,14 @@ class RiskManager:
                 return False
             if index_name == "BANKNIFTY" and not getattr(self.settings, "enable_banknifty_trading", True):
                 return False
+            is_gann_profile = (
+                getattr(self.settings, "strategy_profile", "DUAL_ORB_HYBRID") == "GANN_BOX_5M"
+            )
             is_nifty_hybrid = (
                 index_name == "NIFTY"
                 and getattr(self.settings, "nifty_use_htf_swing_hybrid", False)
             )
-            if not is_nifty_hybrid and self.sl_hit_today_by_index.get(index_name, False):
+            if not is_nifty_hybrid and not is_gann_profile and self.sl_hit_today_by_index.get(index_name, False):
                 return False
             if is_nifty_hybrid:
                 nf_cap = int(getattr(self.settings, "nifty_htf_max_trades_per_day", 2) or 2)

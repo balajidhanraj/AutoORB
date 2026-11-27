@@ -339,6 +339,9 @@
         <span id="m-ping-txt" class="font-data-mono-sm text-on-surface-variant tabular-nums">Sync: --ms</span>
       </div>
 
+      <!-- ATM Option Chart Protection & Live View Panel -->
+      <div id="m-atm-panel" class="px-3"></div>
+
       <!-- Deployed Strategy Cards -->
       <div id="m-radar-cards" class="px-3 space-y-2.5"></div>
     </section>
@@ -679,11 +682,25 @@
         </div>
         <button onclick="closeSheet('sheet-orb')" type="button" class="w-8 h-8 rounded bg-surface-container-high flex items-center justify-center"><span class="material-symbols-outlined">close</span></button>
       </div>
-      <div class="grid grid-cols-2 gap-2">
-        <button type="button" onclick="applyMobileOrbPreset('0930_15m')" class="py-2 px-2 rounded-lg bg-primary-container/20 text-profit border border-primary-container/40 font-label-caps text-[10px] font-bold">09:30–15:00 (15m ORB)</button>
-        <button type="button" onclick="applyMobileOrbPreset('default_30m')" class="py-2 px-2 rounded-lg bg-surface-container-high text-on-surface font-label-caps text-[10px]">10:00–13:15 (30m)</button>
+      <div class="grid grid-cols-3 gap-1.5">
+        <button type="button" onclick="applyMobileOrbPreset('gann_5m')" class="py-2 px-1.5 rounded-lg bg-tertiary-container/25 text-amber-tactical border border-tertiary-fixed-dim/40 font-label-caps text-[9.5px] font-bold">1st 5m Gann + ATM</button>
+        <button type="button" onclick="applyMobileOrbPreset('0930_15m')" class="py-2 px-1.5 rounded-lg bg-primary-container/20 text-profit border border-primary-container/40 font-label-caps text-[9.5px] font-bold">09:30–15 (15m)</button>
+        <button type="button" onclick="applyMobileOrbPreset('default_30m')" class="py-2 px-1.5 rounded-lg bg-surface-container-high text-on-surface font-label-caps text-[9.5px]">10:00–13:15</button>
       </div>
       <form id="m-form-orb" class="space-y-3 text-body-sm">
+        <div class="p-2.5 rounded-xl bg-surface-container space-y-2 border border-primary-container/25">
+          <div class="font-label-caps text-profit font-bold text-[10.5px]">Strategy Engine &amp; 1st 5m Gann + ATM Protection</div>
+          <div class="grid grid-cols-2 gap-2">
+            <div><label class="font-label-caps text-[9.5px] text-on-surface-variant block mb-0.5">Active Strategy</label><select id="ms-strat-profile" class="w-full p-2 rounded-lg bg-surface-container-lowest font-data-mono-sm text-on-surface"><option value="DUAL_ORB_HYBRID">Dual ORB / Hybrid</option><option value="GANN_BOX_5M">1st 5m Gann + ATM</option></select></div>
+            <div><label class="font-label-caps text-[9.5px] text-on-surface-variant block mb-0.5">5m Box Mode</label><select id="ms-gann-mode" class="w-full p-2 rounded-lg bg-surface-container-lowest font-data-mono-sm text-on-surface"><option value="BREAKOUT">Breakout</option><option value="BOUNCE">Bounce</option></select></div>
+            <div><label class="font-label-caps text-[9.5px] text-on-surface-variant block mb-0.5">Confirm Bars</label><input id="ms-gann-confirm" type="number" min="0" max="5" class="w-full p-2 rounded-lg bg-surface-container-lowest font-data-mono-sm text-on-surface"/></div>
+            <div><label class="font-label-caps text-[9.5px] text-on-surface-variant block mb-0.5">Hold Bars</label><input id="ms-gann-hold" type="number" min="1" max="10" class="w-full p-2 rounded-lg bg-surface-container-lowest font-data-mono-sm text-on-surface"/></div>
+            <div><label class="font-label-caps text-[9.5px] text-on-surface-variant block mb-0.5">Warm-up (Min)</label><input id="ms-gann-warm" type="number" min="0" max="240" class="w-full p-2 rounded-lg bg-surface-container-lowest font-data-mono-sm text-on-surface"/></div>
+            <div><label class="font-label-caps text-[9.5px] text-on-surface-variant block mb-0.5">SL ATR Mult</label><input id="ms-gann-stop-atr" type="number" step="0.05" min="0.05" max="3" class="w-full p-2 rounded-lg bg-surface-container-lowest font-data-mono-sm text-on-surface"/></div>
+          </div>
+          <label class="inline-flex items-center gap-1.5 pt-1 font-label-caps text-[10px]"><input id="ms-gann-prot" type="checkbox" class="w-3.5 h-3.5 accent-indigo-500"/>ATM HTF View Protection (CE if BULLISH, PE if BEARISH)</label>
+        </div>
+
         <div class="p-2.5 rounded-xl bg-surface-container space-y-2">
           <div class="font-label-caps text-primary font-bold text-[10.5px]">Session Timings (IST)</div>
           <div class="grid grid-cols-2 gap-2">
@@ -881,14 +898,13 @@
             <span>Use Live Strategy Gates</span>
           </label>
         </div>
-        <div class="grid grid-cols-3 gap-2">
+        <div class="grid grid-cols-2 gap-2">
           <div>
-            <label class="font-label-caps text-[9.5px] text-on-surface-variant block mb-0.5">Order Start</label>
-            <input id="m-bt-start" type="time" value="09:30" class="w-full h-9 px-2 rounded-lg bg-surface-container-low border border-outline-variant/40 font-data-mono-sm"/>
-          </div>
-          <div>
-            <label class="font-label-caps text-[9.5px] text-on-surface-variant block mb-0.5">Order Cutoff</label>
-            <input id="m-bt-end" type="time" value="15:00" class="w-full h-9 px-2 rounded-lg bg-surface-container-low border border-outline-variant/40 font-data-mono-sm"/>
+            <label class="font-label-caps text-[9.5px] text-on-surface-variant block mb-0.5">Strategy Engine</label>
+            <select id="m-bt-strategy" class="w-full h-9 px-2 rounded-lg bg-surface-container-low border border-outline-variant/40 font-data-mono-sm">
+              <option value="DUAL_ORB_HYBRID">Dual ORB / Hybrid</option>
+              <option value="GANN_BOX_5M">1st 5m Gann + ATM</option>
+            </select>
           </div>
           <div>
             <label class="font-label-caps text-[9.5px] text-on-surface-variant block mb-0.5">ORB Min</label>
@@ -899,6 +915,14 @@
               <option value="45">45m</option>
               <option value="60">60m</option>
             </select>
+          </div>
+          <div>
+            <label class="font-label-caps text-[9.5px] text-on-surface-variant block mb-0.5">Order Start</label>
+            <input id="m-bt-start" type="time" value="09:30" class="w-full h-9 px-2 rounded-lg bg-surface-container-low border border-outline-variant/40 font-data-mono-sm"/>
+          </div>
+          <div>
+            <label class="font-label-caps text-[9.5px] text-on-surface-variant block mb-0.5">Order Cutoff</label>
+            <input id="m-bt-end" type="time" value="15:00" class="w-full h-9 px-2 rounded-lg bg-surface-container-low border border-outline-variant/40 font-data-mono-sm"/>
           </div>
         </div>
         <button id="m-bt-run-btn" onclick="runMobileBacktest()" type="button" class="w-full h-9 rounded-lg bg-primary-container text-on-primary-fixed font-label-caps font-bold cursor-pointer">RUN 09:30–15:00 BACKTEST</button>
@@ -1082,14 +1106,45 @@
         document.getElementById('m-pill-orb-txt').textContent = `${snap.orb_window_minutes || 30}m Gates`;
         document.getElementById('m-pill-cut-txt').textContent = `${snap.entry_start_time || '10:00'}–${snap.entry_cutoff_time || '13:15'}`;
         const mcSum = document.getElementById('mc-strat-summary');
+        const profName = snap.strategy_profile || (snap.strategy_config && snap.strategy_config.strategy_profile) || 'DUAL_ORB_HYBRID';
         if (mcSum) {
-          mcSum.textContent = `ORB ${snap.orb_start_time || '09:15'} (${snap.orb_window_minutes || 30}m) • Window ${snap.entry_start_time || '10:00'}–${snap.entry_cutoff_time || '13:15'} • ST(${snap.supertrend_period || 10},${snap.supertrend_multiplier || 3}) • RSI ${snap.rsi_bull_threshold || 60}/${snap.rsi_bear_threshold || 40}`;
+          mcSum.textContent = `[${profName}] ORB ${snap.orb_start_time || '09:15'} (${snap.orb_window_minutes || 30}m) • Window ${snap.entry_start_time || '10:00'}–${snap.entry_cutoff_time || '13:15'} • ST(${snap.supertrend_period || 10},${snap.supertrend_multiplier || 3})`;
         }
         document.getElementById('m-ping-txt').textContent = A.state.lastPingMs ? `Sync: ${A.state.lastPingMs}ms` : 'Sync: --';
 
+        renderMobileAtmPanel();
         renderMobileRadarCards();
         renderMobilePositions();
         renderMobileControls();
+      }
+
+      function renderMobileAtmPanel() {
+        const host = document.getElementById('m-atm-panel');
+        if (!host) return;
+        const ap = snap.atm_protection_panel || {};
+        const prof = ap.strategy_profile || snap.strategy_profile || 'DUAL_ORB_HYBRID';
+        const protOn = ap.protection_enabled !== false;
+        const rows = Object.entries(ap.indices || {}).map(([idx, v]) => {
+          const clr = v.htf_view === 1 ? 'text-profit border-primary-container/35' : v.htf_view === -1 ? 'text-loss border-secondary-container/35' : 'text-on-surface-variant border-outline-variant/30';
+          const boxTxt = (v.gann_vah && v.gann_val) ? `5m ${A.fmtNum(v.gann_val, 0)}–${A.fmtNum(v.gann_vah, 0)}` : '5m Box --';
+          return `<div class="p-2 rounded-lg bg-surface-container-low border ${clr} font-data-mono-sm flex items-center justify-between gap-2">
+            <div class="min-w-0">
+              <div class="font-bold truncate">${esc(idx)} &bull; ${esc(v.htf_view_label || 'NEUTRAL')}</div>
+              <div class="text-[10px] text-on-surface-variant truncate">${boxTxt} &bull; HTF ${A.fmtNum(v.htf_swing_low, 0)}/${A.fmtNum(v.htf_swing_high, 0)}</div>
+            </div>
+            <span class="font-bold text-[11px] shrink-0">${esc(v.recommended_label || 'WAIT')}</span>
+          </div>`;
+        }).join('');
+        host.innerHTML = `<div class="p-2.5 rounded-xl bg-surface-container glass-panel space-y-2 border border-outline-variant/25">
+          <div class="flex items-center justify-between gap-2">
+            <div class="flex items-center gap-1.5 min-w-0">
+              <span class="material-symbols-outlined text-primary text-[16px]">shield</span>
+              <span class="font-label-caps font-bold text-on-surface truncate">ATM Protection Panel</span>
+            </div>
+            <button onclick="openMobileOrbSheet()" type="button" class="px-2 py-0.5 rounded bg-surface-container-high font-label-caps text-[10px] text-profit font-bold cursor-pointer">${esc(prof)} &bull; ${protOn ? 'PROT ON' : 'PROT OFF'}</button>
+          </div>
+          <div class="grid grid-cols-1 gap-1.5">${rows || '<div class="font-data-mono-sm text-on-surface-variant text-[10.5px]">Warming NIFTY &amp; BANKNIFTY HTF views...</div>'}</div>
+        </div>`;
       }
 
       function renderMobileRadarCards() {
@@ -1107,9 +1162,11 @@
             if (!arr.length || arr[arr.length - 1] !== ltp) { arr.push(ltp); if (arr.length > 24) arr.shift(); }
           }
           const isEnabled = enMap[idx] !== false;
-          const isHybrid = (info.strategy_mode || r.strategy_mode) === 'HTF_SWING_HYBRID';
-          const bandHi = isHybrid ? (info.htf_swing_high ?? info.orh) : info.orh;
-          const bandLo = isHybrid ? (info.htf_swing_low ?? info.orl) : info.orl;
+          const stratMode = info.strategy_mode || r.strategy_mode || 'ORB_5GATE';
+          const isGann = stratMode === 'GANN_BOX_5M';
+          const isHybrid = stratMode === 'HTF_SWING_HYBRID';
+          const bandHi = isGann ? (info.gann_vah ?? info.orh) : (isHybrid ? (info.htf_swing_high ?? info.orh) : info.orh);
+          const bandLo = isGann ? (info.gann_val ?? info.orl) : (isHybrid ? (info.htf_swing_low ?? info.orl) : info.orl);
           const isBear = r.radar_state === 'IMMINENT_PE_BREAKOUT' || info.supertrend_dir === -1;
           const ready = Number(r.readiness_pct || 0);
           const lots = Number(r.lots || 1);
@@ -1117,7 +1174,15 @@
           const prd = r.product_type || 'M';
           const stDir = info.supertrend_dir ?? r.supertrend_dir;
           const stVal = info.supertrend_value ?? r.supertrend_value ?? info.supertrend;
-          const gates = isHybrid
+          const gates = isGann
+            ? [
+                ['SYS', r.system_ready],
+                ['VIX', r.vix_ready],
+                ['5m BOX', r.orb_ready],
+                ['BRK', r.ce_price_ok || r.pe_price_ok],
+                ['ATM PROT', r.atm_protection_ok]
+              ]
+            : isHybrid
             ? [
                 ['SYS', r.system_ready],
                 ['VIX', r.vix_ready],
@@ -1147,7 +1212,7 @@
               <div class="min-w-0">
                 <div class="flex items-center gap-1.5 flex-wrap">
                   <span class="db-serial">#${sIdx + 1}</span>
-                  <span class="font-headline-md text-[15px] font-bold text-on-surface">${esc(idx)} ${isHybrid ? '15m HTF + ST(10,3)' : 'ORB + ST(10,3)'}</span>
+                  <span class="font-headline-md text-[15px] font-bold text-on-surface">${esc(idx)} ${isGann ? '1st 5m Gann + ATM' : isHybrid ? '15m HTF + ST(10,3)' : 'ORB + ST(10,3)'}</span>
                   <span class="db-strat__chip ${isLiveMode ? 'db-strat__chip--live' : 'db-strat__chip--paper'}">${isLiveMode ? 'LIVE AUTO' : 'PAPER'}</span>
                 </div>
                 <span class="font-data-mono-sm text-on-surface-variant block truncate mt-0.5">Spot <b class="${isBear ? 'text-loss' : 'text-profit'}">${A.fmtNum(ltp, 2)}</b> &bull; ${r.total_qty || (lots * lotSize)} qty &bull; Margin ${A.fmtINR(r.est_margin || 0, 0)}</span>
@@ -1161,15 +1226,15 @@
             <div class="h-10 bg-surface-container-lowest/70 rounded-lg px-1.5 py-1">${A.buildSparklineSvg(spotHist[idx], bandHi, bandLo, !isBear)}</div>
 
             <div class="grid grid-cols-5 gap-1 p-1.5 rounded bg-surface-container-low text-center font-data-mono-sm tabular-nums">
-              <div><span class="font-label-caps text-on-surface-variant block">${isHybrid ? '15m RED' : 'ORH'}</span><b class="text-profit">${A.fmtNum(bandHi, 0)}</b></div>
-              <div><span class="font-label-caps text-on-surface-variant block">${isHybrid ? '15m GRN' : 'ORL'}</span><b class="text-loss">${A.fmtNum(bandLo, 0)}</b></div>
-              <div><span class="font-label-caps text-on-surface-variant block">VWAP</span><b class="text-on-surface">${A.fmtNum(info.vwap, 0)}</b></div>
-              <div><span class="font-label-caps text-on-surface-variant block">RSI</span><b class="text-on-surface">${info.rsi !== null && info.rsi !== undefined ? Number(info.rsi).toFixed(0) : '--'}</b></div>
+              <div><span class="font-label-caps text-on-surface-variant block">${isGann ? '5m VAH' : isHybrid ? '15m RED' : 'ORH'}</span><b class="text-profit">${A.fmtNum(bandHi, 0)}</b></div>
+              <div><span class="font-label-caps text-on-surface-variant block">${isGann ? '5m VAL' : isHybrid ? '15m GRN' : 'ORL'}</span><b class="text-loss">${A.fmtNum(bandLo, 0)}</b></div>
+              <div><span class="font-label-caps text-on-surface-variant block">${isGann ? 'VIEW' : 'VWAP'}</span><b class="${isGann ? (r.htf_view === 1 ? 'text-profit' : r.htf_view === -1 ? 'text-loss' : 'text-on-surface') : 'text-on-surface'}">${isGann ? esc((r.htf_view_label || 'NEUT').slice(0, 4)) : A.fmtNum(info.vwap, 0)}</b></div>
+              <div><span class="font-label-caps text-on-surface-variant block">${isGann ? 'RUN' : 'RSI'}</span><b class="text-on-surface">${isGann ? `${info.gann_up_run || 0}/${info.gann_dn_run || 0}` : (info.rsi !== null && info.rsi !== undefined ? Number(info.rsi).toFixed(0) : '--')}</b></div>
               <div><span class="font-label-caps text-on-surface-variant block">ST(10,3)</span><b class="${stDir === -1 ? 'text-loss' : 'text-profit'}">${stVal ? A.fmtNum(stVal, 0) : (stDir === -1 ? 'BEAR' : 'BULL')}</b></div>
             </div>
 
             <div class="space-y-1">
-              <div class="flex justify-between font-label-caps"><span class="text-on-surface-variant">${isHybrid ? 'HYBRID H1 READINESS' : '5-GATE + ST READINESS'}</span><b class="text-profit">${ready}%</b></div>
+              <div class="flex justify-between font-label-caps"><span class="text-on-surface-variant">${isGann ? '1st 5m GANN + ATM READINESS' : isHybrid ? 'HYBRID H1 READINESS' : '5-GATE + ST READINESS'}</span><b class="text-profit">${ready}%</b></div>
               <div class="w-full h-1.5 rounded-full bg-surface-container-highest overflow-hidden"><div class="h-full bg-primary-container rounded-full" style="width:${ready}%"></div></div>
               <div class="flex flex-wrap gap-1 pt-0.5">${gates.map(([g, ok]) => `<span class="px-1.5 py-0.5 rounded font-label-caps text-[9px] ${ok ? 'bg-primary-container/20 text-profit font-bold' : 'bg-surface-container-low text-on-surface-variant'}">${ok ? '✓' : '•'} ${g}</span>`).join('')}</div>
             </div>
@@ -1502,6 +1567,13 @@
         if (!cfg) return;
         const setV = (id, v) => { const el = document.getElementById(id); if (el && v !== undefined && v !== null) el.value = v; };
         const setC = (id, v) => { const el = document.getElementById(id); if (el && typeof v === 'boolean') el.checked = v; };
+        setV('ms-strat-profile', cfg.strategy_profile || 'DUAL_ORB_HYBRID');
+        setV('ms-gann-mode', cfg.gann_box_mode || 'BREAKOUT');
+        setV('ms-gann-confirm', cfg.gann_confirm_candles ?? 1);
+        setV('ms-gann-hold', cfg.gann_hold_candles ?? 2);
+        setV('ms-gann-warm', cfg.gann_warmup_minutes ?? 15);
+        setV('ms-gann-stop-atr', cfg.gann_stop_atr_mult ?? 0.5);
+        setC('ms-gann-prot', cfg.gann_use_htf_view_protection !== false);
         setV('ms-start', cfg.orb_start_time || '09:15');
         setV('ms-min', cfg.orb_window_minutes || 30);
         setV('ms-entry-start', cfg.entry_start_time || '10:00');
@@ -1535,8 +1607,22 @@
       }
 
       window.applyMobileOrbPreset = (preset) => {
-        if (preset === '0930_15m') {
+        if (preset === 'gann_5m') {
           fillMobileStrategyForm({
+            strategy_profile: 'GANN_BOX_5M',
+            gann_box_mode: 'BREAKOUT',
+            gann_confirm_candles: 1,
+            gann_warmup_minutes: 15,
+            gann_use_htf_view_protection: true,
+            orb_start_time: '09:15',
+            orb_window_minutes: 5,
+            entry_start_time: '09:30',
+            entry_cutoff_time: '15:00',
+            nifty_htf_entry_start_time: '09:30',
+          });
+        } else if (preset === '0930_15m') {
+          fillMobileStrategyForm({
+            strategy_profile: 'DUAL_ORB_HYBRID',
             orb_start_time: '09:15',
             orb_window_minutes: 15,
             entry_start_time: '09:30',
@@ -1545,6 +1631,7 @@
           });
         } else {
           fillMobileStrategyForm({
+            strategy_profile: 'DUAL_ORB_HYBRID',
             orb_start_time: '09:15',
             orb_window_minutes: 30,
             entry_start_time: '10:00',
@@ -1575,7 +1662,8 @@
         }
         const badge = document.getElementById('m-bt-meta-badge');
         if (badge && mBtMeta) {
-          badge.textContent = `Window ${mBtMeta.entry_start_time || '09:30'}–${mBtMeta.entry_cutoff_time || '15:00'} IST • ${mBtMeta.orb_window_minutes || 15}m ORB • ${trades.length} trades`;
+          const profLbl = (mBtMeta.strategy_profile === 'GANN_BOX_5M') ? '1st 5m Gann' : 'Dual Engine';
+          badge.textContent = `${profLbl} • ${mBtMeta.entry_start_time || '09:30'}–${mBtMeta.entry_cutoff_time || '15:00'} IST • ${mBtMeta.orb_window_minutes || 15}m • ${trades.length} trades`;
         }
         const pnls = trades.map(t => Number(t.net ?? t.net_pnl ?? t.pnl ?? 0));
         const total = pnls.reduce((a, b) => a + b, 0);
@@ -1657,6 +1745,7 @@
         if (btn) btn.textContent = 'RUNNING BACKTEST...';
         try {
           const res = await A.api.runBacktest({
+            strategy_profile: (document.getElementById('m-bt-strategy') && document.getElementById('m-bt-strategy').value) || 'DUAL_ORB_HYBRID',
             entry_start_time: document.getElementById('m-bt-start').value || '09:30',
             entry_cutoff_time: document.getElementById('m-bt-end').value || '15:00',
             orb_window_minutes: Number(document.getElementById('m-bt-orb').value || 15),
@@ -1878,6 +1967,13 @@
         e.preventDefault();
         try {
           const r = await A.api.setStrategyConfig({
+            strategy_profile: document.getElementById('ms-strat-profile').value,
+            gann_box_mode: document.getElementById('ms-gann-mode').value,
+            gann_confirm_candles: Number(document.getElementById('ms-gann-confirm').value),
+            gann_hold_candles: Number(document.getElementById('ms-gann-hold').value),
+            gann_warmup_minutes: Number(document.getElementById('ms-gann-warm').value),
+            gann_stop_atr_mult: Number(document.getElementById('ms-gann-stop-atr').value),
+            gann_use_htf_view_protection: document.getElementById('ms-gann-prot').checked,
             orb_start_time: document.getElementById('ms-start').value.trim(),
             orb_window_minutes: Number(document.getElementById('ms-min').value),
             entry_start_time: document.getElementById('ms-entry-start').value.trim(),

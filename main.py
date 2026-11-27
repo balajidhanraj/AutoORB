@@ -1129,6 +1129,13 @@ class TradingSystemOrchestrator:
                 "nifty_htf_stop_atr_mult": float(s.nifty_htf_stop_atr_mult),
                 "nifty_htf_opt_sl_cap": float(s.nifty_htf_opt_sl_cap),
                 "nifty_htf_max_trades_per_day": int(s.nifty_htf_max_trades_per_day),
+                "strategy_profile": str(getattr(s, "strategy_profile", "DUAL_ORB_HYBRID") or "DUAL_ORB_HYBRID"),
+                "gann_box_mode": str(getattr(s, "gann_box_mode", "BREAKOUT") or "BREAKOUT"),
+                "gann_confirm_candles": int(getattr(s, "gann_confirm_candles", 1)),
+                "gann_hold_candles": int(getattr(s, "gann_hold_candles", 2)),
+                "gann_warmup_minutes": int(getattr(s, "gann_warmup_minutes", 15)),
+                "gann_use_htf_view_protection": bool(getattr(s, "gann_use_htf_view_protection", True)),
+                "gann_stop_atr_mult": float(getattr(s, "gann_stop_atr_mult", 0.5)),
                 "max_trades_per_day": int(s.max_trades_per_day),
                 "max_weekly_losses": int(s.max_weekly_losses),
                 "tuesday_expiry_boost": bool(s.tuesday_expiry_boost),
@@ -1203,6 +1210,14 @@ class TradingSystemOrchestrator:
             else s.auto_squareoff_time
         )
 
+        new_profile = str(clean.get("strategy_profile", getattr(s, "strategy_profile", "DUAL_ORB_HYBRID")) or "DUAL_ORB_HYBRID").strip().upper()
+        if new_profile not in {"DUAL_ORB_HYBRID", "GANN_BOX_5M"}:
+            raise ValueError(f"Unsupported strategy_profile '{new_profile}'. Choose DUAL_ORB_HYBRID or GANN_BOX_5M.")
+
+        new_gann_mode = str(clean.get("gann_box_mode", getattr(s, "gann_box_mode", "BREAKOUT")) or "BREAKOUT").strip().upper()
+        if new_gann_mode not in {"BREAKOUT", "BOUNCE"}:
+            raise ValueError(f"Unsupported gann_box_mode '{new_gann_mode}'. Choose BREAKOUT or BOUNCE.")
+
         num_specs = {
             "min_india_vix": (0.0, 40.0, float),
             "min_orb_range_pct": (0.0, 5.0, float),
@@ -1218,6 +1233,10 @@ class TradingSystemOrchestrator:
             "nifty_htf_stop_atr_mult": (0.1, 3.0, float),
             "nifty_htf_opt_sl_cap": (10.0, 150.0, float),
             "nifty_htf_max_trades_per_day": (1, 10, int),
+            "gann_confirm_candles": (0, 5, int),
+            "gann_hold_candles": (1, 10, int),
+            "gann_warmup_minutes": (0, 240, int),
+            "gann_stop_atr_mult": (0.05, 3.0, float),
             "max_trades_per_day": (1, 20, int),
             "max_weekly_losses": (0, 10, int),
         }
@@ -1249,6 +1268,7 @@ class TradingSystemOrchestrator:
             "use_supertrend_filter",
             "nifty_use_htf_swing_hybrid",
             "nifty_use_ema_body_filter",
+            "gann_use_htf_view_protection",
             "tuesday_expiry_boost",
             "banknifty_be_pyramiding",
         )
@@ -1257,6 +1277,8 @@ class TradingSystemOrchestrator:
         orb_or_ind_changed = (
             new_orb_start != s.orb_start_time
             or new_orb_min != int(s.orb_window_minutes)
+            or new_profile != str(getattr(s, "strategy_profile", "DUAL_ORB_HYBRID")).upper()
+            or new_gann_mode != str(getattr(s, "gann_box_mode", "BREAKOUT")).upper()
             or any(
                 k in clean
                 for k in (
@@ -1266,6 +1288,9 @@ class TradingSystemOrchestrator:
                     "supertrend_multiplier",
                     "nifty_use_htf_swing_hybrid",
                     "nifty_htf_swing_len",
+                    "gann_confirm_candles",
+                    "gann_hold_candles",
+                    "gann_use_htf_view_protection",
                 )
             )
         )
@@ -1279,6 +1304,8 @@ class TradingSystemOrchestrator:
         s.entry_cutoff_time = new_cutoff
         s.nifty_htf_entry_start_time = new_nf_start
         s.auto_squareoff_time = new_sqoff
+        s.strategy_profile = new_profile
+        s.gann_box_mode = new_gann_mode
 
         for k, val in parsed_nums.items():
             setattr(s, k, val)
@@ -1308,7 +1335,7 @@ class TradingSystemOrchestrator:
         self._persist_runtime_state(sync=True, force_remote=True)
         cfg = self.get_strategy_config()
         msg = (
-            f"Strategy updated: ORB {cfg['orb_start_time']}–{cfg['orb_end_time']} ({cfg['orb_window_minutes']}m) | "
+            f"Strategy ({cfg['strategy_profile']}) updated: ORB {cfg['orb_start_time']}–{cfg['orb_end_time']} ({cfg['orb_window_minutes']}m) | "
             f"Entry {cfg['entry_start_time']}–{cfg['entry_cutoff_time']} IST | "
             f"VIX≥{cfg['min_india_vix']:g} | RSI>{cfg['rsi_bull_threshold']:g}/<{cfg['rsi_bear_threshold']:g}."
         )
@@ -1927,14 +1954,25 @@ class TradingSystemOrchestrator:
         vix: Optional[float],
         now_ist: datetime,
     ) -> Dict[str, Any]:
-        """Compute live 5-gate auto-order readiness metrics for an index."""
+        """Compute live 5-gate auto-order readiness metrics and ATM option protection state."""
         spec = INDEX_SPECS[index_name]
         st = self.strategy.get_state(index_name)
+        is_gann = (str(getattr(self.settings, "strategy_profile", "DUAL_ORB_HYBRID") or "DUAL_ORB_HYBRID").upper() == "GANN_BOX_5M")
         is_hybrid = (
-            index_name == "NIFTY"
+            not is_gann
+            and index_name == "NIFTY"
             and bool(getattr(self.settings, "nifty_use_htf_swing_hybrid", False))
         )
-        strategy_mode = "HTF_SWING_HYBRID" if is_hybrid else "ORB_5GATE"
+        strategy_mode = "GANN_BOX_5M" if is_gann else ("HTF_SWING_HYBRID" if is_hybrid else "ORB_5GATE")
+
+        htf_view = int(getattr(st, "htf_view", 0) or st.htf_bias or 0)
+        if spot_ltp is not None:
+            if st.htf_swing_high is not None and spot_ltp > st.htf_swing_high:
+                htf_view = 1
+            elif st.htf_swing_low is not None and spot_ltp < st.htf_swing_low:
+                htf_view = -1
+        htf_view_label = "BULLISH" if htf_view == 1 else ("BEARISH" if htf_view == -1 else "NEUTRAL")
+        use_gann_prot = bool(getattr(self.settings, "gann_use_htf_view_protection", True))
 
         system_ready = (
             not self.risk_manager.halted
@@ -1942,7 +1980,18 @@ class TradingSystemOrchestrator:
             and index_name not in self.risk_manager.positions
         )
         vix_ready = (vix is not None and vix >= self.settings.min_india_vix)
-        if is_hybrid:
+        if is_gann:
+            orb_ready = bool(st.gann_vah is not None and st.gann_val is not None and st.gann_vah > st.gann_val)
+            entry_start = getattr(self.settings, "entry_start_time", dt_time(9, 30, 0))
+            entry_end = getattr(self.settings, "entry_cutoff_time", dt_time(15, 0, 0))
+            in_window = is_nse_trading_day(now_ist.date()) and (entry_start <= now_ist.time() <= entry_end)
+            ce_price_ok = bool(spot_ltp is not None and st.gann_vah is not None and spot_ltp > st.gann_vah)
+            pe_price_ok = bool(spot_ltp is not None and st.gann_val is not None and spot_ltp < st.gann_val)
+            ce_rsi_ok = (htf_view == 1) if use_gann_prot else True
+            pe_rsi_ok = (htf_view == -1) if use_gann_prot else True
+            dist_to_orh = round(st.gann_vah - spot_ltp, 2) if (spot_ltp is not None and st.gann_vah is not None) else None
+            dist_to_orl = round(spot_ltp - st.gann_val, 2) if (spot_ltp is not None and st.gann_val is not None) else None
+        elif is_hybrid:
             orb_ready = bool(st.htf_swing_high is not None and st.htf_swing_low is not None and st.htf_atr is not None)
             entry_start = getattr(self.settings, "nifty_htf_entry_start_time", dt_time(10, 0, 0))
             entry_end = getattr(self.settings, "entry_cutoff_time", dt_time(13, 15, 0))
@@ -2020,13 +2069,26 @@ class TradingSystemOrchestrator:
         total_qty = spec.lot_size * lots
         est_margin = round(total_qty * atm_premium, 2)
 
+        atm_strike = (
+            round_to_strike(spot_ltp, spec.strike_step)
+            if (spot_ltp is not None and spot_ltp > 0)
+            else None
+        )
         candidate_ce = "--"
         candidate_pe = "--"
-        if spot_ltp is not None and spot_ltp > 0:
-            strike = round_to_strike(spot_ltp, spec.strike_step)
+        if atm_strike is not None:
             lots_lbl = f"{lots} lot{'s' if lots > 1 else ''}"
-            candidate_ce = f"{index_name} {strike} CE ({total_qty} qty / {lots_lbl} [{product_type_label}])"
-            candidate_pe = f"{index_name} {strike} PE ({total_qty} qty / {lots_lbl} [{product_type_label}])"
+            candidate_ce = f"{index_name} {atm_strike} CE ({total_qty} qty / {lots_lbl} [{product_type_label}])"
+            candidate_pe = f"{index_name} {atm_strike} PE ({total_qty} qty / {lots_lbl} [{product_type_label}])"
+
+        rec_side = "CE" if htf_view == 1 else ("PE" if htf_view == -1 else None)
+        rec_symbol = actual_symbol_ce if rec_side == "CE" else (actual_symbol_pe if rec_side == "PE" else "")
+        rec_label = (
+            f"BUY ATM {atm_strike} {rec_side}"
+            if (atm_strike is not None and rec_side is not None)
+            else (f"ATM {atm_strike} — WAIT (NO VIEW)" if atm_strike is not None else "WAIT")
+        )
+        atm_prot_ok = (ce_rsi_ok if ce_price_ok else (pe_rsi_ok if pe_price_ok else (htf_view != 0 if use_gann_prot else True)))
 
         ce_score = sum([system_ready, vix_ready, orb_ready, ce_price_ok, ce_rsi_ok])
         pe_score = sum([system_ready, vix_ready, orb_ready, pe_price_ok, pe_rsi_ok])
@@ -2035,13 +2097,39 @@ class TradingSystemOrchestrator:
         if index_name in self.risk_manager.positions:
             radar_state = "ACTIVE_POSITION"
             radar_summary = (
-                "Hybrid H1 active — Spot ATR SL, 35pt Cap & Supertrend(10,3) Close Trail armed."
-                if is_hybrid
-                else "5-Gate ORB active — 45pt SL, BE (+45), T1 50% (+80) & Supertrend(10,3) Line Trail armed."
+                "1st 5m Gann Box active — Spot Mid-Box ATR SL & Supertrend Trail armed."
+                if is_gann
+                else (
+                    "Hybrid H1 active — Spot ATR SL, 35pt Cap & Supertrend(10,3) Close Trail armed."
+                    if is_hybrid
+                    else "5-Gate ORB active — 45pt SL, BE (+45), T1 50% (+80) & Supertrend(10,3) Line Trail armed."
+                )
             )
         elif self.risk_manager.halted or self.risk_manager.trades_taken_today >= self.settings.max_trades_per_day:
             radar_state = "HALTED_OR_MAX_TRADES"
             radar_summary = f"Auto entries paused: {self.risk_manager.halt_reason or 'Max daily trades reached'}."
+        elif is_gann:
+            prot_note = f"HTF View {htf_view_label} ({rec_label})" if use_gann_prot else "Protection OFF"
+            if not orb_ready:
+                radar_state = "WAITING_5M_BOX"
+                radar_summary = "Waiting for 1st 5-minute opening candle (09:15-09:20 IST) to lock VAH/VAL box."
+            elif ce_price_ok:
+                radar_state = "IMMINENT_CE_BREAKOUT"
+                radar_summary = (
+                    f"1st 5m VAH break ({st.gann_vah}) + {prot_note}! Run {st.gann_up_run}."
+                    if (ce_rsi_ok and vix_ready and in_window)
+                    else f"Above 1st 5m VAH ({st.gann_vah}) — {prot_note} (run {st.gann_up_run})."
+                )
+            elif pe_price_ok:
+                radar_state = "IMMINENT_PE_BREAKOUT"
+                radar_summary = (
+                    f"1st 5m VAL break ({st.gann_val}) + {prot_note}! Run {st.gann_dn_run}."
+                    if (pe_rsi_ok and vix_ready and in_window)
+                    else f"Below 1st 5m VAL ({st.gann_val}) — {prot_note} (run {st.gann_dn_run})."
+                )
+            else:
+                radar_state = "SCANNING_RANGE"
+                radar_summary = f"1st 5m Gann Box [{st.gann_val}–{st.gann_vah}] | {prot_note}."
         elif is_hybrid:
             if not orb_ready:
                 radar_state = "WAITING_15M_SWINGS"
@@ -2110,6 +2198,20 @@ class TradingSystemOrchestrator:
             "htf_swing_high": st.htf_swing_high,
             "htf_swing_low": st.htf_swing_low,
             "htf_atr": st.htf_atr,
+            "htf_view": htf_view,
+            "htf_view_label": htf_view_label,
+            "atm_strike": atm_strike,
+            "recommended_option_side": rec_side,
+            "recommended_symbol": rec_symbol,
+            "recommended_label": rec_label,
+            "atm_protection_ok": atm_prot_ok,
+            "gann_vah": st.gann_vah,
+            "gann_val": st.gann_val,
+            "gann_mid": st.gann_mid,
+            "gann_up_run": st.gann_up_run,
+            "gann_dn_run": st.gann_dn_run,
+            "gann_t1_spot": st.gann_t1_spot,
+            "gann_t2_spot": st.gann_t2_spot,
             "supertrend_value": st.last_supertrend,
             "supertrend_dir": st.last_supertrend_dir,
             "candidate_ce": candidate_ce,
@@ -2282,16 +2384,21 @@ class TradingSystemOrchestrator:
         """Return thread-safe JSON snapshot for the live FastAPI Web UI."""
         now_ist = datetime.now(IST)
         vix = self.client.get_ltp(INDIA_VIX_KEY)
+        active_profile = str(getattr(self.settings, "strategy_profile", "DUAL_ORB_HYBRID") or "DUAL_ORB_HYBRID").upper()
         indices_data: Dict[str, Any] = {}
+        atm_panel_indices: Dict[str, Any] = {}
         for name, spec in INDEX_SPECS.items():
             st = self.strategy.get_state(name)
             spot_ltp = self.client.get_ltp(spec.spot_key) or st.last_spot
             is_hybrid = (
-                name == "NIFTY"
+                active_profile != "GANN_BOX_5M"
+                and name == "NIFTY"
                 and bool(getattr(self.settings, "nifty_use_htf_swing_hybrid", False))
             )
+            idx_mode = "GANN_BOX_5M" if active_profile == "GANN_BOX_5M" else ("HTF_SWING_HYBRID" if is_hybrid else "ORB_5GATE")
+            radar = self._build_index_radar(name, spot_ltp, vix, now_ist)
             indices_data[name] = {
-                "strategy_mode": "HTF_SWING_HYBRID" if is_hybrid else "ORB_5GATE",
+                "strategy_mode": idx_mode,
                 "spot_ltp": spot_ltp,
                 "orh": st.orh,
                 "orl": st.orl,
@@ -2299,6 +2406,14 @@ class TradingSystemOrchestrator:
                 "htf_swing_low": st.htf_swing_low,
                 "htf_atr": st.htf_atr,
                 "htf_bias": st.htf_bias,
+                "htf_view": radar.get("htf_view", 0),
+                "gann_vah": st.gann_vah,
+                "gann_val": st.gann_val,
+                "gann_mid": st.gann_mid,
+                "gann_up_run": st.gann_up_run,
+                "gann_dn_run": st.gann_dn_run,
+                "gann_t1_spot": st.gann_t1_spot,
+                "gann_t2_spot": st.gann_t2_spot,
                 "supertrend_value": st.last_supertrend,
                 "supertrend_dir": st.last_supertrend_dir,
                 "range_pct": st.range_pct,
@@ -2308,7 +2423,24 @@ class TradingSystemOrchestrator:
                 "rsi": st.last_rsi,
                 "last_signal": st.last_signal,
                 "last_eval_time": st.last_eval_time,
-                "radar": self._build_index_radar(name, spot_ltp, vix, now_ist),
+                "radar": radar,
+            }
+            atm_panel_indices[name] = {
+                "spot_ltp": spot_ltp,
+                "atm_strike": radar.get("atm_strike"),
+                "htf_view": radar.get("htf_view", 0),
+                "htf_view_label": radar.get("htf_view_label", "NEUTRAL"),
+                "htf_swing_high": st.htf_swing_high,
+                "htf_swing_low": st.htf_swing_low,
+                "gann_vah": st.gann_vah,
+                "gann_mid": st.gann_mid,
+                "gann_val": st.gann_val,
+                "gann_up_run": st.gann_up_run,
+                "gann_dn_run": st.gann_dn_run,
+                "recommended_side": radar.get("recommended_option_side"),
+                "recommended_symbol": radar.get("recommended_symbol", ""),
+                "recommended_label": radar.get("recommended_label", "WAIT"),
+                "atm_protection_ok": radar.get("atm_protection_ok", False),
             }
 
         positions_data = []
@@ -2364,7 +2496,14 @@ class TradingSystemOrchestrator:
             "max_daily_loss": self.risk_manager.get_dynamic_max_daily_loss(now_ist),
             "is_custom_max_daily_loss": self.risk_manager.custom_max_daily_loss is not None,
             "enabled_indices": self.risk_manager.get_enabled_indices(),
+            "strategy_profile": active_profile,
             "strategy_config": self.get_strategy_config(),
+            "atm_protection_panel": {
+                "strategy_profile": active_profile,
+                "protection_enabled": bool(getattr(self.settings, "gann_use_htf_view_protection", True)),
+                "gann_box_mode": str(getattr(self.settings, "gann_box_mode", "BREAKOUT") or "BREAKOUT"),
+                "indices": atm_panel_indices,
+            },
             "halted": self.risk_manager.halted,
             "halt_reason": self.risk_manager.halt_reason,
             "cached_contracts": self.mapper.cached_count,

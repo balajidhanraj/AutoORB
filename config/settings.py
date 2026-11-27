@@ -165,6 +165,13 @@ class AppSettings(BaseModel):
     nifty_htf_opt_sl_cap: float = Field(default=35.0)
     nifty_htf_entry_start_time: time = Field(default=time(10, 0, 0))
     nifty_htf_max_trades_per_day: int = Field(default=2)
+    strategy_profile: str = Field(default="DUAL_ORB_HYBRID")  # DUAL_ORB_HYBRID | GANN_BOX_5M
+    gann_box_mode: str = Field(default="BREAKOUT")            # BREAKOUT | BOUNCE
+    gann_confirm_candles: int = Field(default=1)
+    gann_hold_candles: int = Field(default=2)
+    gann_warmup_minutes: int = Field(default=15)
+    gann_use_htf_view_protection: bool = Field(default=True)
+    gann_stop_atr_mult: float = Field(default=0.5)
     banknifty_be_pyramiding: bool = Field(default=False)
     tuesday_expiry_boost: bool = Field(default=True)
     max_weekly_losses: int = Field(default=0)
@@ -278,6 +285,13 @@ def load_settings(env_path: str | Path | None = None) -> AppSettings:
         nifty_htf_opt_sl_cap=float(os.getenv("NIFTY_HTF_OPT_SL_CAP", "35.0") or 35.0),
         nifty_htf_entry_start_time=_parse_hhmm(os.getenv("NIFTY_HTF_ENTRY_START_TIME"), time(10, 0, 0)),
         nifty_htf_max_trades_per_day=int(os.getenv("NIFTY_HTF_MAX_TRADES_PER_DAY", "2") or 2),
+        strategy_profile=(os.getenv("STRATEGY_PROFILE", "DUAL_ORB_HYBRID") or "DUAL_ORB_HYBRID").strip().upper(),
+        gann_box_mode=(os.getenv("GANN_BOX_MODE", "BREAKOUT") or "BREAKOUT").strip().upper(),
+        gann_confirm_candles=int(os.getenv("GANN_CONFIRM_CANDLES", "1") or 1),
+        gann_hold_candles=int(os.getenv("GANN_HOLD_CANDLES", "2") or 2),
+        gann_warmup_minutes=int(os.getenv("GANN_WARMUP_MINUTES", "15") or 15),
+        gann_use_htf_view_protection=_parse_bool(os.getenv("GANN_USE_HTF_VIEW_PROTECTION"), default=True),
+        gann_stop_atr_mult=float(os.getenv("GANN_STOP_ATR_MULT", "0.5") or 0.5),
         banknifty_be_pyramiding=_parse_bool(os.getenv("BANKNIFTY_BE_PYRAMIDING"), default=False),
         tuesday_expiry_boost=_parse_bool(os.getenv("TUESDAY_EXPIRY_BOOST"), default=True),
         max_weekly_losses=int(os.getenv("MAX_WEEKLY_LOSSES", "0") or 0),

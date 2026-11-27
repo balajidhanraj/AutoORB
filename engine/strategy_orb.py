@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
-from typing import Dict, Optional, Sequence
+from typing import Dict, Optional, Sequence, Tuple
 
 from config.settings import INDEX_SPECS, IST, AppSettings
 from engine.candle_builder import Candle
@@ -41,6 +41,14 @@ class ORBState:
     htf_swing_low: Optional[float] = None
     htf_atr: Optional[float] = None
     htf_bias: int = 0
+    htf_view: int = 0
+    gann_vah: Optional[float] = None
+    gann_val: Optional[float] = None
+    gann_mid: Optional[float] = None
+    gann_up_run: int = 0
+    gann_dn_run: int = 0
+    gann_t1_spot: Optional[float] = None
+    gann_t2_spot: Optional[float] = None
     last_signal: Optional[str] = None
     last_eval_time: Optional[str] = None
 
@@ -179,12 +187,90 @@ class ORBStrategy:
             )
         return state
 
+    @staticmethod
+    def _compute_htf_view(
+        spot: Optional[float],
+        htf_c: Optional[float],
+        htf_f: Optional[float],
+        htf_b: int,
+    ) -> int:
+        """Compute directional HTF view (+1 BULLISH, -1 BEARISH, 0 NEUTRAL) matching Pine panel."""
+        if spot is not None:
+            if htf_c is not None and spot > htf_c:
+                return 1
+            if htf_f is not None and spot < htf_f:
+                return -1
+        return int(htf_b or 0)
+
+    def _update_htf_and_gann_box(
+        self,
+        index_name: str,
+        state: ORBState,
+        candles_seq: Sequence[Candle],
+        session_date: date,
+    ) -> Tuple[Optional[datetime], Optional[int], Optional[float], Optional[int], Optional[float]]:
+        """Update 15m HTF levels + 1st 5m Gann Box (VAH/VAL/Mid) and return bounce trackers."""
+        swing_len = int(getattr(self.settings, "nifty_htf_swing_len", 2) or 2)
+        closed_seq = [c for c in candles_seq if c.is_closed] or list(candles_seq)
+        series = build_htf_15m_series(closed_seq, swing_len=swing_len, atr_period=14)
+        if series:
+            htf_c, htf_f, htf_a, htf_b = series[-1]
+            state.htf_swing_high = round(htf_c, 2) if htf_c is not None else None
+            state.htf_swing_low = round(htf_f, 2) if htf_f is not None else None
+            state.htf_atr = round(htf_a, 2) if htf_a is not None else None
+            state.htf_bias = int(htf_b)
+            state.htf_view = self._compute_htf_view(state.last_spot, htf_c, htf_f, htf_b)
+
+        day_candles = []
+        for c in closed_seq:
+            ts_ist = c.timestamp.astimezone(IST) if c.timestamp.tzinfo else IST.localize(c.timestamp)
+            if ts_ist.date() == session_date:
+                day_candles.append((ts_ist, c))
+        day_candles.sort(key=lambda pair: pair[0])
+
+        if not day_candles:
+            return None, None, None, None, None
+
+        first_ts, first_bar = day_candles[0]
+        box_open_dt: Optional[datetime] = None
+        if first_ts.time() <= time(9, 25, 0):
+            box_open_dt = first_ts
+            vah = round(float(first_bar.high), 2)
+            val = round(float(first_bar.low), 2)
+            state.gann_vah = vah
+            state.gann_val = val
+            state.gann_mid = round((vah + val) * 0.5, 2)
+            up_run = 0
+            dn_run = 0
+            since_l: Optional[int] = None
+            low_at_l: Optional[float] = None
+            since_h: Optional[int] = None
+            high_at_h: Optional[float] = None
+            for ts_ist, c in day_candles[1:]:
+                c_close = float(c.close)
+                up_run = up_run + 1 if c_close > vah else 0
+                dn_run = dn_run + 1 if c_close < val else 0
+                if float(c.low) <= val:
+                    low_at_l = min(low_at_l, float(c.low)) if (since_l == 0 and low_at_l is not None) else float(c.low)
+                    since_l = 0
+                elif since_l is not None:
+                    since_l += 1
+                if float(c.high) >= vah:
+                    high_at_h = max(high_at_h, float(c.high)) if (since_h == 0 and high_at_h is not None) else float(c.high)
+                    since_h = 0
+                elif since_h is not None:
+                    since_h += 1
+            state.gann_up_run = up_run
+            state.gann_dn_run = dn_run
+            return box_open_dt, since_l, low_at_l, since_h, high_at_h
+        return None, None, None, None, None
+
     def warm_indicators_from_candles(
         self,
         index_name: str,
         candles: Sequence[Candle],
     ) -> ORBState:
-        """Warm up ORB/Hybrid HTF Swing, VWAP, RSI(14), and Supertrend(10,3) from backfilled candles."""
+        """Warm up ORB/Hybrid/Gann 15m HTF Swing, 1st 5m Box, VWAP, RSI(14), and Supertrend."""
         state = self.states[index_name]
         candles_seq = [c for c in candles if c.is_closed] or list(candles)
         if not candles_seq:
@@ -201,16 +287,12 @@ class ORBStrategy:
         state.last_supertrend = st_val
         state.last_supertrend_dir = st_dir
 
-        if index_name == "NIFTY" and getattr(self.settings, "nifty_use_htf_swing_hybrid", False):
+        self._update_htf_and_gann_box(index_name, state, candles_seq, session_date=ts_ist.date())
+
+        if getattr(self.settings, "strategy_profile", "DUAL_ORB_HYBRID") == "GANN_BOX_5M":
+            state.strategy_mode = "GANN_BOX_5M"
+        elif index_name == "NIFTY" and getattr(self.settings, "nifty_use_htf_swing_hybrid", False):
             state.strategy_mode = "HTF_SWING_HYBRID"
-            swing_len = int(getattr(self.settings, "nifty_htf_swing_len", 2) or 2)
-            series = build_htf_15m_series(candles_seq, swing_len=swing_len, atr_period=14)
-            if series:
-                htf_c, htf_f, htf_a, htf_b = series[-1]
-                state.htf_swing_high = round(htf_c, 2) if htf_c is not None else None
-                state.htf_swing_low = round(htf_f, 2) if htf_f is not None else None
-                state.htf_atr = round(htf_a, 2) if htf_a is not None else None
-                state.htf_bias = int(htf_b)
         else:
             state.strategy_mode = "ORB_5GATE"
         return state
@@ -251,11 +333,40 @@ class ORBStrategy:
         state.last_supertrend_dir = st_dir
         state.last_eval_time = eval_dt.strftime("%H:%M:%S")
 
+        telemetry_seq = [c for c in candles_seq if c.is_closed] if (current_time_ist is not None and not closed_candle.is_closed) else candles_seq
+        box_open_dt, since_l, low_at_l, since_h, high_at_h = self._update_htf_and_gann_box(
+            index_name=index_name,
+            state=state,
+            candles_seq=telemetry_seq,
+            session_date=candle_ist.date(),
+        )
+
         if not state.is_locked and eval_time >= self.settings.orb_end_time:
             self.lock_opening_range(index_name, candles_seq, session_date=candle_ist.date())
 
         close_px = float(closed_candle.close)
         vix_val = float(india_vix) if india_vix is not None else 15.0
+
+        # Dedicated Strategy 2: 1st 5-Minute Gann Box + Option/ATM HTF View Protection
+        if getattr(self.settings, "strategy_profile", "DUAL_ORB_HYBRID") == "GANN_BOX_5M":
+            return self._evaluate_gann_box_5m(
+                index_name=index_name,
+                state=state,
+                closed_candle=closed_candle,
+                candle_ist=candle_ist,
+                eval_dt=eval_dt,
+                current_time_ist=current_time_ist,
+                vwap=vwap,
+                rsi=rsi,
+                st_val=st_val,
+                st_dir=st_dir,
+                vix_val=vix_val,
+                box_open_dt=box_open_dt,
+                since_l=since_l,
+                low_at_l=low_at_l,
+                since_h=since_h,
+                high_at_h=high_at_h,
+            )
 
         # Dedicated H1 Hybrid NIFTY Engine:
         # 15m HTF Swing Break (swing_len=2, buf=0.1*ATR) + India VIX >= 12 + Supertrend(10,3) Confirm & Pure Trail
@@ -526,6 +637,144 @@ class ORBStrategy:
             )
 
         return None
+
+    def _evaluate_gann_box_5m(
+        self,
+        index_name: str,
+        state: ORBState,
+        closed_candle: Candle,
+        candle_ist: datetime,
+        eval_dt: datetime,
+        current_time_ist: Optional[datetime],
+        vwap: float,
+        rsi: float,
+        st_val: Optional[float],
+        st_dir: int,
+        vix_val: float,
+        box_open_dt: Optional[datetime],
+        since_l: Optional[int],
+        low_at_l: Optional[float],
+        since_h: Optional[int],
+        high_at_h: Optional[float],
+    ) -> Optional[ORBSignal]:
+        """Evaluate 1st 5-Minute Gann Box Breakout/Bounce with Option/ATM HTF View Protection."""
+        state.strategy_mode = "GANN_BOX_5M"
+
+        # Non-repainting: do not emit entries on unclosed 1-minute forming bars
+        if current_time_ist is not None and not closed_candle.is_closed:
+            return None
+
+        if box_open_dt is None or state.gann_vah is None or state.gann_val is None or state.gann_mid is None:
+            return None
+
+        box_h = round(state.gann_vah - state.gann_val, 2)
+        if box_h <= 0 or candle_ist <= box_open_dt:
+            return None
+
+        # Warm-up window from 09:15 (default 15m -> 09:30+) and configured entry window
+        warmup_min = int(getattr(self.settings, "gann_warmup_minutes", 15) or 0)
+        if warmup_min > 0 and eval_dt < (box_open_dt + timedelta(minutes=warmup_min)):
+            return None
+
+        entry_start = getattr(self.settings, "entry_start_time", time(9, 30, 0))
+        entry_end = getattr(self.settings, "entry_cutoff_time", time(15, 0, 0))
+        if not (entry_start <= eval_dt.time() <= entry_end):
+            return None
+
+        if vix_val < self.settings.min_india_vix:
+            return None
+
+        box_mode = str(getattr(self.settings, "gann_box_mode", "BREAKOUT") or "BREAKOUT").strip().upper()
+        confirm_n = max(0, int(getattr(self.settings, "gann_confirm_candles", 1) or 0))
+        hold_n = max(1, int(getattr(self.settings, "gann_hold_candles", 2) or 1))
+        stop_mult = float(getattr(self.settings, "gann_stop_atr_mult", 0.5) or 0.5)
+        use_prot = bool(getattr(self.settings, "gann_use_htf_view_protection", True))
+        use_st = bool(getattr(self.settings, "use_supertrend_filter", True))
+        opt_sl_cap = float(getattr(self.settings, "nifty_htf_opt_sl_cap", 35.0) or 35.0)
+        close_px = float(closed_candle.close)
+
+        if box_mode == "BOUNCE":
+            half_box = box_h * 0.5
+            raw_ce = (since_l is not None and since_l == hold_n and close_px < (state.gann_val + half_box))
+            raw_pe = (since_h is not None and since_h == hold_n and close_px > (state.gann_vah - half_box))
+        else:
+            raw_ce = (state.gann_up_run == (confirm_n + 1))
+            raw_pe = (state.gann_dn_run == (confirm_n + 1))
+
+        if not raw_ce and not raw_pe:
+            return None
+
+        # ATM / Option Chart Protection: BUY CE requires BULLISH HTF View (+1); BUY PE requires BEARISH (-1)
+        if use_prot:
+            if raw_ce and state.htf_view != 1:
+                logger.info("%s Gann 5m CE blocked by ATM HTF View Protection (view=%d)", index_name, state.htf_view)
+                raw_ce = False
+            if raw_pe and state.htf_view != -1:
+                logger.info("%s Gann 5m PE blocked by ATM HTF View Protection (view=%d)", index_name, state.htf_view)
+                raw_pe = False
+
+        if use_st and st_val is not None and st_dir != 0:
+            if raw_ce and (st_dir != 1 or close_px <= st_val):
+                raw_ce = False
+            if raw_pe and (st_dir != -1 or close_px >= st_val):
+                raw_pe = False
+
+        if not raw_ce and not raw_pe:
+            return None
+
+        atr_buf = stop_mult * float(state.htf_atr or 0.0)
+        if raw_ce:
+            if box_mode == "BOUNCE":
+                spot_sl = round(max(0.0, min(low_at_l or close_px, state.gann_val) - atr_buf), 2)
+                t1_spot, t2_spot = round(state.gann_mid, 2), round(state.gann_vah, 2)
+            else:
+                spot_sl = round(max(0.0, state.gann_mid - atr_buf), 2)
+                t1_spot = round(state.gann_vah + 0.5 * box_h, 2)
+                t2_spot = round(state.gann_vah + 1.0 * box_h, 2)
+            state.gann_t1_spot = t1_spot
+            state.gann_t2_spot = t2_spot
+            state.last_signal = f"CE 5m Gann {box_mode} @ {close_px:.2f} (VAH {state.gann_vah:.1f})"
+            return ORBSignal(
+                index_name=index_name,
+                signal_type="CE",
+                candle_time=candle_ist,
+                spot_close=close_px,
+                orh=state.gann_vah,
+                orl=state.gann_val,
+                vwap=vwap,
+                rsi=rsi,
+                india_vix=vix_val,
+                strategy_mode="GANN_BOX_5M",
+                spot_sl_price=spot_sl,
+                opt_sl_cap_pts=opt_sl_cap if index_name == "NIFTY" else None,
+                pure_supertrend_trail=use_st,
+            )
+
+        if box_mode == "BOUNCE":
+            spot_sl = round(max(high_at_h or close_px, state.gann_vah) + atr_buf, 2)
+            t1_spot, t2_spot = round(state.gann_mid, 2), round(state.gann_val, 2)
+        else:
+            spot_sl = round(state.gann_mid + atr_buf, 2)
+            t1_spot = round(state.gann_val - 0.5 * box_h, 2)
+            t2_spot = round(state.gann_val - 1.0 * box_h, 2)
+        state.gann_t1_spot = t1_spot
+        state.gann_t2_spot = t2_spot
+        state.last_signal = f"PE 5m Gann {box_mode} @ {close_px:.2f} (VAL {state.gann_val:.1f})"
+        return ORBSignal(
+            index_name=index_name,
+            signal_type="PE",
+            candle_time=candle_ist,
+            spot_close=close_px,
+            orh=state.gann_vah,
+            orl=state.gann_val,
+            vwap=vwap,
+            rsi=rsi,
+            india_vix=vix_val,
+            strategy_mode="GANN_BOX_5M",
+            spot_sl_price=spot_sl,
+            opt_sl_cap_pts=opt_sl_cap if index_name == "NIFTY" else None,
+            pure_supertrend_trail=use_st,
+        )
 
     def evaluate_live_1m_check(
         self,

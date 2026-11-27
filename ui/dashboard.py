@@ -129,6 +129,13 @@ class StrategyConfigRequest(BaseModel):
     nifty_htf_stop_atr_mult: Optional[float] = None
     nifty_htf_opt_sl_cap: Optional[float] = None
     nifty_htf_max_trades_per_day: Optional[int] = None
+    strategy_profile: Optional[str] = None
+    gann_box_mode: Optional[str] = None
+    gann_confirm_candles: Optional[int] = None
+    gann_hold_candles: Optional[int] = None
+    gann_warmup_minutes: Optional[int] = None
+    gann_use_htf_view_protection: Optional[bool] = None
+    gann_stop_atr_mult: Optional[float] = None
     max_trades_per_day: Optional[int] = None
     max_weekly_losses: Optional[int] = None
     tuesday_expiry_boost: Optional[bool] = None
@@ -163,6 +170,13 @@ class BacktestRunRequest(BaseModel):
     supertrend_multiplier: Optional[float] = None
     nifty_use_htf_swing_hybrid: Optional[bool] = None
     tuesday_expiry_boost: Optional[bool] = None
+    strategy_profile: Optional[str] = None
+    gann_box_mode: Optional[str] = None
+    gann_confirm_candles: Optional[int] = None
+    gann_hold_candles: Optional[int] = None
+    gann_warmup_minutes: Optional[int] = None
+    gann_use_htf_view_protection: Optional[bool] = None
+    gann_stop_atr_mult: Optional[float] = None
 
 
 def create_app(orchestrator: Any) -> FastAPI:
@@ -386,6 +400,7 @@ def create_app(orchestrator: Any) -> FastAPI:
             squareoff_val = pick("auto_squareoff_time", "15:15")
             max_tr_val = int(pick("max_trades_per_day", 4))
             daily_risk_val = float(req.daily_loss_limit if req.daily_loss_limit is not None else getattr(orchestrator.settings, "max_daily_loss", 10000.0))
+            strat_prof_val = str(pick("strategy_profile", "DUAL_ORB_HYBRID") or "DUAL_ORB_HYBRID").strip().upper()
 
             trades = run_nf_bnf_sequential_backtest(
                 candles_by_index,
@@ -420,10 +435,18 @@ def create_app(orchestrator: Any) -> FastAPI:
                 nifty_htf_opt_sl_cap=float(cfg.get("nifty_htf_opt_sl_cap", 35.0)),
                 nifty_htf_max_trades_per_day=int(cfg.get("nifty_htf_max_trades_per_day", 2)),
                 tuesday_expiry_boost=bool(pick("tuesday_expiry_boost", True)),
+                strategy_profile=strat_prof_val,
+                gann_box_mode=str(pick("gann_box_mode", "BREAKOUT") or "BREAKOUT"),
+                gann_confirm_candles=int(pick("gann_confirm_candles", 1)),
+                gann_hold_candles=int(pick("gann_hold_candles", 2)),
+                gann_warmup_minutes=int(pick("gann_warmup_minutes", 15)),
+                gann_use_htf_view_protection=bool(pick("gann_use_htf_view_protection", True)),
+                gann_stop_atr_mult=float(pick("gann_stop_atr_mult", 0.5)),
             )
             trades.sort(key=lambda t: (t["date"], t["in_t"]))
             summary = compute_metrics(trades)
             meta = {
+                "strategy_profile": strat_prof_val,
                 "entry_start_time": str(entry_start_val),
                 "entry_cutoff_time": str(entry_cut_val),
                 "orb_start_time": str(orb_start_val),
@@ -448,7 +471,7 @@ def create_app(orchestrator: Any) -> FastAPI:
                     "trades": trades,
                     "summary": summary,
                     "meta": meta,
-                    "message": f"Backtest complete ({entry_start_val}-{entry_cut_val} IST, {orb_min_val}m ORB): {len(trades)} trades.",
+                    "message": f"Backtest [{strat_prof_val}] complete ({entry_start_val}-{entry_cut_val} IST): {len(trades)} trades.",
                 }
             )
         except Exception as e:

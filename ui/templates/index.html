@@ -431,6 +431,9 @@
           </div>
         </div>
 
+        <!-- ATM Option Protection & Strategy View Panel -->
+        <div id="desk-atm-panel" class="px-4 py-2.5 bg-surface-container/60 border-b border-outline-variant/25 flex flex-wrap items-center justify-between gap-2 text-body-sm"></div>
+
         <!-- AutoORB 8-Column Table Header (.db-strat-head) -->
         <div class="db-strat-head">
           <div>STRATEGY</div>
@@ -721,6 +724,10 @@
                 <input id="bt-run-start" type="time" value="09:30" class="h-7 px-2 rounded bg-surface-container-lowest border border-outline-variant/40 font-data-mono-sm text-[11px]"/>
                 <label class="font-label-caps text-[10px] text-on-surface-variant">End</label>
                 <input id="bt-run-end" type="time" value="15:00" class="h-7 px-2 rounded bg-surface-container-lowest border border-outline-variant/40 font-data-mono-sm text-[11px]"/>
+                <select id="bt-run-strategy" class="h-7 px-2 rounded bg-surface-container-lowest border border-outline-variant/40 font-data-mono-sm text-[11px]">
+                  <option value="DUAL_ORB_HYBRID">Dual ORB / Hybrid</option>
+                  <option value="GANN_BOX_5M">1st 5m Gann Box + ATM Prot</option>
+                </select>
                 <select id="bt-run-orb" class="h-7 px-2 rounded bg-surface-container-lowest border border-outline-variant/40 font-data-mono-sm text-[11px]">
                   <option value="5">5m ORB</option>
                   <option value="15" selected>15m ORB</option>
@@ -1022,10 +1029,38 @@
         <button onclick="closeModal('modal-config')" type="button" class="w-8 h-8 rounded bg-surface-container-high flex items-center justify-center cursor-pointer"><span class="material-symbols-outlined">close</span></button>
       </div>
       <div class="flex flex-wrap gap-2">
+        <button onclick="applyDesktopOrbPreset('gann_5m')" type="button" class="px-3 py-1 rounded bg-tertiary-container/25 text-amber-tactical border border-tertiary-fixed-dim/40 font-label-caps text-label-caps font-bold cursor-pointer">Preset: 1st 5m Gann Box + ATM Prot (09:30–15:00)</button>
         <button onclick="applyDesktopOrbPreset('0930_15m')" type="button" class="px-3 py-1 rounded bg-primary-container/20 text-profit border border-primary-container/40 font-label-caps text-label-caps font-bold cursor-pointer">Preset: 09:30–15:00 (15m ORB)</button>
         <button onclick="applyDesktopOrbPreset('default_30m')" type="button" class="px-3 py-1 rounded bg-surface-container text-on-surface border border-outline-variant/40 font-label-caps text-label-caps cursor-pointer">Preset: 10:00–13:15 (30m Default)</button>
       </div>
       <form id="form-orb-config" class="space-y-4 text-body-sm">
+        <div class="p-3 rounded-xl bg-surface-container space-y-2.5 border border-primary-container/25">
+          <div class="font-label-caps text-profit font-bold">Active Strategy Profile &amp; 1st 5m Gann Box + ATM Protection</div>
+          <div class="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+            <div>
+              <label class="font-label-caps text-on-surface-variant block mb-1">Active Strategy</label>
+              <select id="cfg-strat-profile" class="w-full p-2 rounded-lg bg-surface-container-lowest border border-outline-variant/50 font-data-mono-sm text-on-surface">
+                <option value="DUAL_ORB_HYBRID">DUAL_ORB_HYBRID (ORB / Hybrid)</option>
+                <option value="GANN_BOX_5M">GANN_BOX_5M (1st 5m Gann + ATM Prot)</option>
+              </select>
+            </div>
+            <div>
+              <label class="font-label-caps text-on-surface-variant block mb-1">1st 5m Box Mode</label>
+              <select id="cfg-gann-mode" class="w-full p-2 rounded-lg bg-surface-container-lowest border border-outline-variant/50 font-data-mono-sm text-on-surface">
+                <option value="BREAKOUT">Breakout (Close Beyond)</option>
+                <option value="BOUNCE">Bounce (Touch &amp; Hold)</option>
+              </select>
+            </div>
+            <div><label class="font-label-caps text-on-surface-variant block mb-1">Confirm Candles (N)</label><input id="cfg-gann-confirm" type="number" min="0" max="5" class="w-full p-2 rounded-lg bg-surface-container-lowest border border-outline-variant/50 font-data-mono-sm text-on-surface"/></div>
+            <div><label class="font-label-caps text-on-surface-variant block mb-1">Bounce Hold Bars</label><input id="cfg-gann-hold" type="number" min="1" max="10" class="w-full p-2 rounded-lg bg-surface-container-lowest border border-outline-variant/50 font-data-mono-sm text-on-surface"/></div>
+            <div><label class="font-label-caps text-on-surface-variant block mb-1">Gann Warm-up (Min)</label><input id="cfg-gann-warm" type="number" min="0" max="240" class="w-full p-2 rounded-lg bg-surface-container-lowest border border-outline-variant/50 font-data-mono-sm text-on-surface"/></div>
+            <div><label class="font-label-caps text-on-surface-variant block mb-1">Box SL ATR Mult</label><input id="cfg-gann-stop-atr" type="number" step="0.05" min="0.05" max="3" class="w-full p-2 rounded-lg bg-surface-container-lowest border border-outline-variant/50 font-data-mono-sm text-on-surface"/></div>
+          </div>
+          <div class="pt-1 font-label-caps">
+            <label class="inline-flex items-center gap-1.5 cursor-pointer"><input id="cfg-gann-prot" type="checkbox" class="w-3.5 h-3.5 accent-indigo-500"/>Option/ATM HTF View Protection (CE only if BULLISH, PE only if BEARISH)</label>
+          </div>
+        </div>
+
         <div class="p-3 rounded-xl bg-surface-container space-y-2.5">
           <div class="font-label-caps text-primary font-bold">Session &amp; Order Window Timings (IST)</div>
           <div class="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
@@ -1460,7 +1495,33 @@
         renderAnalyticsOverview();
       }
 
+      function renderDesktopAtmPanel() {
+        const host = document.getElementById('desk-atm-panel');
+        if (!host) return;
+        const ap = snap.atm_protection_panel || {};
+        const idxMap = ap.indices || {};
+        const prof = ap.strategy_profile || snap.strategy_profile || 'DUAL_ORB_HYBRID';
+        const protOn = ap.protection_enabled !== false;
+        const cards = Object.entries(idxMap).map(([idx, v]) => {
+          const clr = v.htf_view === 1 ? 'text-profit border-primary-container/40 bg-primary-container/10' : v.htf_view === -1 ? 'text-loss border-secondary-container/40 bg-secondary-container/10' : 'text-on-surface-variant border-outline-variant/30 bg-surface-container-low';
+          const boxTxt = (v.gann_vah && v.gann_val) ? `5m Box ${A.fmtNum(v.gann_val, 0)}–${A.fmtNum(v.gann_vah, 0)}` : '5m Box Pending';
+          return `<div class="px-2.5 py-1.5 rounded-lg border ${clr} flex items-center gap-2 font-data-mono-sm">
+            <b>${esc(idx)}</b>
+            <span>${esc(v.htf_view_label || 'NEUTRAL')}</span>
+            <span class="font-bold">${esc(v.recommended_label || 'WAIT')}</span>
+            <span class="text-on-surface-variant text-[10.5px]">(${boxTxt})</span>
+          </div>`;
+        }).join('');
+        host.innerHTML = `<div class="flex items-center gap-2 flex-wrap">
+            <span class="px-2 py-0.5 rounded bg-surface-container-highest text-primary font-label-caps font-bold">${esc(prof)}</span>
+            <span class="font-label-caps text-on-surface-variant">ATM Protection: <b class="${protOn ? 'text-profit' : 'text-amber-tactical'}">${protOn ? 'ON' : 'OFF'}</b></span>
+            ${cards || '<span class="text-on-surface-variant font-data-mono-sm">Warming NIFTY/BANKNIFTY HTF &amp; 1st 5m box...</span>'}
+          </div>
+          <button type="button" onclick="document.getElementById('btn-hdr-config').click()" class="db-rowact h-7 px-2.5">Switch Strategy / Gates</button>`;
+      }
+
       function renderRadarCards() {
+        renderDesktopAtmPanel();
         const grid = document.getElementById('radar-cards-grid');
         const entries = Object.entries(snap.indices || {});
         const positions = snap.positions || [];
@@ -1514,9 +1575,11 @@
             }
           }
           const isEnabled = enMap[idx] !== false;
-          const isHybrid = (info.strategy_mode || r.strategy_mode) === 'HTF_SWING_HYBRID';
-          const bandHi = isHybrid ? (info.htf_swing_high ?? info.orh) : info.orh;
-          const bandLo = isHybrid ? (info.htf_swing_low ?? info.orl) : info.orl;
+          const stratMode = info.strategy_mode || r.strategy_mode || 'ORB_5GATE';
+          const isGann = stratMode === 'GANN_BOX_5M';
+          const isHybrid = stratMode === 'HTF_SWING_HYBRID';
+          const bandHi = isGann ? (info.gann_vah ?? info.orh) : (isHybrid ? (info.htf_swing_high ?? info.orh) : info.orh);
+          const bandLo = isGann ? (info.gann_val ?? info.orl) : (isHybrid ? (info.htf_swing_low ?? info.orl) : info.orl);
           const isBear = (bandLo && ltp && ltp <= bandLo) || (r.radar_state === 'IMMINENT_PE_BREAKOUT') || (info.supertrend_dir === -1);
           const stateBadge = esc((r.radar_state || 'SCANNING').replace(/_/g, ' '));
           const readiness = Number(r.readiness_pct || 0);
@@ -1524,7 +1587,15 @@
           const stVal = info.supertrend_value ?? r.supertrend_value ?? info.supertrend;
           const stOk = stDir === 1 || stDir === -1;
           const stBadgeTxt = stDir === 1 ? `ST BULL (${A.fmtNum(stVal, 1)})` : stDir === -1 ? `ST BEAR (${A.fmtNum(stVal, 1)})` : `ST(10,3) ${stVal ? A.fmtNum(stVal, 1) : 'SYNC'}`;
-          const gates = isHybrid
+          const gates = isGann
+            ? [
+                ['SYS', r.system_ready],
+                ['VIX', r.vix_ready],
+                ['5m BOX', r.orb_ready],
+                ['BREAK', r.ce_price_ok || r.pe_price_ok],
+                ['ATM PROT', r.atm_protection_ok]
+              ]
+            : isHybrid
             ? [
                 ['SYS', r.system_ready],
                 ['VIX', r.vix_ready],
@@ -1545,7 +1616,7 @@
           const totalQty = Number(r.total_qty || (lots * lotSize));
           const prd = r.product_type || 'M';
           const distStr = r.dist_to_orh !== null && r.dist_to_orh !== undefined
-            ? `${isHybrid ? 'RED' : 'ORH'} ${r.dist_to_orh > 0 ? '+' : ''}${r.dist_to_orh}`
+            ? `${isGann ? 'VAH' : isHybrid ? 'RED' : 'ORH'} ${r.dist_to_orh > 0 ? '+' : ''}${r.dist_to_orh}`
             : '--';
 
           // Positions & P&L specific to this deployed strategy
@@ -1592,7 +1663,7 @@
                     <span>${drawerOpen ? '▾' : '▸'}</span>
                     <span>${idxPositions.length} Leg${idxPositions.length === 1 ? '' : 's'} &bull; Radar</span>
                   </button>
-                  <span class="db-strat__name truncate">${esc(idx)} &mdash; ${isHybrid ? 'Hybrid H1 (15m HTF Swing + ST 10,3)' : '5-Gate 30m ORB + ST(10,3)'}</span>
+                  <span class="db-strat__name truncate">${esc(idx)} &mdash; ${isGann ? '1st 5m Gann Box + ATM Prot' : isHybrid ? 'Hybrid H1 (15m HTF Swing + ST 10,3)' : '5-Gate 30m ORB + ST(10,3)'}</span>
                   <span class="db-strat__chip ${isLiveMode ? 'db-strat__chip--live' : 'db-strat__chip--paper'}">${isLiveMode ? 'LIVE AUTO' : 'PAPER'}</span>
                 </div>
                 <div class="flex items-center gap-2 text-[11px] font-data-mono-sm text-on-surface-variant flex-wrap">
@@ -1729,18 +1800,18 @@
               <div class="grid grid-cols-1 lg:grid-cols-12 gap-3 items-center">
                 <div class="lg:col-span-4 h-14 bg-surface-container-lowest/90 border border-outline-variant/25 rounded-lg px-2.5 py-1.5 flex flex-col justify-between">
                   <div class="flex items-center justify-between font-label-caps text-[9.5px] text-on-surface-variant">
-                    <span>${esc(idx)} INTRADAY SPOT &amp; ${isHybrid ? '15m HTF SWING BANDS' : 'ORB BANDS'}</span>
+                    <span>${esc(idx)} INTRADAY SPOT &amp; ${isGann ? '1st 5m GANN BOX' : isHybrid ? '15m HTF SWING BANDS' : 'ORB BANDS'}</span>
                     <span class="${isBear ? 'text-loss' : 'text-profit'} font-bold">${A.fmtNum(ltp, 2)}</span>
                   </div>
                   <div class="h-8">${A.buildSparklineSvg(spotHistory[idx], bandHi, bandLo, !isBear)}</div>
                 </div>
 
                 <div class="lg:col-span-8 grid grid-cols-3 sm:grid-cols-7 gap-1.5 font-data-mono-sm tabular-nums">
-                  <div class="p-2 rounded-lg bg-surface-container-low border border-outline-variant/25"><span class="font-label-caps text-on-surface-variant block">${isHybrid ? '15m RED' : 'ORH'}</span><b class="text-profit">${A.fmtNum(bandHi, 2)}</b></div>
-                  <div class="p-2 rounded-lg bg-surface-container-low border border-outline-variant/25"><span class="font-label-caps text-on-surface-variant block">${isHybrid ? '15m GRN' : 'ORL'}</span><b class="text-loss">${A.fmtNum(bandLo, 2)}</b></div>
-                  <div class="p-2 rounded-lg bg-surface-container-low border border-outline-variant/25"><span class="font-label-caps text-on-surface-variant block">${isHybrid ? '15m ATR' : 'RANGE %'}</span><b class="text-amber-tactical">${isHybrid ? (info.htf_atr ? A.fmtNum(info.htf_atr, 1) : '--') : (info.range_pct !== null && info.range_pct !== undefined ? info.range_pct.toFixed(2) + '%' : '--')}</b></div>
-                  <div class="p-2 rounded-lg bg-surface-container-low border border-outline-variant/25"><span class="font-label-caps text-on-surface-variant block">VWAP</span><b class="text-on-surface">${A.fmtNum(info.vwap, 1)}</b></div>
-                  <div class="p-2 rounded-lg bg-surface-container-low border border-outline-variant/25"><span class="font-label-caps text-on-surface-variant block">RSI (14)</span><b class="${(info.rsi || 50) > 60 ? 'text-profit' : (info.rsi || 50) < 40 ? 'text-loss' : 'text-on-surface'}">${info.rsi !== null && info.rsi !== undefined ? Number(info.rsi).toFixed(1) : '--'}</b></div>
+                  <div class="p-2 rounded-lg bg-surface-container-low border border-outline-variant/25"><span class="font-label-caps text-on-surface-variant block">${isGann ? '5m VAH' : isHybrid ? '15m RED' : 'ORH'}</span><b class="text-profit">${A.fmtNum(bandHi, 2)}</b></div>
+                  <div class="p-2 rounded-lg bg-surface-container-low border border-outline-variant/25"><span class="font-label-caps text-on-surface-variant block">${isGann ? '5m VAL' : isHybrid ? '15m GRN' : 'ORL'}</span><b class="text-loss">${A.fmtNum(bandLo, 2)}</b></div>
+                  <div class="p-2 rounded-lg bg-surface-container-low border border-outline-variant/25"><span class="font-label-caps text-on-surface-variant block">${isGann ? '5m MID' : isHybrid ? '15m ATR' : 'RANGE %'}</span><b class="text-amber-tactical">${isGann ? A.fmtNum(info.gann_mid, 1) : isHybrid ? (info.htf_atr ? A.fmtNum(info.htf_atr, 1) : '--') : (info.range_pct !== null && info.range_pct !== undefined ? info.range_pct.toFixed(2) + '%' : '--')}</b></div>
+                  <div class="p-2 rounded-lg bg-surface-container-low border border-outline-variant/25"><span class="font-label-caps text-on-surface-variant block">${isGann ? 'HTF VIEW' : 'VWAP'}</span><b class="${isGann ? (r.htf_view === 1 ? 'text-profit' : r.htf_view === -1 ? 'text-loss' : 'text-on-surface') : 'text-on-surface'}">${isGann ? esc(r.htf_view_label || 'NEUTRAL') : A.fmtNum(info.vwap, 1)}</b></div>
+                  <div class="p-2 rounded-lg bg-surface-container-low border border-outline-variant/25"><span class="font-label-caps text-on-surface-variant block">${isGann ? 'BOX RUN' : 'RSI (14)'}</span><b class="text-on-surface">${isGann ? `↑${info.gann_up_run || 0}/↓${info.gann_dn_run || 0}` : (info.rsi !== null && info.rsi !== undefined ? Number(info.rsi).toFixed(1) : '--')}</b></div>
                   <div class="p-2 rounded-lg bg-surface-container-low border border-outline-variant/25"><span class="font-label-caps text-on-surface-variant block">ST (10,3)</span><b class="${stDir === -1 ? 'text-loss' : 'text-profit'}">${stVal ? A.fmtNum(stVal, 1) : (stDir === 1 ? 'BULL' : stDir === -1 ? 'BEAR' : 'ACTIVE')}</b></div>
                   <div class="p-2 rounded-lg bg-surface-container-low border border-outline-variant/25"><span class="font-label-caps text-on-surface-variant block">DIST</span><b class="text-on-surface">${esc(distStr)}</b></div>
                 </div>
@@ -1961,7 +2032,8 @@
       function updateBacktestBadge(meta) {
         const el = document.getElementById('bt-window-badge');
         if (el && meta) {
-          el.textContent = `${meta.entry_start_time || '09:30'}–${meta.entry_cutoff_time || '15:00'} IST • ${meta.orb_window_minutes || 15}m ORB`;
+          const prof = meta.strategy_profile || 'DUAL_ORB_HYBRID';
+          el.textContent = `${prof === 'GANN_BOX_5M' ? '1st 5m Gann' : 'Dual Engine'} • ${meta.entry_start_time || '09:30'}–${meta.entry_cutoff_time || '15:00'} IST • ${meta.orb_window_minutes || 15}m ORB`;
         }
       }
 
@@ -1979,6 +2051,7 @@
         if (btn) btn.textContent = 'RUNNING...';
         try {
           const res = await A.api.runBacktest({
+            strategy_profile: (document.getElementById('bt-run-strategy') && document.getElementById('bt-run-strategy').value) || 'DUAL_ORB_HYBRID',
             entry_start_time: (document.getElementById('bt-run-start') && document.getElementById('bt-run-start').value) || '09:30',
             entry_cutoff_time: (document.getElementById('bt-run-end') && document.getElementById('bt-run-end').value) || '15:00',
             orb_window_minutes: Number((document.getElementById('bt-run-orb') && document.getElementById('bt-run-orb').value) || 15),
@@ -2447,6 +2520,13 @@
         if (!cfg) return;
         const setV = (id, v) => { const el = document.getElementById(id); if (el && v !== undefined && v !== null) el.value = v; };
         const setC = (id, v) => { const el = document.getElementById(id); if (el && typeof v === 'boolean') el.checked = v; };
+        setV('cfg-strat-profile', cfg.strategy_profile || 'DUAL_ORB_HYBRID');
+        setV('cfg-gann-mode', cfg.gann_box_mode || 'BREAKOUT');
+        setV('cfg-gann-confirm', cfg.gann_confirm_candles ?? 1);
+        setV('cfg-gann-hold', cfg.gann_hold_candles ?? 2);
+        setV('cfg-gann-warm', cfg.gann_warmup_minutes ?? 15);
+        setV('cfg-gann-stop-atr', cfg.gann_stop_atr_mult ?? 0.5);
+        setC('cfg-gann-prot', cfg.gann_use_htf_view_protection !== false);
         setV('cfg-start-time', cfg.orb_start_time || '09:15');
         setV('cfg-minutes', cfg.orb_window_minutes || 30);
         setV('cfg-entry-start', cfg.entry_start_time || '10:00');
@@ -2480,8 +2560,22 @@
       }
 
       window.applyDesktopOrbPreset = (preset) => {
-        if (preset === '0930_15m') {
+        if (preset === 'gann_5m') {
           fillDesktopStrategyModal({
+            strategy_profile: 'GANN_BOX_5M',
+            gann_box_mode: 'BREAKOUT',
+            gann_confirm_candles: 1,
+            gann_warmup_minutes: 15,
+            gann_use_htf_view_protection: true,
+            orb_start_time: '09:15',
+            orb_window_minutes: 5,
+            entry_start_time: '09:30',
+            entry_cutoff_time: '15:00',
+            nifty_htf_entry_start_time: '09:30',
+          });
+        } else if (preset === '0930_15m') {
+          fillDesktopStrategyModal({
+            strategy_profile: 'DUAL_ORB_HYBRID',
             orb_start_time: '09:15',
             orb_window_minutes: 15,
             entry_start_time: '09:30',
@@ -2490,6 +2584,7 @@
           });
         } else {
           fillDesktopStrategyModal({
+            strategy_profile: 'DUAL_ORB_HYBRID',
             orb_start_time: '09:15',
             orb_window_minutes: 30,
             entry_start_time: '10:00',
@@ -2503,6 +2598,13 @@
         e.preventDefault();
         try {
           const r = await A.api.setStrategyConfig({
+            strategy_profile: document.getElementById('cfg-strat-profile').value,
+            gann_box_mode: document.getElementById('cfg-gann-mode').value,
+            gann_confirm_candles: Number(document.getElementById('cfg-gann-confirm').value),
+            gann_hold_candles: Number(document.getElementById('cfg-gann-hold').value),
+            gann_warmup_minutes: Number(document.getElementById('cfg-gann-warm').value),
+            gann_stop_atr_mult: Number(document.getElementById('cfg-gann-stop-atr').value),
+            gann_use_htf_view_protection: document.getElementById('cfg-gann-prot').checked,
             orb_start_time: document.getElementById('cfg-start-time').value.trim(),
             orb_window_minutes: Number(document.getElementById('cfg-minutes').value),
             entry_start_time: document.getElementById('cfg-entry-start').value.trim(),

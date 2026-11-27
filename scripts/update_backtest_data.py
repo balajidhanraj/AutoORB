@@ -538,9 +538,24 @@ def run_nf_bnf_sequential_backtest(
     nifty_htf_opt_sl_cap: float = 35.0,
     nifty_htf_max_trades_per_day: int = 2,
     tuesday_expiry_boost: bool = True,
+    strategy_profile: str = "DUAL_ORB_HYBRID",
+    gann_box_mode: str = "BREAKOUT",
+    gann_confirm_candles: int = 1,
+    gann_hold_candles: int = 2,
+    gann_warmup_minutes: int = 15,
+    gann_use_htf_view_protection: bool = True,
+    gann_stop_atr_mult: float = 0.5,
 ) -> List[Dict[str, Any]]:
-    """Run dual-engine Hybrid NIFTY + ORB backtest with configurable gates and entry window."""
+    """Run dual-engine or 1st 5m Gann Box + ATM Protection backtest with configurable gates."""
     vix_lookup = vix_map or {}
+    strat_prof = str(strategy_profile or "DUAL_ORB_HYBRID").strip().upper()
+    use_gann_strategy = (strat_prof == "GANN_BOX_5M")
+    gann_mode_u = str(gann_box_mode or "BREAKOUT").strip().upper()
+    gann_conf_n = max(0, int(gann_confirm_candles if gann_confirm_candles is not None else 1))
+    gann_hold_n = max(1, int(gann_hold_candles or 2))
+    gann_warm_m = max(0, int(gann_warmup_minutes if gann_warmup_minutes is not None else 15))
+    gann_atr_mult = max(0.05, float(gann_stop_atr_mult or 0.5))
+
     orb_start_t = _parse_hhmm_time(orb_start_time, time(9, 15))
     orb_min = max(5, min(60, int(orb_window_minutes or 15)))
     orb_end_t = (datetime.combine(date(2000, 1, 1), orb_start_t) + timedelta(minutes=orb_min)).time()
@@ -566,16 +581,21 @@ def run_nf_bnf_sequential_backtest(
             days_by_idx[idx].setdefault(d, []).append(c)
             all_dates_set.add(d)
 
-    # Precompute non-repainting 15m HTF Swing levels for NIFTY when Hybrid mode is active
-    nf_htf_by_ts: Dict[datetime, Tuple[Optional[float], Optional[float], Optional[float], int, Optional[Tuple[Optional[float], Optional[float], Optional[float], int]], Optional[float]]] = {}
-    if "NIFTY" in indices and nifty_use_htf_swing_hybrid:
-        nf_candles = candles_by_index.get("NIFTY", [])
-        nf_htf_series = build_htf_15m_series(nf_candles, swing_len=max(1, int(nifty_htf_swing_len)), atr_period=14)
-        for pos_k, c in enumerate(nf_candles):
-            htf_c, htf_f, htf_a, htf_b = nf_htf_series[pos_k]
-            prev_tuple = nf_htf_series[pos_k - 1] if pos_k >= 1 else None
-            prev_cls = nf_candles[pos_k - 1].close if pos_k >= 1 else None
-            nf_htf_by_ts[c.timestamp] = (htf_c, htf_f, htf_a, htf_b, prev_tuple, prev_cls)
+    # Precompute non-repainting 15m HTF Swing levels (for NIFTY Hybrid and for both indices in GANN_BOX_5M)
+    htf_by_idx: Dict[str, Dict[datetime, Tuple[Optional[float], Optional[float], Optional[float], int, Optional[Tuple[Optional[float], Optional[float], Optional[float], int]], Optional[float]]]] = {
+        idx: {} for idx in indices
+    }
+    for idx in indices:
+        need_htf = use_gann_strategy or (idx == "NIFTY" and nifty_use_htf_swing_hybrid)
+        if not need_htf:
+            continue
+        idx_candles = candles_by_index.get(idx, [])
+        idx_htf_series = build_htf_15m_series(idx_candles, swing_len=max(1, int(nifty_htf_swing_len)), atr_period=14)
+        for pos_k, c in enumerate(idx_candles):
+            htf_c, htf_f, htf_a, htf_b = idx_htf_series[pos_k]
+            prev_tuple = idx_htf_series[pos_k - 1] if pos_k >= 1 else None
+            prev_cls = idx_candles[pos_k - 1].close if pos_k >= 1 else None
+            htf_by_idx[idx][c.timestamp] = (htf_c, htf_f, htf_a, htf_b, prev_tuple, prev_cls)
 
     seen_by_idx: Dict[str, List[Candle]] = {idx: [] for idx in indices}
     prev_close_by_idx: Dict[str, Optional[float]] = {idx: None for idx in indices}
@@ -620,6 +640,25 @@ def run_nf_bnf_sequential_backtest(
             else:
                 orb_info[idx] = None
 
+        gann_box: Dict[str, Optional[Tuple[datetime, float, float, float]]] = {}
+        gann_up_run = {idx: 0 for idx in indices}
+        gann_dn_run = {idx: 0 for idx in indices}
+        gann_since_l: Dict[str, Optional[int]] = {idx: None for idx in indices}
+        gann_low_at_l: Dict[str, Optional[float]] = {idx: None for idx in indices}
+        gann_since_h: Dict[str, Optional[int]] = {idx: None for idx in indices}
+        gann_high_at_h: Dict[str, Optional[float]] = {idx: None for idx in indices}
+        if use_gann_strategy:
+            for idx in indices:
+                dc = days_by_idx[idx].get(sess_date, [])
+                if dc and dc[0].timestamp.time() <= time(9, 25):
+                    fb = dc[0]
+                    if fb.high > fb.low:
+                        gann_box[idx] = (fb.timestamp, float(fb.high), float(fb.low), float(fb.high + fb.low) * 0.5)
+                    else:
+                        gann_box[idx] = None
+                else:
+                    gann_box[idx] = None
+
         day_lots = 3 if (tuesday_expiry_boost and sess_date.weekday() == 1) else 2
         trades_today_global = 0
         trades_by_idx = {idx: 0 for idx in indices}
@@ -645,11 +684,29 @@ def run_nf_bnf_sequential_backtest(
             if global_active_exit_ts is not None and ts > global_active_exit_ts:
                 global_active_exit_ts = None
 
-            # Always update seen candle history for both indices first
+            # Always update seen candle history and Gann 1st-5m progression for both indices first
             for idx in indices:
                 pos_i = bars_ts_idx[idx].get(ts)
                 if pos_i is not None:
-                    seen_by_idx[idx].append(days_by_idx[idx][sess_date][pos_i])
+                    c_now = days_by_idx[idx][sess_date][pos_i]
+                    seen_by_idx[idx].append(c_now)
+                    if use_gann_strategy and gann_box.get(idx) is not None:
+                        b_open_ts, b_vah, b_val, _b_mid = gann_box[idx]  # type: ignore[misc]
+                        if ts > b_open_ts:
+                            gann_up_run[idx] = gann_up_run[idx] + 1 if c_now.close > b_vah else 0
+                            gann_dn_run[idx] = gann_dn_run[idx] + 1 if c_now.close < b_val else 0
+                            if c_now.low <= b_val:
+                                cur_ll = gann_low_at_l[idx]
+                                gann_low_at_l[idx] = min(cur_ll, float(c_now.low)) if (gann_since_l[idx] == 0 and cur_ll is not None) else float(c_now.low)
+                                gann_since_l[idx] = 0
+                            elif gann_since_l[idx] is not None:
+                                gann_since_l[idx] += 1
+                            if c_now.high >= b_vah:
+                                cur_hh = gann_high_at_h[idx]
+                                gann_high_at_h[idx] = max(cur_hh, float(c_now.high)) if (gann_since_h[idx] == 0 and cur_hh is not None) else float(c_now.high)
+                                gann_since_h[idx] = 0
+                            elif gann_since_h[idx] is not None:
+                                gann_since_h[idx] += 1
 
             if day_halted or trades_today_global >= max_trades_per_day:
                 continue
@@ -669,7 +726,79 @@ def run_nf_bnf_sequential_backtest(
                 candle = dc[pos_i]
                 spec = INDEX_SPECS[idx]
 
-                if idx == "NIFTY" and nifty_use_htf_swing_hybrid:
+                if use_gann_strategy:
+                    box_tuple = gann_box.get(idx)
+                    if box_tuple is None:
+                        continue
+                    b_open_ts, b_vah, b_val, b_mid = box_tuple
+                    if ts <= b_open_ts or ts < (b_open_ts + timedelta(minutes=gann_warm_m)):
+                        continue
+                    if not (entry_start_t <= ts.time() <= entry_end_t):
+                        continue
+                    vix_now = vix_lookup.get(ts, 14.5)
+                    if vix_now < min_india_vix:
+                        continue
+                    box_h = b_vah - b_val
+                    if gann_mode_u == "BOUNCE":
+                        ce_sig = (gann_since_l[idx] == gann_hold_n and candle.close < (b_val + 0.5 * box_h))
+                        pe_sig = (gann_since_h[idx] == gann_hold_n and candle.close > (b_vah - 0.5 * box_h))
+                    else:
+                        ce_sig = (gann_up_run[idx] == (gann_conf_n + 1))
+                        pe_sig = (gann_dn_run[idx] == (gann_conf_n + 1))
+                    if not ce_sig and not pe_sig:
+                        continue
+
+                    htf_info = htf_by_idx[idx].get(ts)
+                    htf_c = htf_info[0] if htf_info else None
+                    htf_f = htf_info[1] if htf_info else None
+                    htf_a = htf_info[2] if htf_info else None
+                    htf_b = htf_info[3] if htf_info else 0
+                    htf_view = 1 if (htf_c is not None and candle.close > htf_c) else (-1 if (htf_f is not None and candle.close < htf_f) else int(htf_b or 0))
+                    if gann_use_htf_view_protection:
+                        if ce_sig and htf_view != 1:
+                            ce_sig = False
+                        if pe_sig and htf_view != -1:
+                            pe_sig = False
+                    if use_supertrend_filter and (ce_sig or pe_sig):
+                        st_val, st_dir = day_st_map[idx].get(ts, (None, 0))
+                        if st_val is not None and st_dir != 0:
+                            if ce_sig and (st_dir != 1 or candle.close <= st_val):
+                                ce_sig = False
+                            if pe_sig and (st_dir != -1 or candle.close >= st_val):
+                                pe_sig = False
+                    if not ce_sig and not pe_sig:
+                        continue
+
+                    sig_type = "CE" if ce_sig else "PE"
+                    atr_buf = gann_atr_mult * float(htf_a or 0.0)
+                    if ce_sig:
+                        spot_sl = max(0.0, min(gann_low_at_l[idx] or candle.close, b_val) - atr_buf) if gann_mode_u == "BOUNCE" else max(0.0, b_mid - atr_buf)
+                    else:
+                        spot_sl = (max(gann_high_at_h[idx] or candle.close, b_vah) + atr_buf) if gann_mode_u == "BOUNCE" else (b_mid + atr_buf)
+
+                    atm_strike = int(round(candle.close / spec.strike_step) * spec.strike_step)
+                    expiry_d = get_target_expiry(idx, sess_date)
+                    sigma_now = max(0.09, (vix_now / 100.0) * (1.12 if idx == "BANKNIFTY" else 1.0))
+                    t_entry = _time_to_expiry_years(ts, expiry_d)
+                    p0 = round(bs_option_price(candle.close, atm_strike, t_entry, sigma_now, sig_type) + (0.5 if idx == "NIFTY" else 1.0), 2)
+                    total_qty = spec.lot_size * day_lots
+                    res = _simulate_nifty_htf_hybrid_trade(
+                        spec=spec,
+                        sig_type=sig_type,
+                        strike=atm_strike,
+                        expiry_date=expiry_d,
+                        entry_candle=candle,
+                        day_candles=dc,
+                        vix_map=vix_lookup,
+                        total_qty=total_qty,
+                        p0=p0,
+                        spot_sl=spot_sl,
+                        st_by_ts=day_st_map[idx],
+                        opt_sl_cap=float(nifty_htf_opt_sl_cap if idx == "NIFTY" else 65.0),
+                        use_supertrend_trail=use_supertrend_filter,
+                        squareoff_time=squareoff_t,
+                    )
+                elif idx == "NIFTY" and nifty_use_htf_swing_hybrid:
                     # Hybrid H1 NIFTY (15m HTF Swing Break + VIX + optional ST, bounded by entry window)
                     if not (nifty_htf_start_t <= ts.time() <= entry_end_t):
                         continue
@@ -678,7 +807,7 @@ def run_nf_bnf_sequential_backtest(
                     vix_now = vix_lookup.get(ts, 14.5)
                     if vix_now < min_india_vix:
                         continue
-                    htf_info = nf_htf_by_ts.get(ts)
+                    htf_info = htf_by_idx["NIFTY"].get(ts)
                     if not htf_info:
                         continue
                     htf_c, htf_f, htf_a, _htf_b, prev_htf_tup, prev_cls = htf_info
@@ -951,6 +1080,9 @@ def main() -> None:
     parser.add_argument("--orb-start", type=str, default="09:15", help="ORB start HH:MM IST (default 09:15)")
     parser.add_argument("--orb-min", type=int, default=15, help="ORB window minutes (default 15)")
     parser.add_argument("--squareoff", type=str, default="15:15", help="EOD square-off HH:MM IST (default 15:15)")
+    parser.add_argument("--strategy", type=str, default="DUAL_ORB_HYBRID", help="DUAL_ORB_HYBRID or GANN_BOX_5M")
+    parser.add_argument("--gann-mode", type=str, default="BREAKOUT", help="BREAKOUT or BOUNCE (GANN_BOX_5M)")
+    parser.add_argument("--no-save", action="store_true", help="Print report without overwriting saved backtest files")
     args = parser.parse_args()
 
     start_d = date.fromisoformat(args.start)
@@ -1003,6 +1135,8 @@ def main() -> None:
         nifty_htf_entry_start_time=args.entry_start,
         auto_squareoff_time=args.squareoff,
         active_indices=active_indices,
+        strategy_profile=args.strategy,
+        gann_box_mode=args.gann_mode,
     )
     all_trades.sort(key=lambda t: (t["date"], t["in_t"]))
     # Verify strict GLOBAL zero-overlap across NIFTY + BANKNIFTY combined
@@ -1017,10 +1151,13 @@ def main() -> None:
                 )
 
     print_report(
-        f"DUAL-ENGINE BACKTEST ({args.entry_start}-{args.entry_end} IST, {args.orb_min}m ORB, ST(10,3), Max {args.max_trades}/day)",
+        f"{args.strategy.upper()} BACKTEST ({args.entry_start}-{args.entry_end} IST, {args.orb_min}m ORB, ST(10,3), Max {args.max_trades}/day)",
         all_trades,
         date_ranges,
     )
+
+    if args.no_save:
+        return
 
     out_dir = ROOT_DIR / "data" / "backtest"
     out_dir.mkdir(parents=True, exist_ok=True)
