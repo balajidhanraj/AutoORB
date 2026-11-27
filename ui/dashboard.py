@@ -860,6 +860,17 @@ def create_app(orchestrator: Any) -> FastAPI:
             }
         )
 
+    @app.post("/api/telegram/send-eod-csv")
+    def api_telegram_send_eod_csv() -> JSONResponse:
+        ok, msg = orchestrator.send_daily_csv_to_telegram()
+        return JSONResponse(
+            content={
+                "ok": ok,
+                "enabled": orchestrator.notifier.enabled,
+                "message": msg,
+            }
+        )
+
     app.state.handlers = {
         "index": index,
         "api_status": api_status,
@@ -888,6 +899,7 @@ def create_app(orchestrator: Any) -> FastAPI:
         "api_public_config": api_public_config,
         "api_reset_trades": api_reset_trades,
         "api_telegram_test": api_telegram_test,
+        "api_telegram_send_eod_csv": api_telegram_send_eod_csv,
         "health": health,
     }
     return app

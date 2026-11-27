@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import mimetypes
 import queue
 import threading
-from typing import Optional
+from pathlib import Path
+from typing import Optional, Tuple, Union
 
 import requests
 
@@ -20,7 +22,9 @@ class TelegramNotifier:
         self.bot_token = bot_token.strip()
         self.chat_id = chat_id.strip()
         self.timeout_sec = timeout_sec
-        self._queue: queue.Queue[Optional[str]] = queue.Queue()
+        self._queue: queue.Queue[
+            Optional[Union[str, Tuple[str, Path, str, Optional[str]]]]
+        ] = queue.Queue()
         self._stop_event = threading.Event()
         self._worker: Optional[threading.Thread] = None
 
@@ -76,6 +80,69 @@ class TelegramNotifier:
             logger.warning("Telegram send error: %s", exc)
             return False
 
+    def send_document_async(
+        self,
+        file_path: str | Path,
+        caption: str = "",
+        filename: Optional[str] = None,
+    ) -> None:
+        """Enqueue a file attachment upload to Telegram without blocking the caller."""
+        if not self.enabled:
+            logger.debug("Telegram disabled; document skipped: %s", file_path)
+            return
+        self._queue.put(("document", Path(file_path), caption.strip(), filename))
+
+    def send_document_sync(
+        self,
+        file_path: str | Path,
+        caption: str = "",
+        filename: Optional[str] = None,
+        fallback_to_text: bool = True,
+    ) -> bool:
+        """Upload a local file to Telegram via sendDocument and return success status."""
+        if not self.enabled:
+            logger.debug("Telegram disabled; sync document skipped: %s", file_path)
+            return False
+
+        path = Path(file_path)
+        clean_caption = caption.strip()
+        if not path.is_file():
+            logger.warning("Telegram document missing: %s", path)
+            if fallback_to_text and clean_caption:
+                self.send_sync(clean_caption)
+            return False
+
+        doc_name = (filename or path.name).strip() or path.name
+        mime_type = (
+            "text/csv"
+            if doc_name.lower().endswith(".csv")
+            else (mimetypes.guess_type(doc_name)[0] or "application/octet-stream")
+        )
+        url = f"https://api.telegram.org/bot{self.bot_token}/sendDocument"
+        data = {"chat_id": self.chat_id}
+        if clean_caption:
+            data["caption"] = clean_caption[:1024]
+            data["parse_mode"] = "HTML"
+
+        try:
+            with path.open("rb") as fh:
+                resp = requests.post(
+                    url,
+                    data=data,
+                    files={"document": (doc_name, fh, mime_type)},
+                    timeout=max(self.timeout_sec, 15.0),
+                )
+            if resp.status_code == 200:
+                logger.info("Telegram document delivered (%s)", doc_name)
+                return True
+            logger.warning("Telegram sendDocument returned %s: %s", resp.status_code, resp.text)
+        except Exception as exc:
+            logger.warning("Telegram sendDocument error: %s", exc)
+
+        if fallback_to_text and clean_caption:
+            self.send_sync(clean_caption)
+        return False
+
     def _run_worker(self) -> None:
         while not self._stop_event.is_set():
             try:
@@ -85,7 +152,10 @@ class TelegramNotifier:
             if item is None:
                 self._queue.task_done()
                 break
-            self.send_sync(item)
+            if isinstance(item, tuple) and len(item) == 4 and item[0] == "document":
+                self.send_document_sync(item[1], caption=item[2], filename=item[3])
+            elif isinstance(item, str):
+                self.send_sync(item)
             self._queue.task_done()
 
     def stop(self) -> None:

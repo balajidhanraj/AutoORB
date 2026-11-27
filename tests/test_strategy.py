@@ -2153,3 +2153,126 @@ def test_banknifty_enters_on_1m_check_while_nifty_active_and_day_open_today(tmp_
     assert sig_g is not None
     assert sig_g.strategy_mode == "GANN_BOX_5M"
     assert sig_g.signal_type == "CE"
+
+
+def test_eod_report_sends_csv_document_to_telegram(tmp_path: Path, monkeypatch) -> None:
+    """Verify TelegramNotifier uploads EOD trades CSV via sendDocument (with text fallback),
+    run_eod_report dispatches the CSV attachment, and POST /api/telegram/send-eod-csv works."""
+    from fastapi.testclient import TestClient
+
+    from database.connection import get_db
+    from engine.risk_manager import TradeRecord
+    from utils.notifier import TelegramNotifier
+
+    calls: List[Dict[str, Any]] = []
+
+    class _FakeResp:
+        def __init__(self, status_code: int, text: str = '{"ok":true}') -> None:
+            self.status_code = status_code
+            self.text = text
+
+    doc_status = {"code": 200}
+
+    def _fake_post(url: str, data=None, json=None, files=None, timeout=None):
+        uploaded = None
+        if files and "document" in files:
+            doc_name, fh, mime = files["document"]
+            uploaded = (doc_name, fh.read(), mime)
+        calls.append({"url": url, "data": data, "json": json, "uploaded": uploaded, "timeout": timeout})
+        if url.endswith("/sendDocument"):
+            return _FakeResp(doc_status["code"], '{"ok":false}' if doc_status["code"] != 200 else '{"ok":true}')
+        return _FakeResp(200)
+
+    monkeypatch.setattr("utils.notifier.requests.post", _fake_post)
+
+    # 1. Direct send_document_sync uploads multipart CSV document + caption
+    sample_csv = tmp_path / "sample_trades.csv"
+    sample_csv.write_text("trade_id,net_pnl\nT1,2500.0\n", encoding="utf-8")
+    notifier = TelegramNotifier(bot_token="12345:TESTTOKEN", chat_id="987654")
+    try:
+        ok = notifier.send_document_sync(sample_csv, caption="<b>Daily CSV</b>")
+        assert ok is True
+        assert len(calls) == 1
+        assert calls[0]["url"] == "https://api.telegram.org/bot12345:TESTTOKEN/sendDocument"
+        assert calls[0]["data"]["chat_id"] == "987654"
+        assert calls[0]["data"]["parse_mode"] == "HTML"
+        assert calls[0]["data"]["caption"] == "<b>Daily CSV</b>"
+        assert calls[0]["uploaded"][0] == "sample_trades.csv"
+        assert b"T1,2500.0" in calls[0]["uploaded"][1]
+        assert "csv" in calls[0]["uploaded"][2]
+
+        # 2. HTTP 500 on sendDocument with fallback_to_text=True falls back to sendMessage
+        calls.clear()
+        doc_status["code"] = 500
+        ok_fail = notifier.send_document_sync(sample_csv, caption="<b>Fallback Caption</b>", fallback_to_text=True)
+        assert ok_fail is False
+        assert len(calls) == 2
+        assert calls[0]["url"].endswith("/sendDocument")
+        assert calls[1]["url"].endswith("/sendMessage")
+        assert calls[1]["json"]["text"] == "<b>Fallback Caption</b>"
+    finally:
+        notifier.stop()
+
+    # 3. Orchestrator.run_eod_report exports trades CSV and enqueues send_document_async
+    doc_status["code"] = 200
+    calls.clear()
+    settings = _make_settings(
+        tmp_path / "orch",
+        mode="PAPER",
+        telegram_bot_token="99999:ORCHTOKEN",
+        telegram_chat_id="555111",
+    )
+    orch = TradingSystemOrchestrator(settings=settings)
+    try:
+        orch.risk_manager.completed_trades.append(
+            TradeRecord(
+                trade_id="T-EOD-1",
+                date=datetime.now(IST).strftime("%Y-%m-%d"),
+                index_name="NIFTY",
+                tradingsymbol="NIFTY01DEC26C25300",
+                signal_type="CE",
+                quantity=130,
+                entry_time="10:05:00",
+                entry_price=120.0,
+                exit_time="11:30:00",
+                exit_price=145.0,
+                gross_pnl=3250.0,
+                charges_est=0.0,
+                net_pnl=3250.0,
+                exit_reason="SUPERTREND_TRAIL",
+                mode="PAPER",
+            )
+        )
+        queued_docs: List[Dict[str, Any]] = []
+        monkeypatch.setattr(
+            orch.notifier,
+            "send_document_async",
+            lambda file_path, caption="", filename=None: queued_docs.append(
+                {"path": Path(file_path), "caption": caption, "filename": filename}
+            ),
+        )
+        exported_path = orch.run_eod_report()
+        assert exported_path.exists()
+        assert exported_path.name.startswith("trades_") and exported_path.suffix == ".csv"
+        assert len(queued_docs) == 1
+        assert queued_docs[0]["path"] == exported_path
+        assert queued_docs[0]["filename"] == exported_path.name
+        assert "1W / 0L" in queued_docs[0]["caption"]
+        assert "NIFTY01DEC26C25300" in exported_path.read_text(encoding="utf-8")
+
+        # 4. POST /api/telegram/send-eod-csv uploads the CSV document synchronously via endpoint
+        calls.clear()
+        app = create_app(orch)
+        app.dependency_overrides[get_db] = lambda: None
+        with TestClient(app) as client:
+            resp = client.post("/api/telegram/send-eod-csv")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["ok"] is True
+        assert exported_path.name in body["message"]
+        assert len(calls) == 1
+        assert calls[0]["url"] == "https://api.telegram.org/bot99999:ORCHTOKEN/sendDocument"
+        assert calls[0]["uploaded"][0] == exported_path.name
+        assert b"NIFTY01DEC26C25300" in calls[0]["uploaded"][1]
+    finally:
+        orch.notifier.stop()

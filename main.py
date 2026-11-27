@@ -937,19 +937,47 @@ class TradingSystemOrchestrator:
         if self.settings.mode == "LIVE":
             self.sync_live_broker_archive(trigger_event="EOD_SQUAREOFF", force_refresh=True, sync=True)
 
-    def run_eod_report(self) -> None:
+    def _build_eod_report_caption(self, csv_path: Path) -> str:
+        """Build HTML EOD summary caption for the daily trades CSV document."""
+        today_str = datetime.now(IST).strftime("%Y-%m-%d")
+        trades = list(self.risk_manager.completed_trades)
+        count = len(trades)
+        wins = sum(1 for t in trades if float(t.net_pnl) > 0)
+        losses = count - wins
+        mtm = self.risk_manager.total_mtm()
+        net_pnl = sum(float(t.net_pnl) for t in trades)
+        return (
+            f"<b>EOD Report [{self.settings.mode}] — {today_str}</b>\n"
+            f"Trades: {count} ({wins}W / {losses}L) | Gross P&amp;L: ₹{mtm:+.2f} | Net P&amp;L: ₹{net_pnl:+.2f}\n"
+            f"CSV: <code>{csv_path.name}</code>"
+        )
+
+    def run_eod_report(self) -> Path:
         csv_path = self.risk_manager.export_daily_trades_csv()
         mtm = self.risk_manager.total_mtm()
         count = len(self.risk_manager.completed_trades)
         if self.settings.mode == "LIVE":
             self.sync_live_broker_archive(trigger_event="EOD_REPORT", force_refresh=True, sync=True)
-        msg = (
-            f"<b>EOD Report [{self.settings.mode}]</b>\n"
-            f"Trades: {count} | Total Gross P&L: ₹{mtm:+.2f}\n"
-            f"CSV: {csv_path}"
-        )
+        caption = self._build_eod_report_caption(csv_path)
         logger.info("EOD Report: trades=%d mtm=%.2f csv=%s", count, mtm, csv_path)
-        self.notifier.send_async(msg)
+        self.notifier.send_document_async(csv_path, caption=caption, filename=csv_path.name)
+        return csv_path
+
+    def send_daily_csv_to_telegram(self) -> Tuple[bool, str]:
+        """Export today's cumulative trades CSV and upload it to Telegram synchronously."""
+        if not self.notifier.enabled:
+            return False, "Telegram not configured (set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID)."
+        csv_path = self.risk_manager.export_daily_trades_csv()
+        caption = self._build_eod_report_caption(csv_path)
+        ok = self.notifier.send_document_sync(
+            csv_path,
+            caption=caption,
+            filename=csv_path.name,
+            fallback_to_text=False,
+        )
+        if ok:
+            return True, f"Sent {csv_path.name} to Telegram!"
+        return False, f"Telegram API rejected {csv_path.name} — verify Bot Token and Chat ID."
 
     def send_test_telegram(self) -> Tuple[bool, str]:
         """Send a synchronous test alert via Telegram to verify bot token and chat ID."""
