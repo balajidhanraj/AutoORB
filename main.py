@@ -1140,6 +1140,7 @@ class TradingSystemOrchestrator:
                 "max_weekly_losses": int(s.max_weekly_losses),
                 "tuesday_expiry_boost": bool(s.tuesday_expiry_boost),
                 "banknifty_be_pyramiding": bool(s.banknifty_be_pyramiding),
+                "allow_concurrent_indices": bool(getattr(s, "allow_concurrent_indices", True)),
             }
 
     @staticmethod
@@ -1271,6 +1272,7 @@ class TradingSystemOrchestrator:
             "gann_use_htf_view_protection",
             "tuesday_expiry_boost",
             "banknifty_be_pyramiding",
+            "allow_concurrent_indices",
         )
         parsed_bools = {k: self._coerce_bool(clean[k]) for k in bool_keys if k in clean}
 
@@ -1660,9 +1662,20 @@ class TradingSystemOrchestrator:
                     logger.debug("1m option REST refresh skipped for %s: %s", c.tradingsymbol, exc)
 
         vix = self.client.get_ltp(INDIA_VIX_KEY)
+        cur_bucket = dt.replace(minute=(dt.minute // 5) * 5, second=0, microsecond=0)
         summary_parts = []
         triggered = []
         for name, builder in self.candle_builders.items():
+            spec = INDEX_SPECS[name]
+            live_spot = self.client.get_ltp(spec.spot_key)
+            if live_spot is not None and live_spot > 0:
+                cur_bars = builder.get_candles(include_open=True)
+                if (
+                    not cur_bars
+                    or cur_bars[-1].timestamp < cur_bucket
+                    or abs(float(cur_bars[-1].close) - float(live_spot)) > 1e-6
+                ):
+                    builder.on_tick(price=float(live_spot), tick_time=dt, volume=0)
             candles_open = builder.get_candles(include_open=True)
             if not candles_open:
                 continue
@@ -1711,6 +1724,17 @@ class TradingSystemOrchestrator:
                     self._last_triggered_bucket_by_index[name] = signal.candle_time
                     triggered.append(signal.index_name)
                     self._persist_runtime_state(sync=False)
+                else:
+                    logger.warning(
+                        "[1M SIGNAL SKIPPED] %s %s not executed (open=%s, trades=%d/%d, sl_hit=%s, concurrent=%s)",
+                        signal.index_name,
+                        signal.signal_type,
+                        list(self.risk_manager.positions.keys()),
+                        self.risk_manager.trades_taken_today,
+                        self.settings.max_trades_per_day,
+                        self.risk_manager.sl_hit_today_by_index.get(name, False),
+                        bool(getattr(self.settings, "allow_concurrent_indices", True)),
+                    )
 
         self.last_signal_check_time = dt.strftime("%H:%M:%S")
         vix_txt = f"{vix:.2f}" if vix is not None else "--"
@@ -1974,10 +1998,15 @@ class TradingSystemOrchestrator:
         htf_view_label = "BULLISH" if htf_view == 1 else ("BEARISH" if htf_view == -1 else "NEUTRAL")
         use_gann_prot = bool(getattr(self.settings, "gann_use_htf_view_protection", True))
 
+        allow_concurrent = bool(getattr(self.settings, "allow_concurrent_indices", True))
+        blocked_by_other_pos = (not allow_concurrent and len(self.risk_manager.positions) > 0 and index_name not in self.risk_manager.positions)
+        sl_locked = (not is_hybrid and not is_gann and self.risk_manager.sl_hit_today_by_index.get(index_name, False))
         system_ready = (
             not self.risk_manager.halted
             and self.risk_manager.trades_taken_today < self.settings.max_trades_per_day
             and index_name not in self.risk_manager.positions
+            and not blocked_by_other_pos
+            and not sl_locked
         )
         vix_ready = (vix is not None and vix >= self.settings.min_india_vix)
         if is_gann:
@@ -2105,6 +2134,12 @@ class TradingSystemOrchestrator:
                     else "5-Gate ORB active — 45pt SL, BE (+45), T1 50% (+80) & Supertrend(10,3) Line Trail armed."
                 )
             )
+        elif blocked_by_other_pos:
+            radar_state = "LOCKED_OTHER_INDEX_OPEN"
+            radar_summary = f"Paused: Single-order lock active while {', '.join(self.risk_manager.positions.keys())} position is open."
+        elif sl_locked:
+            radar_state = "SL_HIT_COOLDOWN"
+            radar_summary = f"{index_name} paused for today after earlier STOP_LOSS."
         elif self.risk_manager.halted or self.risk_manager.trades_taken_today >= self.settings.max_trades_per_day:
             radar_state = "HALTED_OR_MAX_TRADES"
             radar_summary = f"Auto entries paused: {self.risk_manager.halt_reason or 'Max daily trades reached'}."
@@ -2137,14 +2172,14 @@ class TradingSystemOrchestrator:
             elif ce_price_ok:
                 radar_state = "IMMINENT_CE_BREAKOUT"
                 radar_summary = (
-                    f"15m Red break + ST(10,3) Bull + VIX >= 12! Auto-BUY {candidate_ce} arms on 5m close."
+                    f"15m Red break + ST(10,3) Bull + VIX >= 12! Auto-BUY {candidate_ce} arms on 1m check."
                     if (ce_rsi_ok and vix_ready and in_window)
                     else f"Above 15m Red ({st.htf_swing_high:.1f}) — awaiting ST(10,3) Bull & VIX >= 12."
                 )
             elif pe_price_ok:
                 radar_state = "IMMINENT_PE_BREAKOUT"
                 radar_summary = (
-                    f"15m Green break + ST(10,3) Bear + VIX >= 12! Auto-BUY {candidate_pe} arms on 5m close."
+                    f"15m Green break + ST(10,3) Bear + VIX >= 12! Auto-BUY {candidate_pe} arms on 1m check."
                     if (pe_rsi_ok and vix_ready and in_window)
                     else f"Below 15m Green ({st.htf_swing_low:.1f}) — awaiting ST(10,3) Bear & VIX >= 12."
                 )
@@ -2164,19 +2199,19 @@ class TradingSystemOrchestrator:
         elif orb_ready and ce_price_ok:
             radar_state = "IMMINENT_CE_BREAKOUT"
             if ce_rsi_ok and vix_ready and in_window:
-                radar_summary = f"ALL GATES MET! Auto-BUY {candidate_ce} arms on 5m close."
+                radar_summary = f"ALL GATES MET! Auto-BUY {candidate_ce} arms on 1m check."
             else:
                 rsi_txt = f"{st.last_rsi:.1f}" if st.last_rsi is not None else "--"
                 rsi_b = float(getattr(self.settings, "rsi_bull_threshold", 60.0) or 60.0)
-                radar_summary = f"Above ORH & VWAP! Need RSI > {rsi_b:g} (now {rsi_txt}) & 5m close -> {candidate_ce}."
+                radar_summary = f"Above ORH & VWAP! Need RSI > {rsi_b:g} (now {rsi_txt}) -> {candidate_ce}."
         elif orb_ready and pe_price_ok:
             radar_state = "IMMINENT_PE_BREAKOUT"
             if pe_rsi_ok and vix_ready and in_window:
-                radar_summary = f"ALL GATES MET! Auto-BUY {candidate_pe} arms on 5m close."
+                radar_summary = f"ALL GATES MET! Auto-BUY {candidate_pe} arms on 1m check."
             else:
                 rsi_txt = f"{st.last_rsi:.1f}" if st.last_rsi is not None else "--"
                 rsi_br = float(getattr(self.settings, "rsi_bear_threshold", 40.0) or 40.0)
-                radar_summary = f"Below ORL & VWAP! Need RSI < {rsi_br:g} (now {rsi_txt}) & 5m close -> {candidate_pe}."
+                radar_summary = f"Below ORL & VWAP! Need RSI < {rsi_br:g} (now {rsi_txt}) -> {candidate_pe}."
         else:
             radar_state = "SCANNING_RANGE"
             orh_txt = f"{dist_to_orh:+.2f}" if dist_to_orh is not None else "--"
@@ -2496,6 +2531,7 @@ class TradingSystemOrchestrator:
             "max_daily_loss": self.risk_manager.get_dynamic_max_daily_loss(now_ist),
             "is_custom_max_daily_loss": self.risk_manager.custom_max_daily_loss is not None,
             "enabled_indices": self.risk_manager.get_enabled_indices(),
+            "allow_concurrent_indices": bool(getattr(self.settings, "allow_concurrent_indices", True)),
             "strategy_profile": active_profile,
             "strategy_config": self.get_strategy_config(),
             "atm_protection_panel": {

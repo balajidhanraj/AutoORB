@@ -370,13 +370,19 @@ class RiskManager:
                 index_name == "BANKNIFTY"
                 and getattr(self.settings, "banknifty_be_pyramiding", False)
             )
+            allow_concurrent = bool(getattr(self.settings, "allow_concurrent_indices", True))
             if not allow_bnf_pyramid:
-                # Default ₹1L capital-safe mode: strictly 1 active order across ALL indices at a time,
-                # and global max_trades_per_day (4) across NIFTY + BANKNIFTY combined.
+                # Combined daily trade cap (e.g. 4/day across NIFTY + BANKNIFTY)
                 if self.trades_taken_today >= self.settings.max_trades_per_day:
                     return False
-                if len(self.positions) > 0:
-                    return False
+                if allow_concurrent:
+                    # Allow 1 active order per index concurrently (NIFTY + BANKNIFTY together)
+                    if index_name in self.positions:
+                        return False
+                else:
+                    # Strict ₹1L single-order lock across ALL indices
+                    if len(self.positions) > 0:
+                        return False
             else:
                 idx_count = self.trades_taken_by_index.get(index_name, 0)
                 if idx_count >= self.settings.max_trades_per_day:
@@ -421,8 +427,16 @@ class RiskManager:
         """Select option strike, subscribe WebSocket, and place entry LMT order."""
         with self._lock:
             if not self.can_take_new_trade(signal.index_name, check_time=signal.candle_time):
-                logger.info("Trade rejected for %s (halted=%s, count=%d/%d)",
-                            signal.index_name, self.halted, self.trades_taken_today, self.settings.max_trades_per_day)
+                logger.info(
+                    "Trade rejected for %s (halted=%s, count=%d/%d, open_positions=%s, concurrent=%s, sl_hit=%s)",
+                    signal.index_name,
+                    self.halted,
+                    self.trades_taken_today,
+                    self.settings.max_trades_per_day,
+                    list(self.positions.keys()),
+                    bool(getattr(self.settings, "allow_concurrent_indices", True)),
+                    self.sl_hit_today_by_index.get(signal.index_name, False),
+                )
                 return None
             if signal.strategy_mode == "HTF_SWING_HYBRID":
                 nf_cap = int(getattr(self.settings, "nifty_htf_max_trades_per_day", 2) or 2)

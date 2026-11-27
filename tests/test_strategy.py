@@ -532,6 +532,7 @@ def test_nf_bnf_30m_max4_global_single_order_defaults(tmp_path: Path) -> None:
     assert prod_settings.supertrend_multiplier == 3.0
     assert prod_settings.nifty_use_ema_body_filter is True
     assert prod_settings.banknifty_be_pyramiding is False
+    assert prod_settings.allow_concurrent_indices is True
     assert prod_settings.max_trades_per_day == 4
     assert prod_settings.orb_window_minutes == 30
     assert prod_settings.entry_start_time == time(10, 0, 0)
@@ -578,6 +579,21 @@ def test_nf_bnf_30m_max4_global_single_order_defaults(tmp_path: Path) -> None:
         rsi=68.0,
         india_vix=15.0,
     )
+    # Verify concurrent multi-index default (allow_concurrent_indices=True):
+    # Opening BANKNIFTY allows NIFTY to open simultaneously, while blocking a 2nd concurrent BANKNIFTY order.
+    pos_bnf = rm.execute_entry(bnf_sig, option_ltp=500.0)
+    assert pos_bnf is not None
+    assert rm.can_take_new_trade("BANKNIFTY") is False
+    assert rm.can_take_new_trade("NIFTY") is True
+    pos_nf = rm.execute_entry(nf_sig, option_ltp=150.0)
+    assert pos_nf is not None
+    assert len(rm.positions) == 2
+    rm._close_position_record_locked(pos_bnf, exit_price=pos_bnf.entry_avg_price, exit_reason="BREAKEVEN_SL")
+    rm._close_position_record_locked(pos_nf, exit_price=pos_nf.entry_avg_price, exit_reason="BREAKEVEN_SL")
+    rm.reset_daily()
+
+    # Verify legacy strict single-order lock when allow_concurrent_indices=False
+    prod_settings.allow_concurrent_indices = False
     for leg_idx in range(1, 5):
         sig = bnf_sig if leg_idx % 2 == 1 else nf_sig
         pos = rm.execute_entry(sig, option_ltp=500.0 if sig.index_name == "BANKNIFTY" else 150.0)
@@ -2043,3 +2059,97 @@ def test_gann_box_5m_backtest_runner_and_pine_script(tmp_path: Path, monkeypatch
     assert "m-atm-panel" in mob_html
     assert "ms-strat-profile" in mob_html
     assert "m-bt-strategy" in mob_html
+
+
+def test_banknifty_enters_on_1m_check_while_nifty_active_and_day_open_today(tmp_path: Path) -> None:
+    """Verify BANKNIFTY enters immediately on 1-minute check while NIFTY has an active order,
+    and daily_bias_filter compares against TODAY's 09:15 open rather than 7-day-old backfill."""
+    from engine.candle_builder import Candle
+
+    settings = _make_settings(
+        tmp_path,
+        mode="PAPER",
+        orb_window_minutes=15,
+        orb_end_time=time(9, 30, 0),
+        daily_bias_filter=True,
+        use_ema_filter=False,
+        min_candle_body_ratio=0.40,
+        use_supertrend_filter=False,
+        allow_concurrent_indices=True,
+        enable_nifty_trading=True,
+        enable_banknifty_trading=True,
+    )
+    orch = TradingSystemOrchestrator(settings=settings)
+    orch.client.ws_connected = True
+    orch.client.last_tick_monotonic = 9999999999.0
+    orch.client.update_ltp("NSE|26017", 15.0)
+    orch.client.update_ltp("NSE|26000", 25300.0)
+
+    # 1. Open an active NIFTY order first
+    ok_nf, _, _ = orch.trigger_auto_order("NIFTY", signal_type="CE")
+    assert ok_nf is True
+    assert "NIFTY" in orch.risk_manager.positions
+
+    # 2. Seed 7-day-old BANKNIFTY bars with a HIGHER open (55000) than today's breakout (51700),
+    # plus today's 09:15 open at 51400 -> ORH 51550
+    bnf_builder = orch.candle_builders["BANKNIFTY"]
+    candles: List[Candle] = []
+    old_day = _ist_dt(2026, 11, 18, 9, 15, 0)
+    candles.append(Candle(timestamp=old_day, open=52500.0, high=52550.0, low=51180.0, close=51200.0, volume=1000, is_closed=True))
+    prev_day = _ist_dt(2026, 11, 24, 14, 25, 0)
+    for k in range(12):
+        ts = prev_day + timedelta(minutes=k * 5)
+        px = 51200.0 + (k * 10.0)
+        candles.append(Candle(timestamp=ts, open=px - 4.0, high=px + 8.0, low=px - 8.0, close=px + 4.0, volume=1000, is_closed=True))
+
+    start_today = _ist_dt(2026, 11, 25, 9, 15, 0)
+    for i in range(9):
+        ts = start_today + timedelta(minutes=i * 5)
+        px = 51400.0 + (i * 15.0)
+        hi = 51550.0 if i < 3 else (px + 10.0)
+        lo = 51400.0 if i < 3 else (px - 10.0)
+        candles.append(Candle(timestamp=ts, open=px, high=hi, low=lo, close=px + 5.0, volume=1000, is_closed=True))
+    bnf_builder.seed_candles(candles)
+    orch.strategy.lock_opening_range("BANKNIFTY", bnf_builder.get_candles(), session_date=date(2026, 11, 25))
+    assert orch.strategy.get_state("BANKNIFTY").is_locked is True
+
+    # 3. Inject 1-minute live breakout tick via client LTP (simulating live spot above ORH, VWAP, RSI > 60)
+    #    with a low body-ratio wick on forming bar so only 1m live check catches it before 5m close.
+    bnf_builder.on_tick(51680.0, tick_time=_ist_dt(2026, 11, 25, 10, 5, 10), volume=500)
+    bnf_builder.on_tick(51620.0, tick_time=_ist_dt(2026, 11, 25, 10, 5, 25), volume=200)
+    orch.client.update_ltp("NSE|26009", 51695.0)
+
+    res = orch.run_minute_signal_check(now_ist=_ist_dt(2026, 11, 25, 10, 6, 0))
+    assert "BANKNIFTY" in res["triggered"]
+    assert "BANKNIFTY" in orch.risk_manager.positions
+    assert len(orch.risk_manager.positions) == 2
+
+    # 4. Also verify GANN_BOX_5M fires immediately on 1-minute live check when confirmN=1 has 1 prior closed bar > VAH
+    s_gann = _make_settings(
+        tmp_path / "gann",
+        mode="PAPER",
+        strategy_profile="GANN_BOX_5M",
+        gann_box_mode="BREAKOUT",
+        gann_confirm_candles=1,
+        gann_warmup_minutes=15,
+        gann_use_htf_view_protection=False,
+        use_supertrend_filter=False,
+        entry_start_time=time(9, 30, 0),
+        entry_cutoff_time=time(15, 0, 0),
+    )
+    orch_g = TradingSystemOrchestrator(settings=s_gann)
+    hist_g = [
+        Candle(timestamp=_ist_dt(2026, 11, 25, 9, 15), open=25000.0, high=25020.0, low=24980.0, close=25005.0, volume=1000, is_closed=True),
+        Candle(timestamp=_ist_dt(2026, 11, 25, 9, 25), open=25005.0, high=25018.0, low=24995.0, close=25010.0, volume=1000, is_closed=True),
+        Candle(timestamp=_ist_dt(2026, 11, 25, 9, 30), open=25015.0, high=25040.0, low=25010.0, close=25035.0, volume=1000, is_closed=True),
+    ]
+    forming_g = Candle(timestamp=_ist_dt(2026, 11, 25, 9, 35), open=25035.0, high=25048.0, low=25032.0, close=25046.0, volume=500, is_closed=False)
+    sig_g = orch_g.strategy.evaluate_live_1m_check(
+        "NIFTY",
+        hist_g + [forming_g],
+        india_vix=15.0,
+        current_time_ist=_ist_dt(2026, 11, 25, 9, 36, 0),
+    )
+    assert sig_g is not None
+    assert sig_g.strategy_mode == "GANN_BOX_5M"
+    assert sig_g.signal_type == "CE"

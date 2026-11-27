@@ -431,15 +431,20 @@ class ORBStrategy:
                         logger.info("%s PE skipped: flat VWAP slope %.4f%% > -%.4f%%", index_name, slope_pct, min_slope)
                         pe_signal = False
 
-        # 1. Day Open Bias Filter (CE requires Spot > Open; PE requires Spot < Open)
+        # 1. Day Open Bias Filter (CE requires Spot > Today's Open; PE requires Spot < Today's Open)
         if getattr(self.settings, "daily_bias_filter", False) and candles_seq:
-            day_open = candles_seq[0].open
-            if ce_signal and close_px <= day_open:
-                logger.info("%s CE skipped: Spot %.2f <= Day Open %.2f", index_name, close_px, day_open)
-                ce_signal = False
-            if pe_signal and close_px >= day_open:
-                logger.info("%s PE skipped: Spot %.2f >= Day Open %.2f", index_name, close_px, day_open)
-                pe_signal = False
+            today_candles = [
+                c for c in candles_seq
+                if (c.timestamp.astimezone(IST) if c.timestamp.tzinfo else IST.localize(c.timestamp)).date() == candle_ist.date()
+            ]
+            if today_candles:
+                day_open = today_candles[0].open
+                if ce_signal and close_px <= day_open:
+                    logger.info("%s CE skipped: Spot %.2f <= Day Open %.2f", index_name, close_px, day_open)
+                    ce_signal = False
+                if pe_signal and close_px >= day_open:
+                    logger.info("%s PE skipped: Spot %.2f >= Day Open %.2f", index_name, close_px, day_open)
+                    pe_signal = False
 
         # 2. 20 EMA Filter (Option H for BANKNIFTY; optional for NIFTY Option A)
         apply_ema_body = (index_name != "NIFTY") or getattr(self.settings, "nifty_use_ema_body_filter", False)
@@ -453,9 +458,10 @@ class ORBStrategy:
                     logger.info("%s PE skipped: Spot %.2f >= 20 EMA %.2f", index_name, close_px, ema20)
                     pe_signal = False
 
-        # 3. Decisive Candle Body Ratio Filter (Option H for BANKNIFTY; optional for NIFTY Option A)
+        # 3. Decisive Candle Body Ratio Filter (evaluate on closed candles; do not block mid-bar 1m breakouts)
         min_body_ratio = getattr(self.settings, "min_candle_body_ratio", 0.0)
-        if apply_ema_body and min_body_ratio > 0 and (ce_signal or pe_signal):
+        is_forming_bar = (current_time_ist is not None and not closed_candle.is_closed)
+        if apply_ema_body and min_body_ratio > 0 and not is_forming_bar and (ce_signal or pe_signal):
             c_range = closed_candle.high - closed_candle.low
             c_body = abs(closed_candle.close - closed_candle.open)
             if c_range > 0 and (c_body / c_range) < min_body_ratio:
@@ -660,10 +666,6 @@ class ORBStrategy:
         """Evaluate 1st 5-Minute Gann Box Breakout/Bounce with Option/ATM HTF View Protection."""
         state.strategy_mode = "GANN_BOX_5M"
 
-        # Non-repainting: do not emit entries on unclosed 1-minute forming bars
-        if current_time_ist is not None and not closed_candle.is_closed:
-            return None
-
         if box_open_dt is None or state.gann_vah is None or state.gann_val is None or state.gann_mid is None:
             return None
 
@@ -692,14 +694,24 @@ class ORBStrategy:
         use_st = bool(getattr(self.settings, "use_supertrend_filter", True))
         opt_sl_cap = float(getattr(self.settings, "nifty_htf_opt_sl_cap", 35.0) or 35.0)
         close_px = float(closed_candle.close)
+        is_forming = (current_time_ist is not None and not closed_candle.is_closed)
 
         if box_mode == "BOUNCE":
+            if is_forming:
+                return None
             half_box = box_h * 0.5
             raw_ce = (since_l is not None and since_l == hold_n and close_px < (state.gann_val + half_box))
             raw_pe = (since_h is not None and since_h == hold_n and close_px > (state.gann_vah - half_box))
         else:
-            raw_ce = (state.gann_up_run == (confirm_n + 1))
-            raw_pe = (state.gann_dn_run == (confirm_n + 1))
+            if is_forming:
+                # 1-minute live breakout check: prior closed bars confirmed + live price holding beyond level
+                eff_up_run = (state.gann_up_run + 1) if close_px > state.gann_vah else 0
+                eff_dn_run = (state.gann_dn_run + 1) if close_px < state.gann_val else 0
+                raw_ce = (eff_up_run >= (confirm_n + 1))
+                raw_pe = (eff_dn_run >= (confirm_n + 1))
+            else:
+                raw_ce = (state.gann_up_run == (confirm_n + 1))
+                raw_pe = (state.gann_dn_run == (confirm_n + 1))
 
         if not raw_ce and not raw_pe:
             return None

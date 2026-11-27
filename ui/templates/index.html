@@ -334,7 +334,7 @@
             <span id="rad-mtm-split" class="font-data-mono-sm text-on-surface-variant tabular-nums">(R: ₹0.00 | UR: ₹0.00)</span>
           </div>
           <div class="flex items-center justify-between text-[11px] font-data-mono-sm text-on-surface-variant pt-1 border-t border-outline-variant/25">
-            <span>Single-Order Lock: <b class="text-profit">₹1,00,000 Safe</b></span>
+            <span id="rad-order-lock-mode">Concurrent NF + BNF: <b class="text-profit">ON</b></span>
             <span>Allocated: <b id="rad-capital" class="text-on-surface tabular-nums">₹1,00,000</b></span>
           </div>
         </div>
@@ -1105,11 +1105,12 @@
             <div><label class="font-label-caps text-on-surface-variant block mb-1">NF Break Buf ATR</label><input id="cfg-nf-buf" type="number" step="0.05" min="0" max="2" class="w-full p-2 rounded-lg bg-surface-container-lowest border border-outline-variant/50 font-data-mono-sm text-on-surface"/></div>
             <div><label class="font-label-caps text-on-surface-variant block mb-1">NF Stop ATR Mult</label><input id="cfg-nf-stop" type="number" step="0.1" min="0.1" max="3" class="w-full p-2 rounded-lg bg-surface-container-lowest border border-outline-variant/50 font-data-mono-sm text-on-surface"/></div>
           </div>
-          <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1 font-label-caps">
+          <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 pt-1 font-label-caps">
             <label class="inline-flex items-center gap-1.5 cursor-pointer"><input id="cfg-nf-hybrid" type="checkbox" class="w-3.5 h-3.5 accent-indigo-500"/>NIFTY HTF Hybrid</label>
             <label class="inline-flex items-center gap-1.5 cursor-pointer"><input id="cfg-nf-emabody" type="checkbox" class="w-3.5 h-3.5 accent-indigo-500"/>NF EMA+Body</label>
             <label class="inline-flex items-center gap-1.5 cursor-pointer"><input id="cfg-tue-boost" type="checkbox" class="w-3.5 h-3.5 accent-indigo-500"/>Tuesday Boost</label>
             <label class="inline-flex items-center gap-1.5 cursor-pointer"><input id="cfg-bnf-pyr" type="checkbox" class="w-3.5 h-3.5 accent-indigo-500"/>BNF Pyramiding</label>
+            <label class="inline-flex items-center gap-1.5 cursor-pointer sm:col-span-2"><input id="cfg-concurrent" type="checkbox" class="w-3.5 h-3.5 accent-indigo-500"/>Allow NIFTY + BANKNIFTY Simultaneously</label>
           </div>
         </div>
 
@@ -1460,6 +1461,13 @@
         roiBadge.textContent = `${roi >= 0 ? '+' : ''}${roi.toFixed(2)}% ROI`;
         roiBadge.className = `db-chip ${roi >= 0 ? 'up' : 'down'}`;
         document.getElementById('rad-capital').textContent = A.fmtINR(cap, 0);
+        const lockEl = document.getElementById('rad-order-lock-mode');
+        if (lockEl) {
+          const isConc = snap.allow_concurrent_indices !== false && (!(snap.strategy_config) || snap.strategy_config.allow_concurrent_indices !== false);
+          lockEl.innerHTML = isConc
+            ? 'Concurrent NF + BNF: <b class="text-profit">ON (1/Index)</b>'
+            : 'Single-Order Lock: <b class="text-amber-tactical">1 Active Total</b>';
+        }
         document.getElementById('rad-vix').textContent = snap.india_vix ? Number(snap.india_vix).toFixed(2) : '--';
         document.getElementById('rad-vix-badge').textContent = !snap.india_vix ? 'WAIT' : snap.india_vix >= 12 ? 'OPTIMAL' : 'LOW VIX';
         document.getElementById('rad-ist-time').textContent = snap.ist_time || '--';
@@ -2556,7 +2564,8 @@
         setC('cfg-nf-hybrid', cfg.nifty_use_htf_swing_hybrid !== false);
         setC('cfg-nf-emabody', Boolean(cfg.nifty_use_ema_body_filter));
         setC('cfg-tue-boost', cfg.tuesday_expiry_boost !== false);
-        setC('cfg-bnf-pyr', cfg.banknifty_be_pyramiding !== false);
+        setC('cfg-bnf-pyr', Boolean(cfg.banknifty_be_pyramiding));
+        setC('cfg-concurrent', cfg.allow_concurrent_indices !== false);
       }
 
       window.applyDesktopOrbPreset = (preset) => {
@@ -2635,6 +2644,7 @@
             nifty_use_ema_body_filter: document.getElementById('cfg-nf-emabody').checked,
             tuesday_expiry_boost: document.getElementById('cfg-tue-boost').checked,
             banknifty_be_pyramiding: document.getElementById('cfg-bnf-pyr').checked,
+            allow_concurrent_indices: document.getElementById('cfg-concurrent').checked,
           });
           snap = r.snapshot || snap;
           renderAll();

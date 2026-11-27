@@ -140,6 +140,7 @@ class StrategyConfigRequest(BaseModel):
     max_weekly_losses: Optional[int] = None
     tuesday_expiry_boost: Optional[bool] = None
     banknifty_be_pyramiding: Optional[bool] = None
+    allow_concurrent_indices: Optional[bool] = None
 
 
 class BacktestRunRequest(BaseModel):

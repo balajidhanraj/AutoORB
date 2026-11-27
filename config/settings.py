@@ -173,6 +173,7 @@ class AppSettings(BaseModel):
     gann_use_htf_view_protection: bool = Field(default=True)
     gann_stop_atr_mult: float = Field(default=0.5)
     banknifty_be_pyramiding: bool = Field(default=False)
+    allow_concurrent_indices: bool = Field(default=True)
     tuesday_expiry_boost: bool = Field(default=True)
     max_weekly_losses: int = Field(default=0)
     entry_slippage_buffer: float = Field(default=2.5)
@@ -293,6 +294,7 @@ def load_settings(env_path: str | Path | None = None) -> AppSettings:
         gann_use_htf_view_protection=_parse_bool(os.getenv("GANN_USE_HTF_VIEW_PROTECTION"), default=True),
         gann_stop_atr_mult=float(os.getenv("GANN_STOP_ATR_MULT", "0.5") or 0.5),
         banknifty_be_pyramiding=_parse_bool(os.getenv("BANKNIFTY_BE_PYRAMIDING"), default=False),
+        allow_concurrent_indices=_parse_bool(os.getenv("ALLOW_CONCURRENT_INDICES"), default=True),
         tuesday_expiry_boost=_parse_bool(os.getenv("TUESDAY_EXPIRY_BOOST"), default=True),
         max_weekly_losses=int(os.getenv("MAX_WEEKLY_LOSSES", "0") or 0),
         signal_check_interval_sec=float(os.getenv("SIGNAL_CHECK_INTERVAL_SEC", "60.0") or 60.0),

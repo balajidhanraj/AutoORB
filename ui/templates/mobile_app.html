@@ -750,6 +750,7 @@
             <label class="inline-flex items-center gap-1.5"><input id="ms-nf-emabody" type="checkbox" class="w-3.5 h-3.5 accent-indigo-500"/>NF EMA+Body</label>
             <label class="inline-flex items-center gap-1.5"><input id="ms-tue-boost" type="checkbox" class="w-3.5 h-3.5 accent-indigo-500"/>Tuesday Boost</label>
             <label class="inline-flex items-center gap-1.5"><input id="ms-bnf-pyr" type="checkbox" class="w-3.5 h-3.5 accent-indigo-500"/>BNF Pyramiding</label>
+            <label class="inline-flex items-center gap-1.5 col-span-2"><input id="ms-concurrent" type="checkbox" class="w-3.5 h-3.5 accent-indigo-500"/>Allow NIFTY + BANKNIFTY Simultaneously</label>
           </div>
         </div>
 
@@ -1603,7 +1604,8 @@
         setC('ms-nf-hybrid', cfg.nifty_use_htf_swing_hybrid !== false);
         setC('ms-nf-emabody', Boolean(cfg.nifty_use_ema_body_filter));
         setC('ms-tue-boost', cfg.tuesday_expiry_boost !== false);
-        setC('ms-bnf-pyr', cfg.banknifty_be_pyramiding !== false);
+        setC('ms-bnf-pyr', Boolean(cfg.banknifty_be_pyramiding));
+        setC('ms-concurrent', cfg.allow_concurrent_indices !== false);
       }
 
       window.applyMobileOrbPreset = (preset) => {
@@ -2004,6 +2006,7 @@
             nifty_use_ema_body_filter: document.getElementById('ms-nf-emabody').checked,
             tuesday_expiry_boost: document.getElementById('ms-tue-boost').checked,
             banknifty_be_pyramiding: document.getElementById('ms-bnf-pyr').checked,
+            allow_concurrent_indices: document.getElementById('ms-concurrent').checked,
           });
           snap = r.snapshot || snap;
           renderMobile();
